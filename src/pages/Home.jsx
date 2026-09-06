@@ -44,7 +44,7 @@ export default function Home() {
                                 <Link to={hero.primary_cta_link || "/novidades"} className="inline-flex items-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--rose))]/85">
                                     {hero.primary_cta_label || "Ver novidades"} <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
                                 </Link>
-                                <Link to={(!hero.secondary_cta_link || hero.secondary_cta_link === "/loja") ? "/colecoes" : hero.secondary_cta_link} className="inline-flex items-center gap-2 border border-[hsl(var(--gold))] text-[hsl(var(--gold))] text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--gold))] hover:text-white">
+                                <Link to={(!hero.secondary_cta_link || hero.secondary_cta_link === "/loja") ? "/colecoes" : hero.secondary_cta_link} className="inline-flex items-center gap-2 border border-bone/80 text-bone text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-bone hover:text-charcoal">
                                     {hero.secondary_cta_label || "Conhecer a coleção"}
                                 </Link>
                             </div>
