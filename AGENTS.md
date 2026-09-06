@@ -16,3 +16,10 @@ O projeto roda de forma autônoma/independente (sem dependência do Base44).
 
 - `npm run dev`: inicia o servidor de desenvolvimento na porta 5551.
 - `npm run build`: compila a aplicação para produção.
+
+## Ambiente Base44 (docker compose)
+
+- `docker-compose.base44.yml`: sobe o app a partir do código-fonte clonado (imagem `node:22`), com bind-mount e Vite dev server (live reload). Porta do host `3000` mapeada para a porta `5551` do container.
+- Sem backend nem credenciais externas: o app roda 100% standalone (persistência em `localStorage`, dados-semente em `src/data/initialData.json`). Não há secrets necessários para boot.
+- `vite.config.js` usa `allowedHosts: true` para aceitar o hostname de preview variável.
+- Verificação: `curl -sf -H "Host: external-preview.example.com" http://localhost:3000/` deve retornar o HTML do app; `/src/main.jsx` deve servir módulo fonte (não bundle pré-compilado).

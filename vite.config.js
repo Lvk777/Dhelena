@@ -16,6 +16,6 @@ export default defineConfig({
     server: {
         port: 5551,
         host: true,
-        allowedHosts: ['angella-soullike-virgie.ngrok-free.dev', '.ngrok-free.dev', '.ngrok.app', 'localhost'],
+        allowedHosts: true,
     },
 });
