@@ -1,0 +1,238 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        --background: 0 0% 100%;
+        --foreground: 25 8% 16%;
+        --card: 0 0% 100%;
+        --card-foreground: 25 8% 16%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 25 8% 16%;
+        --primary: 351 52% 80%;
+        --primary-foreground: 25 8% 16%;
+        --secondary: 30 18% 97%;
+        --secondary-foreground: 25 8% 16%;
+        --muted: 30 14% 96%;
+        --muted-foreground: 25 5% 45%;
+        --accent: 44 69% 54%;
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 62% 50%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 30 14% 92%;
+        --input: 30 14% 92%;
+        --ring: 44 69% 54%;
+        --radius: 0.125rem;
+        --font-heading: 'Cormorant Garamond', ui-serif, Georgia, serif;
+        --font-body: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+        --font-display: 'Cormorant Garamond', ui-serif, Georgia, serif;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+        /* Brand tokens */
+        --blossom: 351 52% 80%;
+        /* #E6B0B8 rosa claro */
+        --rose: 352 50% 70%;
+        /* #D98C96 rosa queimado */
+        --gold: 44 69% 54%;
+        /* #DAAF37 dourado */
+        --bone: 30 18% 97%;
+        /* #F9F7F5 off-white */
+        --charcoal: 25 8% 16%;
+        /* #2D2926 */
+
+        --sidebar-background: 30 18% 97%;
+        --sidebar-foreground: 25 8% 16%;
+        --sidebar-primary: 352 50% 70%;
+        --sidebar-primary-foreground: 0 0% 100%;
+        --sidebar-accent: 30 14% 94%;
+        --sidebar-accent-foreground: 25 8% 16%;
+        --sidebar-border: 30 14% 90%;
+        --sidebar-ring: 44 69% 54%;
+    }
+
+    .dark {
+        --background: 25 8% 14%;
+        --foreground: 30 18% 97%;
+        --card: 25 8% 17%;
+        --card-foreground: 30 18% 97%;
+        --popover: 25 8% 17%;
+        --popover-foreground: 30 18% 97%;
+        --primary: 351 52% 80%;
+        --primary-foreground: 25 8% 14%;
+        --secondary: 25 8% 20%;
+        --secondary-foreground: 30 18% 97%;
+        --muted: 25 8% 20%;
+        --muted-foreground: 30 10% 68%;
+        --accent: 44 69% 54%;
+        --accent-foreground: 25 8% 14%;
+        --destructive: 0 62% 50%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 25 8% 24%;
+        --input: 25 8% 24%;
+        --ring: 44 69% 54%;
+
+        --bone: 25 8% 12%;
+
+        --sidebar-background: 25 8% 14%;
+        --sidebar-foreground: 30 18% 97%;
+        --sidebar-primary: 352 50% 70%;
+        --sidebar-primary-foreground: 0 0% 100%;
+        --sidebar-accent: 25 8% 20%;
+        --sidebar-accent-foreground: 30 18% 97%;
+        --sidebar-border: 25 8% 22%;
+        --sidebar-ring: 44 69% 54%;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+
+    body {
+        @apply bg-background text-foreground font-body antialiased;
+        letter-spacing: 0.01em;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5 {
+        @apply font-heading;
+        letter-spacing: 0.02em;
+    }
+}
+
+@layer components {
+    .container-boutique {
+        @apply mx-auto w-full max-w-[1400px] px-5 sm:px-8 lg:px-12;
+    }
+
+    .btn-gold {
+        @apply inline-flex items-center justify-center gap-2 bg-accent text-white text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--rose))] hover:tracking-[0.28em] disabled:opacity-50;
+    }
+
+    .btn-outline {
+        @apply inline-flex items-center justify-center gap-2 border border-foreground/30 text-foreground text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-all duration-500 hover:border-foreground hover:bg-foreground hover:text-white;
+    }
+
+    .btn-ghost {
+        @apply inline-flex items-center justify-center gap-2 text-[11px] uppercase tracking-[0.22em] font-medium text-foreground/70 transition-colors duration-300 hover:text-foreground;
+    }
+
+    .btn-danger {
+        @apply inline-flex items-center justify-center gap-2 bg-destructive text-destructive-foreground text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-all duration-500 hover:bg-destructive/90 disabled:opacity-50;
+    }
+
+    .eyebrow {
+        @apply text-[11px] uppercase tracking-[0.32em] text-[hsl(var(--gold))] font-medium;
+    }
+
+    .gold-rule {
+        @apply h-px w-16 bg-gradient-to-r from-transparent via-[hsl(var(--gold))] to-transparent;
+    }
+
+    .link-underline {
+        @apply relative after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-[hsl(var(--gold))] after:transition-all after:duration-500 hover:after:w-full;
+    }
+
+    /* Admin form fields — fix dark mode legibility */
+    .admin-field {
+        @apply w-full bg-background text-foreground border border-border px-4 py-3 text-sm transition-colors;
+        @apply focus:outline-none focus:border-accent;
+    }
+
+    .admin-field::placeholder {
+        color: hsl(var(--muted-foreground));
+    }
+
+    .admin-field:disabled {
+        @apply opacity-60 cursor-not-allowed;
+    }
+
+    select.admin-field {
+        @apply cursor-pointer;
+    }
+
+    select.admin-field option {
+        background: hsl(var(--background));
+        color: hsl(var(--foreground));
+    }
+
+    .dark select option {
+        background: hsl(var(--background));
+        color: hsl(var(--foreground));
+    }
+
+    textarea.admin-field {
+        @apply resize-none;
+    }
+}
+
+@layer utilities {
+    .reveal {
+        opacity: 0;
+        transform: translateY(24px);
+        transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .reveal.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+
+    .text-balance {
+        text-wrap: balance;
+    }
+
+    /* Numeric font — clean sans-serif with tabular-nums for data, prices, stock, metrics */
+    .font-numeric {
+        font-family: var(--font-body);
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0;
+    }
+
+    /* Dark mode scrollbar */
+    .dark ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    .dark ::-webkit-scrollbar-track {
+        background: hsl(25 8% 14%);
+    }
+
+    .dark ::-webkit-scrollbar-thumb {
+        background: hsl(25 8% 28%);
+        border-radius: 4px;
+    }
+
+    .dark ::-webkit-scrollbar-thumb:hover {
+        background: hsl(25 8% 35%);
+    }
+
+    .admin-scroll::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+
+    .admin-scroll::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .admin-scroll::-webkit-scrollbar-thumb {
+        background: hsl(var(--border));
+        border-radius: 3px;
+    }
+}

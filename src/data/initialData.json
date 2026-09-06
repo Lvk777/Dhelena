@@ -1,0 +1,1267 @@
+{
+  "Product": [
+    {
+      "short_description": null,
+      "modeling": null,
+      "elasticity": null,
+      "rating": 4.9,
+      "description": "O Vestido Helena traduz a essência D'Helenas em um caimento fluido que abraça o corpo com delicadeza. Uma peça atemporal para mulheres que carregam histórias.",
+      "colors": [
+        {
+          "id": "rosa_queimado",
+          "name": "Rosa queimado",
+          "hex": "#D98C96",
+          "image": "",
+          "stock": {
+            "PP": 1,
+            "P": 3,
+            "M": 3,
+            "G": 1,
+            "GG": 0
+          }
+        },
+        {
+          "id": "off_white",
+          "name": "Off-white",
+          "hex": "#F9F7F5",
+          "image": "",
+          "stock": {
+            "PP": 2,
+            "P": 2,
+            "M": 3,
+            "G": 2,
+            "GG": 1
+          }
+        }
+      ],
+      "package_height": 60,
+      "sizes": [
+        "PP",
+        "P",
+        "M",
+        "G",
+        "GG"
+      ],
+      "installments": 6,
+      "composition": "97% Poliéster, 3% Elastano. Forro 100% Acetinado.",
+      "price": 289.9,
+      "package_length": 30,
+      "details": "Modelagem midi, decote V suave, mangas longas levemente bufantes e cinto do mesmo tecido.",
+      "sku": "DH-VD-001",
+      "cost_price": 120,
+      "measurements": null,
+      "images": [
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/14418bf56_generated_b26f6802.jpg",
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/de2108912_generated_b3a4de3c.jpg"
+      ],
+      "length": null,
+      "weight": 0.4,
+      "collection": "Conexão Inverno",
+      "sale_price": null,
+      "badges": {
+        "novo": true,
+        "destaque": true,
+        "maisVendido": false,
+        "promocao": false,
+        "ultimas": false,
+        "exclusivo": false
+      },
+      "package_width": 40,
+      "lining": null,
+      "transparency": null,
+      "name": "Vestido Helena",
+      "category": "vestidos",
+      "subcategory": null,
+      "care": "Lavar à mão em água fria. Não usar alvejante. Secar à sombra. Passar em temperatura baixa.",
+      "status": "published",
+      "sold_count": 142,
+      "id": "6a9b3ddb8285c05f1ad6f5c5",
+      "created_date": "2026-09-04T21:53:31.010000",
+      "updated_date": "2026-09-05T01:09:03.320000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "short_description": null,
+      "modeling": null,
+      "elasticity": null,
+      "rating": 4.8,
+      "description": "Slip dress de seda com toque líquido, pensado para transitar do dia à noite com elegância natural.",
+      "colors": [
+        {
+          "id": "bege",
+          "name": "Bege",
+          "hex": "#E8DDCF",
+          "image": "",
+          "stock": {
+            "PP": 0,
+            "P": 1,
+            "M": 3,
+            "G": 2,
+            "GG": 1
+          }
+        }
+      ],
+      "package_height": 70,
+      "sizes": [
+        "PP",
+        "P",
+        "M",
+        "G",
+        "GG"
+      ],
+      "installments": 6,
+      "composition": "100% Seda.",
+      "price": 349.9,
+      "package_length": 28,
+      "details": "Modelagem reta, alças finas ajustáveis, comprimento longo.",
+      "sku": "DH-VD-002",
+      "cost_price": 140,
+      "measurements": null,
+      "images": [
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/be513dd6b_generated_1ce6c83f.jpg",
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/de2108912_generated_b3a4de3c.jpg"
+      ],
+      "length": null,
+      "weight": 0.3,
+      "collection": "Conexão Inverno",
+      "sale_price": 279.9,
+      "badges": {
+        "novo": true,
+        "destaque": false,
+        "maisVendido": true,
+        "promocao": true,
+        "ultimas": false,
+        "exclusivo": false
+      },
+      "package_width": 38,
+      "lining": null,
+      "transparency": null,
+      "name": "Vestido Aurora",
+      "category": "vestidos",
+      "subcategory": null,
+      "care": "Lavagem a seco recomendada.",
+      "status": "published",
+      "sold_count": 98,
+      "id": "6a9b3ddb8285c05f1ad6f5c6",
+      "created_date": "2026-09-04T21:53:31.010000",
+      "updated_date": "2026-09-04T22:32:36.614000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "short_description": null,
+      "modeling": null,
+      "elasticity": null,
+      "rating": 5,
+      "description": "Blazer e calça de alfaiataria em rosa queimado, um par que celebra a força feminina com sofisticação.",
+      "colors": [
+        {
+          "id": "rosa_queimado",
+          "name": "Rosa queimado",
+          "hex": "#D98C96",
+          "image": "",
+          "stock": {
+            "PP": 2,
+            "P": 3,
+            "M": 2,
+            "G": 1,
+            "GG": 0
+          }
+        },
+        {
+          "id": "preto",
+          "name": "Preto",
+          "hex": "#2D2926",
+          "image": "",
+          "stock": {
+            "PP": 1,
+            "P": 1,
+            "M": 0,
+            "G": 0,
+            "GG": 0
+          }
+        }
+      ],
+      "package_height": 62,
+      "sizes": [
+        "PP",
+        "P",
+        "M",
+        "G",
+        "GG"
+      ],
+      "installments": 6,
+      "composition": "92% Poliéster, 8% Elastano.",
+      "price": 459.9,
+      "package_length": 30,
+      "details": "Blazer acinturado com abotoamento duplo, calça de cintura alta e perna reta.",
+      "sku": "DH-CJ-001",
+      "cost_price": 190,
+      "measurements": null,
+      "images": [
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/6690bfa3c_generated_482b55c6.jpg",
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/2c7257aca_generated_ae00107f.jpg"
+      ],
+      "length": null,
+      "weight": 0.7,
+      "collection": "Legados",
+      "sale_price": null,
+      "badges": {
+        "novo": false,
+        "destaque": true,
+        "maisVendido": true,
+        "promocao": false,
+        "ultimas": true,
+        "exclusivo": false
+      },
+      "package_width": 40,
+      "lining": null,
+      "transparency": null,
+      "name": "Conjunto Lúcia",
+      "category": "conjuntos",
+      "subcategory": null,
+      "care": "Lavagem a seco.",
+      "status": "published",
+      "sold_count": 76,
+      "id": "6a9b3ddb8285c05f1ad6f5c7",
+      "created_date": "2026-09-04T21:53:31.010000",
+      "updated_date": "2026-09-04T21:53:31.010000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "short_description": null,
+      "modeling": null,
+      "elasticity": null,
+      "rating": 4.7,
+      "description": "Blusa de seda com volume suave e movimento, uma ode à delicadeza no dia a dia.",
+      "colors": [
+        {
+          "id": "off_white",
+          "name": "Off-white",
+          "hex": "#F9F7F5",
+          "image": "",
+          "stock": {
+            "PP": 3,
+            "P": 4,
+            "M": 5,
+            "G": 3,
+            "GG": 2
+          }
+        },
+        {
+          "id": "rosa_claro",
+          "name": "Rosa claro",
+          "hex": "#E6B0B8",
+          "image": "",
+          "stock": {
+            "PP": 1,
+            "P": 2,
+            "M": 2,
+            "G": 1,
+            "GG": 0
+          }
+        }
+      ],
+      "package_height": 58,
+      "sizes": [
+        "PP",
+        "P",
+        "M",
+        "G",
+        "GG"
+      ],
+      "installments": 4,
+      "composition": "100% Seda.",
+      "price": 189.9,
+      "package_length": 5,
+      "details": "Gola solta, mangas três quartos, fechamento lateral discreto.",
+      "sku": "DH-BL-001",
+      "cost_price": 75,
+      "measurements": null,
+      "images": [
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/1408a0956_generated_316408ba.jpg",
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/5b1981267_generated_3d3235dd.jpg"
+      ],
+      "length": null,
+      "weight": 0.2,
+      "collection": "Conexão Inverno",
+      "sale_price": null,
+      "badges": {
+        "novo": true,
+        "destaque": false,
+        "maisVendido": false,
+        "promocao": false,
+        "ultimas": false,
+        "exclusivo": false
+      },
+      "package_width": 50,
+      "lining": null,
+      "transparency": null,
+      "name": "Blusa Serena",
+      "category": "blusas",
+      "subcategory": null,
+      "care": "Lavar à mão em água fria.",
+      "status": "published",
+      "sold_count": 64,
+      "id": "6a9b3ddb8285c05f1ad6f5c8",
+      "created_date": "2026-09-04T21:53:31.010000",
+      "updated_date": "2026-09-04T21:53:31.010000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "short_description": null,
+      "modeling": null,
+      "elasticity": null,
+      "rating": 4.8,
+      "description": "Calça pantalona de cintura alta que alonga a silhueta com conforto e elegância.",
+      "colors": [
+        {
+          "id": "bege",
+          "name": "Bege",
+          "hex": "#E8DDCF",
+          "image": "",
+          "stock": {
+            "PP": 2,
+            "P": 3,
+            "M": 4,
+            "G": 2,
+            "GG": 1
+          }
+        },
+        {
+          "id": "preto",
+          "name": "Preto",
+          "hex": "#2D2926",
+          "image": "",
+          "stock": {
+            "PP": 1,
+            "P": 2,
+            "M": 1,
+            "G": 0,
+            "GG": 0
+          }
+        }
+      ],
+      "package_height": 105,
+      "sizes": [
+        "PP",
+        "P",
+        "M",
+        "G",
+        "GG"
+      ],
+      "installments": 5,
+      "composition": "97% Poliéster, 3% Elastano.",
+      "price": 259.9,
+      "package_length": 5,
+      "details": "Cintura alta, pences frontais, comprimento longo.",
+      "sku": "DH-CA-001",
+      "cost_price": 95,
+      "measurements": null,
+      "images": [
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/91c37652a_generated_259bf357.jpg",
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/2cc9318e6_generated_c7c5f6ef.jpg"
+      ],
+      "length": null,
+      "weight": 0.35,
+      "collection": "Legados",
+      "sale_price": null,
+      "badges": {
+        "novo": false,
+        "destaque": false,
+        "maisVendido": true,
+        "promocao": false,
+        "ultimas": true,
+        "exclusivo": false
+      },
+      "package_width": 40,
+      "lining": null,
+      "transparency": null,
+      "name": "Calça Margot",
+      "category": "calcas",
+      "subcategory": null,
+      "care": "Lavar à mão. Passar em temperatura baixa.",
+      "status": "published",
+      "sold_count": 121,
+      "id": "6a9b3ddb8285c05f1ad6f5c9",
+      "created_date": "2026-09-04T21:53:31.010000",
+      "updated_date": "2026-09-04T21:53:31.010000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "short_description": null,
+      "modeling": null,
+      "elasticity": null,
+      "rating": 4.9,
+      "description": "Bolsa estruturada em couro com fecho dourado, companheira ideal das histórias que você carrega.",
+      "colors": [
+        {
+          "id": "rosa_queimado",
+          "name": "Rosa queimado",
+          "hex": "#D98C96",
+          "image": "",
+          "stock": {
+            "PP": 5,
+            "P": 5,
+            "M": 5,
+            "G": 5,
+            "GG": 5
+          }
+        },
+        {
+          "id": "caramelo",
+          "name": "Caramelo",
+          "hex": "#B98A6B",
+          "image": "",
+          "stock": {
+            "PP": 3,
+            "P": 3,
+            "M": 3,
+            "G": 3,
+            "GG": 3
+          }
+        }
+      ],
+      "package_height": 22,
+      "sizes": [
+        "Único"
+      ],
+      "installments": 6,
+      "composition": "Couro sintético premium. Ferragem dourada.",
+      "price": 329.9,
+      "package_length": 12,
+      "details": "Alça ajustável, bolso interno com zíper, pés de proteção.",
+      "sku": "DH-AC-001",
+      "cost_price": 130,
+      "measurements": null,
+      "images": [
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/c74ea59fb_generated_4e2304f3.jpg",
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/38d0b8849_generated_e157ded6.jpg"
+      ],
+      "length": null,
+      "weight": 0.6,
+      "collection": "Legados",
+      "sale_price": null,
+      "badges": {
+        "novo": true,
+        "destaque": true,
+        "maisVendido": false,
+        "promocao": false,
+        "ultimas": false,
+        "exclusivo": false
+      },
+      "package_width": 30,
+      "lining": null,
+      "transparency": null,
+      "name": "Bolsa Sofia",
+      "category": "acessorios",
+      "subcategory": null,
+      "care": "Limpar com pano úmido. Evitar contato com água.",
+      "status": "published",
+      "sold_count": 53,
+      "id": "6a9b3ddb8285c05f1ad6f5ca",
+      "created_date": "2026-09-04T21:53:31.010000",
+      "updated_date": "2026-09-04T21:53:31.010000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "short_description": null,
+      "modeling": null,
+      "elasticity": null,
+      "rating": 4.9,
+      "description": "Vestido midi com babados delicados que dançam com o movimento, feito para marcar momentos.",
+      "colors": [
+        {
+          "id": "rosa_claro",
+          "name": "Rosa claro",
+          "hex": "#E6B0B8",
+          "image": "",
+          "stock": {
+            "PP": 2,
+            "P": 3,
+            "M": 3,
+            "G": 2,
+            "GG": 1
+          }
+        }
+      ],
+      "package_height": 95,
+      "sizes": [
+        "PP",
+        "P",
+        "M",
+        "G",
+        "GG"
+      ],
+      "installments": 6,
+      "composition": "100% Viscose.",
+      "price": 319.9,
+      "package_length": 5,
+      "details": "Alças finas, decote reto, babados na barra.",
+      "sku": "DH-VD-003",
+      "cost_price": 135,
+      "measurements": null,
+      "images": [
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/de2108912_generated_b3a4de3c.jpg",
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/14418bf56_generated_b26f6802.jpg"
+      ],
+      "length": null,
+      "weight": 0.35,
+      "collection": "Legados",
+      "sale_price": null,
+      "badges": {
+        "novo": false,
+        "destaque": true,
+        "maisVendido": true,
+        "promocao": false,
+        "ultimas": false,
+        "exclusivo": false
+      },
+      "package_width": 42,
+      "lining": null,
+      "transparency": null,
+      "name": "Vestido Beatriz",
+      "category": "vestidos",
+      "subcategory": null,
+      "care": "Lavar à mão em água fria.",
+      "status": "published",
+      "sold_count": 110,
+      "id": "6a9b3ddb8285c05f1ad6f5cb",
+      "created_date": "2026-09-04T21:53:31.010000",
+      "updated_date": "2026-09-04T21:53:31.010000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "short_description": null,
+      "modeling": null,
+      "elasticity": null,
+      "rating": 4.6,
+      "description": "Blusa em seda blush com pences suaves, leveza que veste a feminilidade.",
+      "colors": [
+        {
+          "id": "rosa_claro",
+          "name": "Rosa claro",
+          "hex": "#E6B0B8",
+          "image": "",
+          "stock": {
+            "PP": 1,
+            "P": 2,
+            "M": 2,
+            "G": 1,
+            "GG": 0
+          }
+        },
+        {
+          "id": "off_white",
+          "name": "Off-white",
+          "hex": "#F9F7F5",
+          "image": "",
+          "stock": {
+            "PP": 2,
+            "P": 3,
+            "M": 3,
+            "G": 2,
+            "GG": 1
+          }
+        }
+      ],
+      "package_height": 60,
+      "sizes": [
+        "PP",
+        "P",
+        "M",
+        "G",
+        "GG"
+      ],
+      "installments": 4,
+      "composition": "100% Seda.",
+      "price": 219.9,
+      "package_length": 5,
+      "details": "Gola V, mangas curtas, pences frontais.",
+      "sku": "DH-BL-002",
+      "cost_price": 80,
+      "measurements": null,
+      "images": [
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/5b1981267_generated_3d3235dd.jpg",
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/1408a0956_generated_316408ba.jpg"
+      ],
+      "length": null,
+      "weight": 0.2,
+      "collection": "Conexão Inverno",
+      "sale_price": 175.9,
+      "badges": {
+        "novo": false,
+        "destaque": false,
+        "maisVendido": false,
+        "promocao": true,
+        "ultimas": true,
+        "exclusivo": false
+      },
+      "package_width": 48,
+      "lining": null,
+      "transparency": null,
+      "name": "Blusa Helena Silk",
+      "category": "blusas",
+      "subcategory": null,
+      "care": "Lavagem a seco.",
+      "status": "published",
+      "sold_count": 47,
+      "id": "6a9b3ddb8285c05f1ad6f5cc",
+      "created_date": "2026-09-04T21:53:31.010000",
+      "updated_date": "2026-09-04T21:53:31.010000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "short_description": null,
+      "modeling": null,
+      "elasticity": null,
+      "rating": 4.8,
+      "description": "Dupla de tricô fino em tom bege, aconchego sofisticado para os dias frescos.",
+      "colors": [
+        {
+          "id": "bege",
+          "name": "Bege",
+          "hex": "#E8DDCF",
+          "image": "",
+          "stock": {
+            "PP": 2,
+            "P": 2,
+            "M": 3,
+            "G": 2,
+            "GG": 1
+          }
+        }
+      ],
+      "package_height": 50,
+      "sizes": [
+        "PP",
+        "P",
+        "M",
+        "G",
+        "GG"
+      ],
+      "installments": 6,
+      "composition": "50% Viscose, 50% Poliamida.",
+      "price": 489.9,
+      "package_length": 10,
+      "details": "Cropped de tricô + saia midi de cintura alta.",
+      "sku": "DH-CJ-002",
+      "cost_price": 200,
+      "measurements": null,
+      "images": [
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/2c7257aca_generated_ae00107f.jpg",
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/6690bfa3c_generated_482b55c6.jpg"
+      ],
+      "length": null,
+      "weight": 0.5,
+      "collection": "Conexão Inverno",
+      "sale_price": null,
+      "badges": {
+        "novo": true,
+        "destaque": false,
+        "maisVendido": false,
+        "promocao": false,
+        "ultimas": false,
+        "exclusivo": false
+      },
+      "package_width": 40,
+      "lining": null,
+      "transparency": null,
+      "name": "Conjunto Sofia",
+      "category": "conjuntos",
+      "subcategory": null,
+      "care": "Lavagem a seco.",
+      "status": "published",
+      "sold_count": 39,
+      "id": "6a9b3ddb8285c05f1ad6f5cd",
+      "created_date": "2026-09-04T21:53:31.010000",
+      "updated_date": "2026-09-04T21:53:31.010000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "short_description": null,
+      "modeling": null,
+      "elasticity": null,
+      "rating": 4.7,
+      "description": "Calça reta de cintura alta, versátil e elegante para compor looks atemporais.",
+      "colors": [
+        {
+          "id": "off_white",
+          "name": "Off-white",
+          "hex": "#F9F7F5",
+          "image": "",
+          "stock": {
+            "PP": 2,
+            "P": 3,
+            "M": 4,
+            "G": 3,
+            "GG": 2
+          }
+        },
+        {
+          "id": "caramelo",
+          "name": "Caramelo",
+          "hex": "#B98A6B",
+          "image": "",
+          "stock": {
+            "PP": 1,
+            "P": 1,
+            "M": 1,
+            "G": 0,
+            "GG": 0
+          }
+        }
+      ],
+      "package_height": 100,
+      "sizes": [
+        "PP",
+        "P",
+        "M",
+        "G",
+        "GG"
+      ],
+      "installments": 5,
+      "composition": "97% Poliéster, 3% Elastano.",
+      "price": 239.9,
+      "package_length": 5,
+      "details": "Cintura alta, bolsos laterais, fechamento por zíper.",
+      "sku": "DH-CA-002",
+      "cost_price": 90,
+      "measurements": null,
+      "images": [
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/2cc9318e6_generated_c7c5f6ef.jpg",
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/91c37652a_generated_259bf357.jpg"
+      ],
+      "length": null,
+      "weight": 0.35,
+      "collection": "Legados",
+      "sale_price": null,
+      "badges": {
+        "novo": false,
+        "destaque": false,
+        "maisVendido": true,
+        "promocao": false,
+        "ultimas": false,
+        "exclusivo": false
+      },
+      "package_width": 38,
+      "lining": null,
+      "transparency": null,
+      "name": "Calça Paloma",
+      "category": "calcas",
+      "subcategory": null,
+      "care": "Lavar à mão.",
+      "status": "published",
+      "sold_count": 88,
+      "id": "6a9b3ddb8285c05f1ad6f5ce",
+      "created_date": "2026-09-04T21:53:31.010000",
+      "updated_date": "2026-09-04T21:53:31.010000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "short_description": null,
+      "modeling": null,
+      "elasticity": null,
+      "rating": 5,
+      "description": "Colar fino em banho dourado inspirado na ponte que conecta gerações. Um símbolo para ser herdado.",
+      "colors": [
+        {
+          "id": "dourado",
+          "name": "Dourado",
+          "hex": "#DAAF37",
+          "image": "",
+          "stock": {
+            "PP": 10,
+            "P": 10,
+            "M": 10,
+            "G": 10,
+            "GG": 10
+          }
+        }
+      ],
+      "package_height": 10,
+      "sizes": [
+        "Único"
+      ],
+      "installments": 3,
+      "composition": "Aço inox banhado a ouro 18k.",
+      "price": 159.9,
+      "package_length": 3,
+      "details": "Cadeia fina 45cm + extensor 5cm. Pingente em formato de arco.",
+      "sku": "DH-AC-002",
+      "cost_price": 55,
+      "measurements": null,
+      "images": [
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/38d0b8849_generated_e157ded6.jpg",
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/c74ea59fb_generated_4e2304f3.jpg"
+      ],
+      "length": null,
+      "weight": 0.05,
+      "collection": "Método Ponte",
+      "sale_price": null,
+      "badges": {
+        "novo": true,
+        "destaque": true,
+        "maisVendido": false,
+        "promocao": false,
+        "ultimas": false,
+        "exclusivo": true
+      },
+      "package_width": 10,
+      "lining": null,
+      "transparency": null,
+      "name": "Colar Ponte",
+      "category": "acessorios",
+      "subcategory": null,
+      "care": "Evitar contato com perfumes e água.",
+      "status": "published",
+      "sold_count": 67,
+      "id": "6a9b3ddb8285c05f1ad6f5cf",
+      "created_date": "2026-09-04T21:53:31.010000",
+      "updated_date": "2026-09-04T21:53:31.010000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "short_description": null,
+      "modeling": null,
+      "elasticity": null,
+      "rating": 4.8,
+      "description": "Vestido envelope que valoriza todas as silhuetas, uma peça curinga com alma D'Helenas.",
+      "colors": [
+        {
+          "id": "rosa_queimado",
+          "name": "Rosa queimado",
+          "hex": "#D98C96",
+          "image": "",
+          "stock": {
+            "PP": 1,
+            "P": 2,
+            "M": 2,
+            "G": 1,
+            "GG": 0
+          }
+        },
+        {
+          "id": "preto",
+          "name": "Preto",
+          "hex": "#2D2926",
+          "image": "",
+          "stock": {
+            "PP": 0,
+            "P": 1,
+            "M": 1,
+            "G": 0,
+            "GG": 0
+          }
+        }
+      ],
+      "package_height": 95,
+      "sizes": [
+        "PP",
+        "P",
+        "M",
+        "G",
+        "GG"
+      ],
+      "installments": 6,
+      "composition": "97% Poliéster, 3% Elastano.",
+      "price": 299.9,
+      "package_length": 5,
+      "details": "Decote V, cinto removível, comprimento midi.",
+      "sku": "DH-VD-004",
+      "cost_price": 125,
+      "measurements": null,
+      "images": [
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/14418bf56_generated_b26f6802.jpg",
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/de2108912_generated_b3a4de3c.jpg"
+      ],
+      "length": null,
+      "weight": 0.4,
+      "collection": "Método Ponte",
+      "sale_price": null,
+      "badges": {
+        "novo": false,
+        "destaque": false,
+        "maisVendido": true,
+        "promocao": false,
+        "ultimas": true,
+        "exclusivo": false
+      },
+      "package_width": 44,
+      "lining": null,
+      "transparency": null,
+      "name": "Vestido Íris",
+      "category": "vestidos",
+      "subcategory": null,
+      "care": "Lavar à mão.",
+      "status": "published",
+      "sold_count": 95,
+      "id": "6a9b3ddb8285c05f1ad6f5d0",
+      "created_date": "2026-09-04T21:53:31.010000",
+      "updated_date": "2026-09-04T21:53:31.010000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "short_description": null,
+      "modeling": null,
+      "elasticity": null,
+      "rating": 4.7,
+      "description": "Camisa de viscose com gola clássica, elegância atemporal para o dia a dia.",
+      "colors": [
+        {
+          "id": "off_white",
+          "name": "Off-white",
+          "hex": "#F9F7F5",
+          "image": "",
+          "stock": {
+            "PP": 3,
+            "P": 4,
+            "M": 4,
+            "G": 3,
+            "GG": 2
+          }
+        }
+      ],
+      "package_height": 64,
+      "sizes": [
+        "PP",
+        "P",
+        "M",
+        "G",
+        "GG"
+      ],
+      "installments": 3,
+      "composition": "100% Viscose.",
+      "price": 169.9,
+      "package_length": 5,
+      "details": "Gola clássica, abotoamento frontal, mangas longas.",
+      "sku": "DH-BL-003",
+      "cost_price": 60,
+      "measurements": null,
+      "images": [
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/1408a0956_generated_316408ba.jpg",
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/5b1981267_generated_3d3235dd.jpg"
+      ],
+      "length": null,
+      "weight": 0.25,
+      "collection": "Método Ponte",
+      "sale_price": null,
+      "badges": {
+        "novo": true,
+        "destaque": false,
+        "maisVendido": false,
+        "promocao": false,
+        "ultimas": false,
+        "exclusivo": false
+      },
+      "package_width": 52,
+      "lining": null,
+      "transparency": null,
+      "name": "Blusa Maria",
+      "category": "blusas",
+      "subcategory": null,
+      "care": "Lavar à mão. Passar em temperatura média.",
+      "status": "published",
+      "sold_count": 58,
+      "id": "6a9b3ddb8285c05f1ad6f5d1",
+      "created_date": "2026-09-04T21:53:31.010000",
+      "updated_date": "2026-09-04T21:53:31.010000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "short_description": null,
+      "modeling": null,
+      "elasticity": null,
+      "rating": 4.6,
+      "description": "Cinto de couro com fivela dourada, o detalhe que finaliza qualquer composição.",
+      "colors": [
+        {
+          "id": "caramelo",
+          "name": "Caramelo",
+          "hex": "#B98A6B",
+          "image": "",
+          "stock": {
+            "PP": 8,
+            "P": 8,
+            "M": 8,
+            "G": 8,
+            "GG": 8
+          }
+        },
+        {
+          "id": "preto",
+          "name": "Preto",
+          "hex": "#2D2926",
+          "image": "",
+          "stock": {
+            "PP": 6,
+            "P": 6,
+            "M": 6,
+            "G": 6,
+            "GG": 6
+          }
+        }
+      ],
+      "package_height": 5,
+      "sizes": [
+        "Único"
+      ],
+      "installments": 2,
+      "composition": "Couro sintético. Fivela em metal dourado.",
+      "price": 119.9,
+      "package_length": 10,
+      "details": "Largura 2,5cm. Fivela dourada.",
+      "sku": "DH-AC-003",
+      "cost_price": 40,
+      "measurements": null,
+      "images": [
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/38d0b8849_generated_e157ded6.jpg",
+        "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/c74ea59fb_generated_4e2304f3.jpg"
+      ],
+      "length": null,
+      "weight": 0.15,
+      "collection": "Método Ponte",
+      "sale_price": null,
+      "badges": {
+        "novo": false,
+        "destaque": false,
+        "maisVendido": false,
+        "promocao": false,
+        "ultimas": false,
+        "exclusivo": false
+      },
+      "package_width": 20,
+      "lining": null,
+      "transparency": null,
+      "name": "Cinto Aurora",
+      "category": "acessorios",
+      "subcategory": null,
+      "care": "Limpar com pano seco.",
+      "status": "published",
+      "sold_count": 41,
+      "id": "6a9b3ddb8285c05f1ad6f5d2",
+      "created_date": "2026-09-04T21:53:31.010000",
+      "updated_date": "2026-09-04T21:53:31.010000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    }
+  ],
+  "Category": [
+    {
+      "name": "Vestidos",
+      "image": "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/de2108912_generated_b3a4de3c.jpg",
+      "sort_order": 1,
+      "slug": "vestidos",
+      "parent_id": null,
+      "id": "6a9b3dda2c50786ca225c2a0",
+      "created_date": "2026-09-04T21:53:30.557000",
+      "updated_date": "2026-09-04T21:53:30.557000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "name": "Conjuntos",
+      "image": "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/2c7257aca_generated_ae00107f.jpg",
+      "sort_order": 2,
+      "slug": "conjuntos",
+      "parent_id": null,
+      "id": "6a9b3dda2c50786ca225c2a1",
+      "created_date": "2026-09-04T21:53:30.557000",
+      "updated_date": "2026-09-04T21:53:30.557000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "name": "Blusas",
+      "image": "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/5b1981267_generated_3d3235dd.jpg",
+      "sort_order": 3,
+      "slug": "blusas",
+      "parent_id": null,
+      "id": "6a9b3dda2c50786ca225c2a2",
+      "created_date": "2026-09-04T21:53:30.557000",
+      "updated_date": "2026-09-04T21:53:30.557000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "name": "Calças",
+      "image": "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/2cc9318e6_generated_c7c5f6ef.jpg",
+      "sort_order": 4,
+      "slug": "calcas",
+      "parent_id": null,
+      "id": "6a9b3dda2c50786ca225c2a3",
+      "created_date": "2026-09-04T21:53:30.557000",
+      "updated_date": "2026-09-04T21:53:30.557000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "name": "Acessórios",
+      "image": "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/38d0b8849_generated_e157ded6.jpg",
+      "sort_order": 5,
+      "slug": "acessorios",
+      "parent_id": null,
+      "id": "6a9b3dda2c50786ca225c2a4",
+      "created_date": "2026-09-04T21:53:30.557000",
+      "updated_date": "2026-09-04T21:53:30.557000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    }
+  ],
+  "Collection": [
+    {
+      "name": "Legados",
+      "description": "Peças atemporais pensadas para atravessar gerações.",
+      "image": null,
+      "sort_order": 2,
+      "slug": "legados",
+      "id": "6a9b3ddadedaed5878aa009c",
+      "created_date": "2026-09-04T21:53:30.736000",
+      "updated_date": "2026-09-04T21:53:30.736000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "name": "Método Ponte",
+      "description": "A assinatura D'Helenas: moda que conecta histórias.",
+      "image": null,
+      "sort_order": 3,
+      "slug": "metodo-ponte",
+      "id": "6a9b3ddadedaed5878aa009d",
+      "created_date": "2026-09-04T21:53:30.736000",
+      "updated_date": "2026-09-04T21:53:30.736000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "name": "Conexão Inverno",
+      "description": "Tons quentes e caimentos fluidos para os dias frescos.",
+      "image": null,
+      "sort_order": 1,
+      "slug": "conexao-inverno",
+      "id": "6a9b3ddadedaed5878aa009b",
+      "created_date": "2026-09-04T21:53:30.735000",
+      "updated_date": "2026-09-04T21:53:30.735000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    }
+  ],
+  "Banner": [
+    {
+      "image": "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/ca5732fc0_generated_db5c1f89.jpg",
+      "primary_cta_link": "/novidades",
+      "eyebrow": "Método Ponte • Moda Feminina",
+      "secondary_cta_link": "/colecoes",
+      "link": null,
+      "active": true,
+      "title": "D'Helenas",
+      "primary_cta_label": "Ver novidades",
+      "subtitle": "Moda que conecta histórias.",
+      "text": "Peças escolhidas para mulheres que valorizam estilo, elegância e personalidade.",
+      "position": "home",
+      "sort_order": 0,
+      "secondary_cta_label": "Conhecer a coleção",
+      "id": "6a9b3ddbde9622f565437381",
+      "created_date": "2026-09-04T21:53:31.277000",
+      "updated_date": "2026-09-04T21:53:31.277000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "image": "https://media.base44.com/images/public/6a9b39c904f395072f289bf5/39ec14145_generated_c6ec8583.jpg",
+      "primary_cta_link": "/sobre",
+      "eyebrow": "O conceito D'Helenas",
+      "secondary_cta_link": null,
+      "link": null,
+      "active": true,
+      "title": "Muito além da moda.",
+      "primary_cta_label": "Conheça nossa história",
+      "subtitle": null,
+      "text": "A D'Helenas nasceu para criar pontes entre mulheres, histórias e gerações.",
+      "position": "home",
+      "sort_order": 1,
+      "secondary_cta_label": null,
+      "id": "6a9b3ddbde9622f565437382",
+      "created_date": "2026-09-04T21:53:31.277000",
+      "updated_date": "2026-09-04T21:53:31.277000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    }
+  ],
+  "Setting": [
+    {
+      "is_public": true,
+      "value": {
+        "pickup_enabled": true,
+        "pickup_name": "Retirada na boutique",
+        "pickup_instructions": "",
+        "pickup_time": "",
+        "free_shipping_enabled": true,
+        "free_shipping_threshold": 122,
+        "melhor_envio_enabled": false,
+        "melhor_envio_mode": "sandbox"
+      },
+      "key": "shipping",
+      "id": "6a9b5af5fee751c96c74d84c",
+      "created_date": "2026-09-04T23:57:41.982000",
+      "updated_date": "2026-09-05T00:33:43.770000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "is_public": true,
+      "value": {
+        "top_bar_text": "Frete grátis acima de R$ 122 · Parcelamos em até 6x",
+        "free_shipping_threshold": 499,
+        "max_installments": 6,
+        "interest_free_installments": 6,
+        "allow_out_of_stock": false,
+        "show_low_stock": true,
+        "low_stock_threshold": 3
+      },
+      "key": "store",
+      "id": "6a9b5ae0e02960c5429bd5e2",
+      "created_date": "2026-09-04T23:57:20.494000",
+      "updated_date": "2026-09-05T00:33:44.125000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    },
+    {
+      "is_public": true,
+      "value": {
+        "store_name": "D'Helenas",
+        "trade_name": "",
+        "company_name": "",
+        "cnpj": "",
+        "email": "",
+        "phone": "",
+        "whatsapp": "",
+        "logo": "",
+        "logo_dark": "",
+        "favicon": "",
+        "currency": "BRL",
+        "timezone": "America/Sao_Paulo"
+      },
+      "key": "general",
+      "id": "6a9b591a5cab7f1e89e9213c",
+      "created_date": "2026-09-04T23:49:46.522000",
+      "updated_date": "2026-09-04T23:49:50.211000",
+      "created_by_id": "6a9b39c904f395072f289bf6",
+      "is_sample": false
+    }
+  ],
+  "Coupon": [],
+  "Order": []
+}
