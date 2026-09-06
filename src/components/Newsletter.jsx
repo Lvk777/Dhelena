@@ -13,7 +13,7 @@ export default function Newsletter() {
     };
 
     return (
-        <section className="py-20 sm:py-28 bg-[hsl(var(--charcoal))] text-bone">
+        <section className="py-20 sm:py-28 bg-[hsl(var(--rose-deep))] text-bone">
             <div className="container-boutique text-center max-w-xl mx-auto">
                 <p className="text-[11px] uppercase tracking-[0.32em] text-[hsl(var(--gold))]">Newsletter</p>
                 <h2 className="mt-4 font-heading text-4xl sm:text-5xl tracking-[0.03em]">Faça parte da D'Helenas</h2>

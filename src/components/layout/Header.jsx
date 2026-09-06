@@ -46,7 +46,7 @@ export default function Header() {
     return (
         <>
             {/* announcement bar */}
-            <div className="bg-[hsl(var(--charcoal))] text-bone text-[10px] tracking-[0.3em] uppercase text-center py-2 px-4">
+            <div className="bg-[hsl(var(--rose))] text-white text-[10px] tracking-[0.3em] uppercase text-center py-2 px-4">
                 {(settings.store.top_bar_text || "").replace(/R\$\s*[\d.,]+/g, `R$ ${(freeShippingThreshold || 499).toLocaleString("pt-BR")}`)}
             </div>
 
