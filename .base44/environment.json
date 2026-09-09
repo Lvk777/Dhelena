@@ -4,8 +4,74 @@
   "startCommand": "docker compose -f docker-compose.base44.yml up -d",
   "secrets": [
     {
+      "name": "SUPABASE_URL",
+      "description": "Supabase project URL (Dashboard → Project Settings → API). Format: https://xxxx.supabase.co. When set, backend uses Supabase Auth.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "SUPABASE_SERVICE_ROLE_KEY",
+      "description": "Supabase service role key (Dashboard → Project Settings → API). Railway only — never in frontend or GitHub.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "DATABASE_URL",
+      "description": "Supabase PostgreSQL pooler connection string (aws-0-sa-east-1.pooler.supabase.com:6543). Falls back to local Docker PostgreSQL if unreachable.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "VITE_SUPABASE_URL",
+      "description": "Supabase URL for frontend (same as SUPABASE_URL). Enables Supabase Auth + Storage in the frontend.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "VITE_SUPABASE_ANON_KEY",
+      "description": "Supabase anon key for frontend Auth + Storage.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "VITE_API_URL",
+      "description": "Railway backend URL for frontend API calls. Empty for local dev (uses Vite proxy).",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "RESEND_API_KEY",
+      "description": "Resend API key for transactional email notifications (https://resend.com/api-keys).",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "EMAIL_FROM",
+      "description": "Sender email for notifications. Example: D'Helenas <noreply@dhelenas.com.br>",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "WHATSAPP_ACCESS_TOKEN",
+      "description": "WhatsApp Business Cloud API access token (Meta Business → WhatsApp → API Setup).",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "WHATSAPP_PHONE_NUMBER_ID",
+      "description": "WhatsApp Business phone number ID (Meta Business → WhatsApp → API Setup).",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "WHATSAPP_WEBHOOK_SECRET",
+      "description": "WhatsApp webhook verification secret (user-defined string).",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
       "name": "JWT_SECRET",
-      "description": "Secret key for signing JWT auth tokens in the backend. Auto-generated for dev; set a strong random value for production (Railway).",
+      "description": "Secret key for signing JWT auth tokens in local dev. Auto-generated; not used when SUPABASE_URL is set.",
       "requiredAtBoot": true,
       "generatedForDevelopment": true
     }
