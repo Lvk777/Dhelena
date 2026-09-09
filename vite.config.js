@@ -17,5 +17,11 @@ export default defineConfig({
         port: 5551,
         host: true,
         allowedHosts: true,
+        proxy: {
+            '/api': {
+                target: 'http://backend:3001',
+                changeOrigin: true,
+            },
+        },
     },
 });

@@ -723,6 +723,83 @@ VITE_API_URL
 
 ---
 
+## Módulos Futuros (NÃO implementados — previstos para fase posterior)
+
+### MONTE SEU LOOK
+
+Cliente monta um look completo escolhendo peças por categoria:
+- Parte de cima
+- Parte de baixo
+- Vestido (quando aplicável)
+- Calçado (se a loja vender)
+- Bolsa
+- Acessórios
+
+**Regras:**
+- Mostrar somente produtos publicados e com estoque disponível.
+- Permitir adicionar o look inteiro à sacola.
+- Permitir campanhas de desconto por look completo (ex: "Leve 3 peças do look e ganhe 10% de desconto").
+- **Desconto validado exclusivamente no backend.** Nunca confiar no frontend para definir percentual, valor ou produtos elegíveis.
+
+**Endpoints futuros:**
+```
+GET  /api/look-builder              — categorias participantes
+POST /api/look-builder/validate     — validar desconto de look completo (server-side)
+```
+
+### PROMOÇÕES E CAMPANHAS (Admin)
+
+Área administrativa para criar e gerenciar promoções:
+
+**Tipos de desconto:**
+- Desconto percentual
+- Desconto fixo
+- Frete grátis
+- Desconto por coleção
+- Desconto por categoria
+- Desconto por produto
+- Desconto por quantidade
+- Desconto de look completo
+
+**Campos:**
+- Nome da campanha
+- Descrição
+- Status (ativa/inativa)
+- Tipo de desconto
+- Valor
+- Data de início
+- Data de término
+- Produtos participantes
+- Categorias participantes
+- Coleções participantes
+- Quantidade mínima
+- Valor mínimo
+- Acumula com cupom: sim/não
+- Destaque na Home: sim/não
+
+**Entidade futura:** `campaigns` (tabela a criar quando implementado)
+
+### BANNERS — Evolução
+
+Evoluir a administração de banners para permitir:
+- Criar, editar, excluir, ativar/desativar
+- Definir ordem (drag-and-drop)
+- Imagem desktop e imagem mobile (separadas)
+- Título, subtítulo, texto do botão, link do botão
+- Data de início e término (scheduling)
+- Campanha associada (opcional)
+- Tudo administrável sem alterar código
+
+**Schema futuro (extensão da tabela banners):**
+```sql
+ALTER TABLE banners ADD COLUMN image_mobile TEXT;
+ALTER TABLE banners ADD COLUMN start_date TIMESTAMPTZ;
+ALTER TABLE banners ADD COLUMN end_date TIMESTAMPTZ;
+ALTER TABLE banners ADD COLUMN campaign_id UUID REFERENCES campaigns(id);
+```
+
+---
+
 ## Próximos Passos
 
 1. **Criar projeto no Supabase** → obter URL + anon key + service role key
