@@ -27,7 +27,7 @@ export async function runSeed() {
     // 1. Admin user
     const hash = await bcrypt.hash('admin123', 10);
     await pool.query(
-        `INSERT INTO users (email, password_hash, full_name, role)
+        `INSERT INTO profiles (email, password_hash, full_name, role)
          VALUES ($1, $2, $3, $4)
          ON CONFLICT (email) DO UPDATE SET role = $4, password_hash = $2`,
         ['admin@dhelenas.com', hash, 'Administrador', 'admin']

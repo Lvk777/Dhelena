@@ -12,11 +12,17 @@ import uploadRoutes from './routes/upload.js';
 
 const app = express();
 
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+// ─── CORS ──────────────────────────────────────────────────────────
+const corsOrigin = process.env.CORS_ORIGIN || '*';
+app.use(cors({
+    origin: corsOrigin === '*' ? true : corsOrigin.split(',').map(s => s.trim()),
+    credentials: true,
+}));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(auth);
 
-// Routes
+// ─── Routes ─────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api', catalogRoutes);
 app.use('/api', orderRoutes);
@@ -24,15 +30,22 @@ app.use('/api', userRoutes);
 app.use('/api', adminRoutes);
 app.use('/api', uploadRoutes);
 
-// Health check
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
+// ─── Health check ──────────────────────────────────────────────────
+app.get('/health', async (req, res) => {
+    try {
+        await pool.query('SELECT 1');
+        res.json({ status: 'ok', database: 'connected' });
+    } catch {
+        res.status(503).json({ status: 'error', database: 'disconnected' });
+    }
+});
 
-// Static files for uploads
+// ─── Static files for uploads (dev only) ───────────────────────────
 const uploadDir = process.env.UPLOAD_DIR || './uploads';
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 app.use('/api/uploads', express.static(uploadDir));
 
-// Auto-run migrations + seed on first start
+// ─── Auto-run migrations + seed on first start ─────────────────────
 let initialized = false;
 async function ensureInitialized() {
     if (initialized) return;
@@ -47,7 +60,6 @@ async function ensureInitialized() {
             }
         }
 
-        // Auto-seed if products table is empty
         const { rows } = await pool.query('SELECT COUNT(*) as cnt FROM products');
         if (parseInt(rows[0].cnt) === 0) {
             console.log('[Seed] Products table empty, running seed...');
@@ -58,11 +70,10 @@ async function ensureInitialized() {
         console.log('[API] Database initialized');
     } catch (err) {
         console.error('[API] Init error:', err.message);
-        initialized = true; // Don't retry on every request
+        initialized = true;
     }
 }
 
-// Run init before routes (middleware)
 app.use(async (req, res, next) => {
     if (!initialized) await ensureInitialized();
     next();

@@ -1,8 +1,9 @@
 /**
- * Real HTTP API client — replaces localStorage stubs.
+ * API client — dual-mode (Supabase Auth + Storage in production, Express JWT + local in dev).
  * Maintains the same interface the frontend expects (entities, auth, functions, integrations, app).
- * All data comes from the Express backend (Railway in production, local Docker in dev).
  */
+
+import { supabase } from './supabaseClient.js';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 const TOKEN_KEY = 'dhelena_access_token';
@@ -13,6 +14,18 @@ function getToken() { return localStorage.getItem(TOKEN_KEY); }
 function setToken(token) { token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY); }
 function getStoredUser() { try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch { return null; } }
 function setStoredUser(user) { user ? localStorage.setItem(USER_KEY, JSON.stringify(user)) : localStorage.removeItem(USER_KEY); }
+
+// ─── Sync Supabase session → localStorage token ────────────────────
+if (supabase) {
+    supabase.auth.onAuthStateChange((event, session) => {
+        if (session?.access_token) {
+            setToken(session.access_token);
+        } else {
+            setToken(null);
+            setStoredUser(null);
+        }
+    });
+}
 
 // ─── Core fetch wrapper ────────────────────────────────────────────
 async function apiFetch(path, options = {}) {
@@ -98,14 +111,24 @@ function makeEntity(name) {
     };
 }
 
-// ─── Auth ──────────────────────────────────────────────────────────
+// ─── Auth (Supabase when configured, Express JWT fallback) ──────────
 const auth = {
     async me() {
-        const token = getToken();
-        if (!token) {
-            const err = new Error('Not authenticated');
-            err.status = 401;
-            throw err;
+        if (supabase) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                const err = new Error('Not authenticated');
+                err.status = 401;
+                throw err;
+            }
+            setToken(session.access_token);
+        } else {
+            const token = getToken();
+            if (!token) {
+                const err = new Error('Not authenticated');
+                err.status = 401;
+                throw err;
+            }
         }
         try {
             const user = await apiFetch('/auth/me');
@@ -123,6 +146,14 @@ const auth = {
     getToken() { return getToken(); },
     setToken(token) { setToken(token); },
     async loginViaEmailPassword(email, password, returnTo = '') {
+        if (supabase) {
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+            setToken(data.session.access_token);
+            const user = await apiFetch('/auth/me');
+            setStoredUser(user);
+            return user;
+        }
         const data = await apiFetch('/auth/login', {
             method: 'POST',
             body: JSON.stringify({ email, password }),
@@ -135,6 +166,20 @@ const auth = {
         window.location.href = '/login?returnTo=/admin';
     },
     async register({ email, password, full_name }) {
+        if (supabase) {
+            const { data, error } = await supabase.auth.signUp({
+                email, password,
+                options: { data: { full_name } },
+            });
+            if (error) throw error;
+            if (data.session) {
+                setToken(data.session.access_token);
+                const user = await apiFetch('/auth/me');
+                setStoredUser(user);
+                return user;
+            }
+            return { email, pending_verification: true };
+        }
         const data = await apiFetch('/auth/register', {
             method: 'POST',
             body: JSON.stringify({ email, password, full_name }),
@@ -151,12 +196,25 @@ const auth = {
         return user;
     },
     async resetPasswordRequest(email) {
+        if (supabase) {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/reset-password`,
+            });
+            if (error) throw error;
+            return {};
+        }
         return apiFetch('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
     },
     async resetPassword({ resetToken, newPassword }) {
+        if (supabase) {
+            const { error } = await supabase.auth.updateUser({ password: newPassword });
+            if (error) throw error;
+            return { success: true };
+        }
         return apiFetch('/auth/reset-password', { method: 'POST', body: JSON.stringify({ resetToken, newPassword }) });
     },
     logout(redirectUrl) {
+        if (supabase) supabase.auth.signOut();
         setToken(null);
         setStoredUser(null);
         if (redirectUrl) window.location.href = redirectUrl;
@@ -165,7 +223,14 @@ const auth = {
         window.location.href = '/login' + (returnTo ? '?returnTo=' + encodeURIComponent(returnTo) : '');
     },
     loginWithProvider(provider, returnTo) {
-        window.location.href = '/login' + (returnTo ? '?returnTo=' + encodeURIComponent(returnTo) : '');
+        if (supabase) {
+            supabase.auth.signInWithOAuth({
+                provider,
+                options: { redirectTo: returnTo || window.location.href },
+            });
+        } else {
+            window.location.href = '/login' + (returnTo ? '?returnTo=' + encodeURIComponent(returnTo) : '');
+        }
     },
 };
 
@@ -194,10 +259,37 @@ const functions = {
     },
 };
 
-// ─── File upload ───────────────────────────────────────────────────
+// ─── File upload (Supabase Storage when configured, backend fallback) ─
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_SIZE = 10 * 1024 * 1024;
+
 const integrations = {
     Core: {
-        async UploadFile({ file }) {
+        async UploadFile({ file, bucket = 'product-images' }) {
+            // Validate file type
+            if (!ALLOWED_TYPES.includes(file.type)) {
+                throw new Error('Formato não permitido. Use JPEG, PNG ou WEBP.');
+            }
+            if (file.size > MAX_SIZE) {
+                throw new Error('Arquivo muito grande. Máximo 10MB.');
+            }
+
+            if (supabase) {
+                // Upload to Supabase Storage
+                const ext = file.name.split('.').pop().toLowerCase();
+                const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+                const { error } = await supabase.storage
+                    .from(bucket)
+                    .upload(fileName, file, { contentType: file.type });
+                if (error) throw error;
+
+                const { data: { publicUrl } } = supabase.storage
+                    .from(bucket)
+                    .getPublicUrl(fileName);
+                return { file_url: publicUrl };
+            }
+
+            // Dev mode: upload to backend
             const token = getToken();
             const formData = new FormData();
             formData.append('file', file);
@@ -228,7 +320,7 @@ const app = {
     },
 };
 
-// ─── Entity registry (Proxy for dynamic entity access) ─────────────
+// ─── Entity registry ───────────────────────────────────────────────
 const entities = new Proxy({}, {
     get(_, name) {
         return makeEntity(name);
