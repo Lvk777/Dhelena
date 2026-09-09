@@ -5,7 +5,7 @@ const IMG_BASE = "https://media.base44.com/images/public/6a9b39c904f395072f289bf
 const img = (slug) => `${IMG_BASE}/${slug}`;
 
 export const HERO_IMAGE = img("ca5732fc0_generated_db5c1f89.jpg");
-export const ABOUT_IMAGE = img("39ec14145_generated_c6ec8583.jpg");
+export const ABOUT_IMAGE = "https://media.base44.com/images/public/6a9cb96c35367ad0608d2e70/c1c14d892_Nossahistriadhelenas.jpg";
 export const LOOK_IMAGE = img("b30f6cddb_generated_048b13fa.jpg");
 
 export const CATEGORY_IMAGES = {
