@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.base44-defaults
 
 # Logs
 /logs
