@@ -14,6 +14,7 @@ import uploadRoutes from './routes/upload.js';
 import lookRoutes from './routes/look.js';
 import analyticsRoutes from './routes/analytics.js';
 import contactRoutes from './routes/contact.js';
+import securityRoutes from './routes/security.js';
 
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -58,6 +59,7 @@ app.use('/api', userRoutes);
 app.use('/api', adminRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api', lookRoutes);
+app.use('/api', securityRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────
 app.get('/health', async (req, res) => {

@@ -5,6 +5,7 @@ import { pool } from '../config/db.js';
 import { auth } from '../middleware.js';
 import { loginLimiter, registerLimiter, forgotPasswordLimiter } from '../middleware/rateLimiters.js';
 import { logSecurityEvent } from '../middleware/securityLog.js';
+import { recordLoginEvent } from './security.js';
 
 const router = Router();
 
@@ -59,6 +60,7 @@ router.post('/login', loginLimiter, async (req, res, next) => {
 
         if (rows.length === 0) {
             await logSecurityEvent(req, 'login_failed', { reason: 'email_not_found' });
+            await recordLoginEvent(req, { email: (email || '').toLowerCase(), userType: 'customer', status: 'failed' });
             return res.status(401).json({ error: genericError });
         }
 
@@ -66,11 +68,13 @@ router.post('/login', loginLimiter, async (req, res, next) => {
         const valid = await bcrypt.compare(password, user.password_hash);
         if (!valid) {
             await logSecurityEvent(req, 'login_failed', { reason: 'wrong_password', target_email: email.toLowerCase() });
+            await recordLoginEvent(req, { userId: user.id, email: user.email, userType: user.role === 'admin' ? 'admin' : 'customer', status: 'failed' });
             return res.status(401).json({ error: genericError });
         }
 
         const safeUser = { id: user.id, email: user.email, full_name: user.full_name, phone: user.phone, role: user.role };
         const token = signToken(user);
+        await recordLoginEvent(req, { userId: user.id, email: user.email, userType: user.role === 'admin' ? 'admin' : 'customer', status: 'success' });
         res.json({ user: safeUser, token });
     } catch (err) { next(err); }
 });

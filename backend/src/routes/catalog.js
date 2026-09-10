@@ -225,7 +225,17 @@ router.get('/banners', async (req, res, next) => {
 
         let query = 'SELECT *, created_at as created_date, updated_at as updated_date FROM banners';
         if (conditions.length > 0) query += ' WHERE ' + conditions.join(' AND ');
-        query += ' ' + buildSort(req, 'sort_order', 'ASC');
+
+        // For public access: filter by date validity and priority ordering
+        if (!isAdmin) {
+            const dateParamIdx = allParams.length + 1;
+            if (conditions.length > 0) query += ' AND';
+            else query += ' WHERE';
+            query += ` (start_date IS NULL OR start_date <= $${dateParamIdx}) AND (end_date IS NULL OR end_date >= $${dateParamIdx})`;
+            allParams.push(new Date());
+        }
+
+        query += ' ' + buildSort(req, isAdmin ? 'sort_order' : 'priority', isAdmin ? 'ASC' : 'DESC');
         if (req.query.limit) query += ` LIMIT ${parseInt(req.query.limit)}`;
         const { rows } = await pool.query(query, allParams);
         res.json(rows);

@@ -333,6 +333,23 @@ const custom = {
     analyticsPages: ({ period }) => apiFetch(`/analytics/pages?period=${period || '7d'}`),
     analyticsFunnel: ({ period }) => apiFetch(`/analytics/funnel?period=${period || '7d'}`),
     analyticsProducts: ({ period }) => apiFetch(`/analytics/products?period=${period || '7d'}`),
+    analyticsCampaigns: ({ period }) => apiFetch(`/analytics/campaigns?period=${period || '7d'}`),
+    analyticsCustomers: ({ period }) => apiFetch(`/analytics/customers?period=${period || '7d'}`),
+    analyticsGeo: ({ period }) => apiFetch(`/analytics/geo?period=${period || '7d'}`),
+    // Security endpoints
+    securityStatus: () => apiFetch('/security/status'),
+    setup2FA: () => apiFetch('/security/setup-2fa', { method: 'POST' }),
+    verify2FA: ({ code }) => apiFetch('/security/verify-2fa', { method: 'POST', body: JSON.stringify({ code }) }),
+    disable2FA: () => apiFetch('/security/disable-2fa', { method: 'POST' }),
+    updateSecuritySetting: (data) => apiFetch('/security/settings', { method: 'PATCH', body: JSON.stringify(data) }),
+    // Login history
+    loginHistory: (queryString) => apiFetch(`/login-history?${queryString || ''}`),
+    archiveLoginHistory: (id) => apiFetch(`/login-history/${id}/archive`, { method: 'POST' }),
+    markLoginSuspicious: (id) => apiFetch(`/login-history/${id}/suspicious`, { method: 'POST' }),
+    // Sessions
+    activeSessions: () => apiFetch('/sessions/active'),
+    revokeSession: (id) => apiFetch(`/sessions/${id}/revoke`, { method: 'POST' }),
+    revokeUserSessions: (userId) => apiFetch(`/sessions/user/${userId}/revoke`, { method: 'POST' }),
 };
 
 // ─── Public client ────────────────────────────────────────────────

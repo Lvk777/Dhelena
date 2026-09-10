@@ -10,8 +10,8 @@ import { LOOK_IMAGE, formatBRL } from "@/data/products";
 
 export default function Home() {
     const { products, categories, banners, loading } = useCatalog();
-    const hero = banners[0] || {};
-    const concept = banners[1] || {};
+    const hero = banners.find(b => b.position === "home_hero") || banners[0] || {};
+    const concept = banners.find(b => b.position === "home_after_news") || banners[1] || {};
     const novidades = products.filter((p) => p.badges?.novo).slice(0, 8);
     const maisDesejados = products.filter((p) => p.badges?.maisVendido).slice(0, 4);
     const instImages = products.slice(0, 6).map((p) => p.images[0]).filter(Boolean);
@@ -42,8 +42,8 @@ export default function Home() {
                             <p className="mt-5 font-heading text-2xl sm:text-3xl italic text-bone/90">{hero.subtitle}</p>
                             <p className="mt-4 text-sm sm:text-base text-bone/80 leading-relaxed max-w-md">{hero.text}</p>
                             <div className="mt-9 flex flex-wrap gap-3">
-                                <Link to={hero.primary_cta_link || "/novidades"} className="inline-flex items-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--rose))]/85">
-                                    {hero.primary_cta_label || "Ver novidades"} <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
+                                <Link to={hero.button_link || hero.primary_cta_link || "/novidades"} className="inline-flex items-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--rose))]/85">
+                                    {hero.button_text || hero.primary_cta_label || "Ver novidades"} <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
                                 </Link>
                                 <Link to={(!hero.secondary_cta_link || hero.secondary_cta_link === "/loja") ? "/colecoes" : hero.secondary_cta_link} className="inline-flex items-center gap-2 border border-bone/80 text-bone text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-bone hover:text-charcoal">
                                     {hero.secondary_cta_label || "Conhecer a coleção"}
