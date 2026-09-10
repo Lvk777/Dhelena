@@ -1205,7 +1205,7 @@
       "is_public": true,
       "value": {
         "pickup_enabled": true,
-        "pickup_name": "Retirada na boutique",
+        "pickup_name": "Retirada no estoque",
         "pickup_instructions": "",
         "pickup_time": "",
         "free_shipping_enabled": true,

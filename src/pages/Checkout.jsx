@@ -189,7 +189,7 @@ export default function Checkout() {
                         <div className="space-y-3">
                             <OptionCard selected={form.entrega === "padrao"} onClick={() => set("entrega", "padrao")} title="Entrega padrão" desc="3 a 7 dias úteis" price={isFreeShipping(subtotal) ? "Grátis" : formatBRL(29.9)} />
                             <OptionCard selected={form.entrega === "expressa"} onClick={() => set("entrega", "expressa")} title="Entrega expressa" desc="1 a 2 dias úteis" price={formatBRL(49.9)} />
-                            <OptionCard selected={form.entrega === "retirada"} onClick={() => set("entrega", "retirada")} title="Retirada na boutique" desc="Combinar retirada na loja" price="Grátis" />
+                            <OptionCard selected={form.entrega === "retirada"} onClick={() => set("entrega", "retirada")} title="Retirada no estoque" desc="Combinar retirada na loja" price="Grátis" />
                         </div>
                     )}
                     {/* step 3 */}

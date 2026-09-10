@@ -83,5 +83,5 @@ export const PAYMENT_LABELS = {
 export const SHIPPING_LABELS = {
     padrao: "Entrega padrão",
     expressa: "Entrega expressa",
-    retirada: "Retirada na boutique",
+    retirada: "Retirada no estoque",
 };

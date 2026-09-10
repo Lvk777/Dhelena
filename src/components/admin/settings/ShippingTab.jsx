@@ -10,9 +10,9 @@ export default function ShippingTab({ data, onChange }) {
     const set = (k, v) => onChange({ ...data, [k]: v });
     return (
         <div className="space-y-5">
-            <AdminFormSection title="Retirada na boutique" icon={Truck}>
+            <AdminFormSection title="Retirada no estoque" icon={Truck}>
                 <div className="sm:col-span-2">
-                    <AdminToggle label="Ativar retirada" checked={data.pickup_enabled} onChange={(v) => set("pickup_enabled", v)} description="Permite que o cliente escolha retirar o pedido na boutique" />
+                    <AdminToggle label="Ativar retirada" checked={data.pickup_enabled} onChange={(v) => set("pickup_enabled", v)} description="Permite que o cliente escolha retirar o pedido no estoque" />
                 </div>
                 <AdminInput label="Nome exibido" value={data.pickup_name} onChange={(v) => set("pickup_name", v)} />
                 <AdminInput label="Prazo para retirada" value={data.pickup_time} onChange={(v) => set("pickup_time", v)} placeholder="Ex: 2 dias úteis" />
