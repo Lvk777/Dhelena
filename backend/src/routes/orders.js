@@ -10,6 +10,7 @@ const router = Router();
 
 // POST /api/orders — placeOrder
 router.post('/orders', auth, async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'É necessário estar autenticado para criar um pedido' });
     try {
         const idempotencyKey = req.headers['idempotency-key'] || null;
         const order = await placeOrder(req.user.id, req.body, idempotencyKey);

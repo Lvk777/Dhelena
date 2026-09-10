@@ -54,7 +54,7 @@ export default function MonteSeuLook() {
     // When the backend is deployed, the look discount should be recalculated
     // by the backend before order creation. See: backend/src/orderService.js
     const subtotal = lookItems.reduce((sum, item) => {
-        return sum + (item.product.salePrice ?? item.product.price);
+        return sum + Number(item.product.salePrice ?? item.product.price);
     }, 0);
 
     const lookDiscount = useMemo(() => {
@@ -187,7 +187,7 @@ export default function MonteSeuLook() {
                                         </div>
                                         <div className="p-2.5">
                                             <p className="text-[11px] font-medium truncate">{p.name}</p>
-                                            <p className="text-[11px] text-muted-foreground">{formatBRL(p.salePrice ?? p.price)}</p>
+                                            <p className="text-[11px] text-muted-foreground whitespace-nowrap">{formatBRL(Number(p.salePrice ?? p.price))}</p>
                                             <button
                                                 onClick={() => openConfig(p)}
                                                 className="w-full mt-2 py-1.5 text-[10px] uppercase tracking-[0.12em] border border-border hover:border-foreground transition-colors"
@@ -224,7 +224,7 @@ export default function MonteSeuLook() {
                                                 <p className="text-[11px] text-muted-foreground">
                                                     {color?.name} · Tam {item.size}
                                                 </p>
-                                                <p className="text-sm mt-1">{formatBRL(item.product.salePrice ?? item.product.price)}</p>
+                                                <p className="text-sm mt-1 whitespace-nowrap">{formatBRL(Number(item.product.salePrice ?? item.product.price))}</p>
                                             </div>
                                             <button onClick={() => openConfig(item.product)} className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground">Trocar</button>
                                             <button onClick={() => handleRemoveItem(item.productId)} className="text-muted-foreground hover:text-[hsl(var(--rose))]">
@@ -239,17 +239,17 @@ export default function MonteSeuLook() {
 
                     {/* ─── Right: Summary ─── */}
                     <div className={`${mobileTab === "look" ? "block" : "hidden"} lg:block`}>
-                        <div className="bg-background border border-border p-5 lg:sticky lg:top-6">
-                            <h3 className="font-heading text-lg tracking-[0.04em] mb-4">Resumo</h3>
-                            <div className="space-y-2 text-sm">
+                        <div className="bg-background border border-border p-6 lg:sticky lg:top-6">
+                            <h3 className="font-heading text-lg tracking-[0.04em] mb-5">Resumo</h3>
+                            <div className="space-y-3 text-sm">
                                 <div className="flex justify-between">
                                     <span className="text-muted-foreground">{lookItems.length} {lookItems.length === 1 ? "peça" : "peças"}</span>
-                                    <span>{formatBRL(subtotal)}</span>
+                                    <span className="whitespace-nowrap">{formatBRL(subtotal)}</span>
                                 </div>
                                 {lookDiscount > 0 && (
                                     <div className="flex justify-between text-[hsl(var(--gold))]">
                                         <span>Desconto do look</span>
-                                        <span>- {formatBRL(lookDiscount)}</span>
+                                        <span className="whitespace-nowrap">- {formatBRL(lookDiscount)}</span>
                                     </div>
                                 )}
                                 {promotion && lookItems.length < promotion.min_items && (
@@ -257,9 +257,9 @@ export default function MonteSeuLook() {
                                         Adicione mais {promotion.min_items - lookItems.length} peça(s) para ganhar {Number(promotion.discount_percent)}% OFF
                                     </p>
                                 )}
-                                <div className="border-t border-border pt-3 flex justify-between font-medium text-base">
+                                <div className="border-t border-border pt-4 flex justify-between font-medium text-base">
                                     <span>Total</span>
-                                    <span>{formatBRL(total)}</span>
+                                    <span className="whitespace-nowrap">{formatBRL(total)}</span>
                                 </div>
                             </div>
 

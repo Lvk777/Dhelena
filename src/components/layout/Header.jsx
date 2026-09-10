@@ -75,9 +75,9 @@ export default function Header() {
                             </button>
 
                             {/* nav desktop */}
-                            <nav className="hidden lg:flex items-center gap-7">
+                            <nav className="hidden lg:flex items-center gap-5">
                                 {NAV.slice(0, 4).map((n) => (
-                                    <Link key={n.label} to={n.to} className="link-underline text-[11px] uppercase tracking-[0.2em] text-foreground/75 hover:text-foreground transition-colors">
+                                    <Link key={n.label} to={n.to} className="link-underline text-[11px] uppercase tracking-[0.15em] whitespace-nowrap text-foreground/75 hover:text-foreground transition-colors">
                                         {n.label}
                                     </Link>
                                 ))}
@@ -96,9 +96,9 @@ export default function Header() {
 
                         {/* right nav + icons */}
                         <div className="justify-self-end flex items-center gap-1 sm:gap-2">
-                            <nav className="hidden lg:flex items-center gap-7 mr-2">
+                            <nav className="hidden lg:flex items-center gap-5 mr-2">
                                 {NAV.slice(4).map((n) => (
-                                    <Link key={n.label} to={n.to} className="link-underline text-[11px] uppercase tracking-[0.2em] text-foreground/75 hover:text-foreground transition-colors">
+                                    <Link key={n.label} to={n.to} className="link-underline text-[11px] uppercase tracking-[0.15em] whitespace-nowrap text-foreground/75 hover:text-foreground transition-colors">
                                         {n.label}
                                     </Link>
                                 ))}

@@ -100,12 +100,14 @@ const AuthenticatedApp = () => {
                             <Route path="/novidades" element={<Navigate to="/loja?filtro=novidades" replace />} />
                             <Route path="/produto/:id" element={<ProductDetail />} />
                             <Route path="/sacola" element={<Cart />} />
-                            <Route path="/checkout" element={<Checkout />} />
                             <Route path="/sobre" element={<About />} />
                             <Route path="/contato" element={<Contact />} />
                             <Route path="/colecoes" element={<Collections />} />
                             <Route path="/favoritos" element={<Favorites />} />
                             <Route path="/monte-seu-look" element={<MonteSeuLook />} />
+                            <Route path="/checkout" element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login?returnTo=/checkout" replace />} />}>
+                                <Route index element={<Checkout />} />
+                            </Route>
                         </Route>
 
                         {/* Customer account (protected) */}
