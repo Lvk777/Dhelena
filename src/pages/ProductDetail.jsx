@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Heart, Minus, Plus, Ruler, Truck, ChevronDown, Check } from "lucide-react";
+import SizeGuideModal from "@/components/SizeGuideModal";
 import { useStore } from "@/context/StoreContext";
 import { useCatalog } from "@/context/CatalogContext";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
 import { COLOR_SWATCHES, formatBRL, installmentValue } from "@/data/products";
 import ProductCard from "@/components/ProductCard";
+import { track } from "@/lib/analytics";
+import PositionBanner from "@/components/PositionBanner";
 
 export default function ProductDetail() {
     const { id } = useParams();
@@ -18,10 +21,14 @@ export default function ProductDetail() {
     const [size, setSize] = useState(null);
     const [qty, setQty] = useState(1);
     const [openAcc, setOpenAcc] = useState("descricao");
+    const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
     const [cep, setCep] = useState("");
     const [frete, setFrete] = useState(null);
 
     useEffect(() => { if (product && !color) setColor(product.colors[0]?.id); }, [product, color]);
+
+    // Track product view
+    useEffect(() => { if (product) track('product_view', { product_id: product.id }); }, [product?.id]);
 
     if (loading && !product) {
         return <div className="h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-[hsl(var(--bone))] border-t-[hsl(var(--gold))] rounded-full animate-spin" /></div>;
@@ -57,6 +64,7 @@ export default function ProductDetail() {
 
     return (
         <div>
+            <PositionBanner position="product_top" />
             {/* breadcrumb */}
             <div className="container-boutique py-5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                 <Link to="/" className="hover:text-foreground">Início</Link>
@@ -134,7 +142,7 @@ export default function ProductDetail() {
                         <div className="mt-6">
                             <div className="flex items-center justify-between mb-3">
                                 <p className="text-[11px] uppercase tracking-[0.2em]">Tamanho</p>
-                                <button className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground">
+                                <button onClick={() => setSizeGuideOpen(true)} className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors">
                                     <Ruler className="w-3.5 h-3.5" strokeWidth={1.25} /> Guia de medidas
                                 </button>
                             </div>
@@ -249,6 +257,8 @@ export default function ProductDetail() {
                     {size ? "Adicionar" : "Escolha o tamanho"}
                 </button>
             </div>
+
+            <SizeGuideModal open={sizeGuideOpen} onClose={() => setSizeGuideOpen(false)} guideId={product?.size_guide_id} customMeasurements={product?.custom_measurements} />
         </div>
     );
 }

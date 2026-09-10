@@ -1,252 +1,349 @@
 /**
- * Standalone API client — replaces the Base44 SDK.
- *
- * All entity methods store data in localStorage so the app runs fully
- * offline / standalone (no Base44 account required).
- * Replace these implementations with real fetch() calls to your backend.
+ * API client — dual-mode (Supabase Auth + Storage in production, Express JWT + local in dev).
+ * Maintains the same interface the frontend expects (entities, auth, functions, integrations, app).
  */
 
-import initialData from '@/data/initialData.json';
+import { supabase } from './supabaseClient.js';
 
-// ─── Tiny localStorage store with initial seed ────────────────────────────────
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const TOKEN_KEY = 'dhelena_access_token';
+const USER_KEY = 'dhelena_auth_user';
 
-function storeKey(entity) {
-    return `dhelena_entity_${entity}`;
+// ─── Token & user storage ──────────────────────────────────────────
+function getToken() { return localStorage.getItem(TOKEN_KEY); }
+function setToken(token) { token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY); }
+function getStoredUser() { try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch { return null; } }
+function setStoredUser(user) { user ? localStorage.setItem(USER_KEY, JSON.stringify(user)) : localStorage.removeItem(USER_KEY); }
+
+// ─── Sync Supabase session → localStorage token ────────────────────
+// Only sync when supabase has a session; don't clear JWT token on sign-out events
+if (supabase) {
+    supabase.auth.onAuthStateChange((event, session) => {
+        if (session?.access_token) {
+            setToken(session.access_token);
+        }
+        // Don't clear JWT token on SIGNED_OUT — the JWT auth path is independent
+    });
 }
 
-function readAll(entity) {
-    try {
-        const item = localStorage.getItem(storeKey(entity));
-        if (!item || item === '[]') {
-            const seed = initialData[entity];
-            if (seed && seed.length > 0) {
-                localStorage.setItem(storeKey(entity), JSON.stringify(seed));
-                return JSON.parse(JSON.stringify(seed));
-            }
-        }
-        let data = item ? JSON.parse(item) : (initialData[entity] || []);
-        if (entity === 'Banner' && Array.isArray(data)) {
-            let changed = false;
-            data = data.map(b => {
-                if (b.secondary_cta_link === '/loja') {
-                    changed = true;
-                    return { ...b, secondary_cta_link: '/colecoes' };
-                }
-                return b;
-            });
-            if (changed) writeAll(entity, data);
-        }
-        return data;
-    } catch {
-        return initialData[entity] || [];
+// ─── Core fetch wrapper ────────────────────────────────────────────
+async function apiFetch(path, options = {}) {
+    const token = getToken();
+    const headers = { 'Content-Type': 'application/json', ...options.headers };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+
+    if (res.status === 401) {
+        setToken(null);
+        setStoredUser(null);
+        const err = new Error('Não autenticado');
+        err.status = 401;
+        throw err;
     }
+
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: res.statusText }));
+        const err = new Error(error.error || error.message || 'Request failed');
+        err.status = res.status;
+        err.response = { data: error };
+        throw err;
+    }
+
+    return res.json();
 }
 
-function writeAll(entity, records) {
-    localStorage.setItem(storeKey(entity), JSON.stringify(records));
-}
+// ─── Entity → endpoint mapping ─────────────────────────────────────
+const ENTITY_MAP = {
+    Product: 'products',
+    Category: 'categories',
+    Collection: 'collections',
+    Banner: 'banners',
+    Setting: 'settings',
+    Order: 'orders',
+    Coupon: 'coupons',
+    Address: 'addresses',
+    Favorite: 'favorites',
+    StockMovement: 'stock-movements',
+    AuditLog: 'audit-logs',
+    User: 'users',
+    NotificationLog: 'notifications',
+};
 
-function newId() {
-    return Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
-
-function nowIso() {
-    return new Date().toISOString();
-}
-
-// ─── Entity CRUD factory ──────────────────────────────────────────────────────
-
+// ─── Entity CRUD factory ───────────────────────────────────────────
 function makeEntity(name) {
+    const endpoint = ENTITY_MAP[name] || name.toLowerCase();
     return {
         async list(sortField, limit) {
-            let records = readAll(name);
-            if (sortField) {
-                const desc = sortField.startsWith('-');
-                const field = desc ? sortField.slice(1) : sortField;
-                records = records.sort((a, b) => {
-                    const av = a[field], bv = b[field];
-                    if (av === bv) return 0;
-                    const cmp = av < bv ? -1 : 1;
-                    return desc ? -cmp : cmp;
-                });
-            }
-            if (limit) records = records.slice(0, limit);
-            return records;
+            const params = new URLSearchParams();
+            if (sortField) params.set('sort', sortField);
+            if (limit) params.set('limit', limit);
+            return apiFetch(`/${endpoint}?${params}`);
         },
         async filter(predicate, sortField, limit) {
-            let records = readAll(name).filter(record => {
-                if (typeof predicate !== 'object') return true;
-                return Object.entries(predicate).every(([k, v]) => {
-                    if (v && typeof v === 'object' && '$in' in v) return v.$in.includes(record[k]);
-                    return record[k] === v;
-                });
-            });
-            if (sortField) {
-                const desc = sortField.startsWith('-');
-                const field = desc ? sortField.slice(1) : sortField;
-                records = records.sort((a, b) => {
-                    const av = a[field], bv = b[field];
-                    if (av === bv) return 0;
-                    const cmp = av < bv ? -1 : 1;
-                    return desc ? -cmp : cmp;
-                });
+            const params = new URLSearchParams();
+            if (predicate && typeof predicate === 'object') {
+                for (const [k, v] of Object.entries(predicate)) {
+                    if (v !== null && typeof v === 'object') params.set(k, JSON.stringify(v));
+                    else params.set(k, v);
+                }
             }
-            if (limit) records = records.slice(0, limit);
-            return records;
+            if (sortField) params.set('sort', sortField);
+            if (limit) params.set('limit', limit);
+            return apiFetch(`/${endpoint}?${params}`);
         },
         async get(id) {
-            const rec = readAll(name).find(r => r.id === id);
-            if (!rec) throw Object.assign(new Error('Not found'), { status: 404 });
-            return rec;
+            return apiFetch(`/${endpoint}/${id}`);
         },
         async create(data) {
-            const records = readAll(name);
-            const rec = { id: newId(), created_date: nowIso(), ...data };
-            records.push(rec);
-            writeAll(name, records);
-            return rec;
+            return apiFetch(`/${endpoint}`, { method: 'POST', body: JSON.stringify(data) });
         },
         async bulkCreate(items) {
-            return Promise.all(items.map(item => this.create(item)));
+            return apiFetch(`/${endpoint}/bulk`, { method: 'POST', body: JSON.stringify({ items }) });
         },
         async update(id, data) {
-            const records = readAll(name);
-            const idx = records.findIndex(r => r.id === id);
-            if (idx === -1) throw Object.assign(new Error('Not found'), { status: 404 });
-            records[idx] = { ...records[idx], ...data };
-            writeAll(name, records);
-            return records[idx];
+            return apiFetch(`/${endpoint}/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
         },
         async delete(id) {
-            const records = readAll(name).filter(r => r.id !== id);
-            writeAll(name, records);
-            return { id };
+            return apiFetch(`/${endpoint}/${id}`, { method: 'DELETE' });
         },
     };
 }
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
-
-const AUTH_KEY = 'dhelena_auth_user';
-const TOKEN_KEY = 'dhelena_access_token';
-
+// ─── Auth (Supabase when configured, Express JWT fallback) ──────────
 const auth = {
-    me() {
-        const raw = localStorage.getItem(AUTH_KEY);
-        if (!raw) return Promise.reject(Object.assign(new Error('Not authenticated'), { status: 401 }));
-        return Promise.resolve(JSON.parse(raw));
+    async me() {
+        // When supabase is configured, try its session first;
+        // fall back to JWT token from localStorage if no supabase session
+        if (supabase) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.access_token) {
+                setToken(session.access_token);
+            }
+        }
+        // If no supabase session (or supabase not configured), check JWT token
+        const token = getToken();
+        if (!token) {
+            const err = new Error('Not authenticated');
+            err.status = 401;
+            throw err;
+        }
+        try {
+            const user = await apiFetch('/auth/me');
+            setStoredUser(user);
+            return user;
+        } catch (err) {
+            if (err.status === 401) {
+                setToken(null);
+                setStoredUser(null);
+            }
+            throw err;
+        }
     },
-    isAuthenticated() {
-        return !!localStorage.getItem(TOKEN_KEY);
-    },
-    getToken() {
-        return localStorage.getItem(TOKEN_KEY);
-    },
-    setToken(token) {
-        localStorage.setItem(TOKEN_KEY, token);
-    },
+    isAuthenticated() { return !!getToken(); },
+    getToken() { return getToken(); },
+    setToken(token) { setToken(token); },
     async loginViaEmailPassword(email, password, returnTo = '') {
-        // Automatically grant admin role if email has 'admin', or if accessing /admin
-        const isAdmin = email.toLowerCase().includes('admin') || 
-                        returnTo.includes('admin') || 
-                        (typeof window !== 'undefined' && window.location.href.includes('admin'));
-        const role = isAdmin ? 'admin' : 'user';
-        const user = { id: newId(), email, full_name: email.split('@')[0], role };
-        localStorage.setItem(AUTH_KEY, JSON.stringify(user));
-        localStorage.setItem(TOKEN_KEY, 'stub-token-' + newId());
-        return user;
+        if (supabase) {
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+            setToken(data.session.access_token);
+            const user = await apiFetch('/auth/me');
+            setStoredUser(user);
+            return user;
+        }
+        const data = await apiFetch('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ email, password }),
+        });
+        setToken(data.token);
+        setStoredUser(data.user);
+        return data.user;
     },
     async loginAsAdmin() {
-        const user = { id: 'admin-1', email: 'admin@dhelena.com', full_name: 'Administrador D\'Helenas', role: 'admin' };
-        localStorage.setItem(AUTH_KEY, JSON.stringify(user));
-        localStorage.setItem(TOKEN_KEY, 'stub-token-admin');
-        return user;
+        window.location.href = '/login?returnTo=/admin';
     },
     async register({ email, password, full_name }) {
-        // Stub: immediately create user (skip OTP flow)
-        const user = { id: newId(), email, full_name, role: 'user' };
-        localStorage.setItem(AUTH_KEY, JSON.stringify(user));
-        localStorage.setItem(TOKEN_KEY, 'stub-token-' + newId());
-        return user;
+        if (supabase) {
+            const { data, error } = await supabase.auth.signUp({
+                email, password,
+                options: { data: { full_name } },
+            });
+            if (error) throw error;
+            if (data.session) {
+                setToken(data.session.access_token);
+                const user = await apiFetch('/auth/me');
+                setStoredUser(user);
+                return user;
+            }
+            return { email, pending_verification: true };
+        }
+        const data = await apiFetch('/auth/register', {
+            method: 'POST',
+            body: JSON.stringify({ email, password, full_name }),
+        });
+        setToken(data.token);
+        setStoredUser(data.user);
+        return data.user;
     },
-    async verifyOtp({ email, otpCode }) {
-        return { access_token: 'stub-token-' + newId() };
-    },
-    async resendOtp(email) { return {}; },
+    async verifyOtp() { throw new Error('OTP não implementado'); },
+    async resendOtp() { return {}; },
     async updateMe(data) {
-        const raw = localStorage.getItem(AUTH_KEY);
-        const user = raw ? { ...JSON.parse(raw), ...data } : data;
-        localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+        const user = await apiFetch('/auth/me', { method: 'PATCH', body: JSON.stringify(data) });
+        setStoredUser(user);
         return user;
     },
-    async resetPasswordRequest(email) { return {}; },
-    async resetPassword({ resetToken, newPassword }) { return {}; },
+    async resetPasswordRequest(email) {
+        if (supabase) {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/reset-password`,
+            });
+            if (error) throw error;
+            return {};
+        }
+        return apiFetch('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
+    },
+    async resetPassword({ resetToken, newPassword }) {
+        if (supabase) {
+            const { error } = await supabase.auth.updateUser({ password: newPassword });
+            if (error) throw error;
+            return { success: true };
+        }
+        return apiFetch('/auth/reset-password', { method: 'POST', body: JSON.stringify({ resetToken, newPassword }) });
+    },
     logout(redirectUrl) {
-        localStorage.removeItem(AUTH_KEY);
-        localStorage.removeItem(TOKEN_KEY);
+        if (supabase) supabase.auth.signOut();
+        setToken(null);
+        setStoredUser(null);
         if (redirectUrl) window.location.href = redirectUrl;
     },
     redirectToLogin(returnTo) {
         window.location.href = '/login' + (returnTo ? '?returnTo=' + encodeURIComponent(returnTo) : '');
     },
     loginWithProvider(provider, returnTo) {
-        // Stub: redirect to login page (no OAuth flow)
-        window.location.href = '/login' + (returnTo ? '?returnTo=' + encodeURIComponent(returnTo) : '');
+        if (supabase) {
+            supabase.auth.signInWithOAuth({
+                provider,
+                options: { redirectTo: returnTo || window.location.href },
+            });
+        } else {
+            window.location.href = '/login' + (returnTo ? '?returnTo=' + encodeURIComponent(returnTo) : '');
+        }
     },
 };
 
-// ─── Functions (backend function stubs) ──────────────────────────────────────
-
+// ─── Backend functions ─────────────────────────────────────────────
 const functions = {
     async invoke(name, args) {
-        console.warn(`[apiClient] Function "${name}" called with`, args, '— stub response returned.');
-        // Specific stubs for known functions
-        if (name === 'validateCoupon') return { valid: false, error: 'Cupons não configurados' };
-        if (name === 'placeOrder') {
-            const orderNum = 'DH' + Date.now();
-            return { data: { order_number: orderNum } };
+        switch (name) {
+            case 'placeOrder':
+                return apiFetch('/orders', { method: 'POST', body: JSON.stringify(args) });
+            case 'cancelOrder':
+                return apiFetch(`/orders/${args.orderId || args.id}`, { method: 'DELETE' });
+            case 'validateCoupon':
+                return apiFetch('/coupons/validate', { method: 'POST', body: JSON.stringify(args) });
+            case 'adjustStock':
+                return apiFetch('/stock/adjust', { method: 'POST', body: JSON.stringify(args) });
+            case 'updateOrderStatus':
+                return apiFetch(`/orders/${args.orderId || args.id}/status`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ status: args.status, ...args }),
+                });
+            case 'logAdminAction':
+                return {};
+            default:
+                throw new Error(`Unknown function: ${name}`);
         }
-        if (name === 'logAdminAction') return {};
-        if (name === 'updateOrderStatus') return {};
-        if (name === 'cancelOrder') return {};
-        if (name === 'adjustStock') return {};
-        return {};
     },
 };
 
-// ─── Integrations (file upload stub) ─────────────────────────────────────────
+// ─── File upload (via backend → Supabase Storage with service role key) ─
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_SIZE = 10 * 1024 * 1024;
 
 const integrations = {
     Core: {
-        async UploadFile({ file }) {
-            // Convert file to a local object URL as a stub
-            const url = URL.createObjectURL(file);
-            return { file_url: url };
+        async UploadFile({ file, folder = 'misc' }) {
+            // Validate file type
+            if (!ALLOWED_TYPES.includes(file.type)) {
+                throw new Error('Formato não permitido. Use JPEG, PNG ou WEBP.');
+            }
+            if (file.size > MAX_SIZE) {
+                throw new Error('Arquivo muito grande. Máximo 10MB.');
+            }
+
+            // Always upload via backend (uses Supabase service role key securely)
+            const token = getToken();
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('folder', folder);
+
+            const res = await fetch(`${API_BASE}/upload`, {
+                method: 'POST',
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                body: formData,
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Não foi possível enviar a imagem.');
+            }
+
+            return res.json();
         },
     },
 };
 
-// ─── App (public settings stub) ──────────────────────────────────────────────
-
+// ─── App settings ──────────────────────────────────────────────────
 const app = {
     async getPublicSettings() {
-        return {
-            id: 'local',
-            public_settings: { store_name: "D'Helenas" },
-        };
+        try {
+            const settings = await apiFetch('/settings?is_public=true');
+            const general = settings.find(s => s.key === 'general');
+            return {
+                id: 'api',
+                public_settings: { store_name: general?.value?.store_name || "D'Helenas" },
+            };
+        } catch {
+            return { id: 'local', public_settings: { store_name: "D'Helenas" } };
+        }
     },
 };
 
-// ─── Entity registry ─────────────────────────────────────────────────────────
-
+// ─── Entity registry ───────────────────────────────────────────────
 const entities = new Proxy({}, {
     get(_, name) {
         return makeEntity(name);
     },
 });
 
-// ─── Public client ────────────────────────────────────────────────────────────
+// ─── Custom analytics endpoints ───────────────────────────────────
+const custom = {
+    analyticsOverview: ({ period, start, end }) => apiFetch(`/analytics/overview?period=${period || '7d'}${start ? `&start=${start}` : ''}${end ? `&end=${end}` : ''}`),
+    analyticsSources: ({ period }) => apiFetch(`/analytics/sources?period=${period || '7d'}`),
+    analyticsDevices: ({ period }) => apiFetch(`/analytics/devices?period=${period || '7d'}`),
+    analyticsPages: ({ period }) => apiFetch(`/analytics/pages?period=${period || '7d'}`),
+    analyticsFunnel: ({ period }) => apiFetch(`/analytics/funnel?period=${period || '7d'}`),
+    analyticsProducts: ({ period }) => apiFetch(`/analytics/products?period=${period || '7d'}`),
+    analyticsCampaigns: ({ period }) => apiFetch(`/analytics/campaigns?period=${period || '7d'}`),
+    analyticsCustomers: ({ period }) => apiFetch(`/analytics/customers?period=${period || '7d'}`),
+    analyticsGeo: ({ period }) => apiFetch(`/analytics/geo?period=${period || '7d'}`),
+    // Security endpoints
+    securityStatus: () => apiFetch('/security/status'),
+    setup2FA: () => apiFetch('/security/setup-2fa', { method: 'POST' }),
+    verify2FA: ({ code }) => apiFetch('/security/verify-2fa', { method: 'POST', body: JSON.stringify({ code }) }),
+    disable2FA: () => apiFetch('/security/disable-2fa', { method: 'POST' }),
+    updateSecuritySetting: (data) => apiFetch('/security/settings', { method: 'PATCH', body: JSON.stringify(data) }),
+    // Login history
+    loginHistory: (queryString) => apiFetch(`/login-history?${queryString || ''}`),
+    archiveLoginHistory: (id) => apiFetch(`/login-history/${id}/archive`, { method: 'POST' }),
+    markLoginSuspicious: (id) => apiFetch(`/login-history/${id}/suspicious`, { method: 'POST' }),
+    // Sessions
+    activeSessions: () => apiFetch('/sessions/active'),
+    revokeSession: (id) => apiFetch(`/sessions/${id}/revoke`, { method: 'POST' }),
+    revokeUserSessions: (userId) => apiFetch(`/sessions/user/${userId}/revoke`, { method: 'POST' }),
+};
 
-export const createClient = () => ({ auth, entities, functions, integrations, app });
-
+// ─── Public client ────────────────────────────────────────────────
+export const createClient = () => ({ auth, entities, functions, integrations, app, custom });
 export const client = createClient();

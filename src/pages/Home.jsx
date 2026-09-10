@@ -3,14 +3,15 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Instagram } from "lucide-react";
 import ProductCard from "@/components/ProductCard";
 import NewsletterCmp from "@/components/Newsletter";
+import { PromotionCampaignBanner } from "@/components/PromoComponents";
 import { useReveal } from "@/hooks/useReveal";
 import { useCatalog } from "@/context/CatalogContext";
 import { LOOK_IMAGE, formatBRL } from "@/data/products";
 
 export default function Home() {
     const { products, categories, banners, loading } = useCatalog();
-    const hero = banners[0] || {};
-    const concept = banners[1] || {};
+    const hero = banners.find(b => b.position === "home_hero") || banners[0] || {};
+    const concept = banners.find(b => b.position === "home_after_news") || banners[1] || {};
     const novidades = products.filter((p) => p.badges?.novo).slice(0, 8);
     const maisDesejados = products.filter((p) => p.badges?.maisVendido).slice(0, 4);
     const instImages = products.slice(0, 6).map((p) => p.images[0]).filter(Boolean);
@@ -41,10 +42,10 @@ export default function Home() {
                             <p className="mt-5 font-heading text-2xl sm:text-3xl italic text-bone/90">{hero.subtitle}</p>
                             <p className="mt-4 text-sm sm:text-base text-bone/80 leading-relaxed max-w-md">{hero.text}</p>
                             <div className="mt-9 flex flex-wrap gap-3">
-                                <Link to={hero.primary_cta_link || "/novidades"} className="inline-flex items-center gap-2 bg-bone text-charcoal text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--gold))] hover:text-white">
-                                    {hero.primary_cta_label || "Ver novidades"} <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
+                                <Link to={hero.button_link || hero.primary_cta_link || "/novidades"} className="inline-flex items-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--rose))]/85">
+                                    {hero.button_text || hero.primary_cta_label || "Ver novidades"} <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
                                 </Link>
-                                <Link to={(!hero.secondary_cta_link || hero.secondary_cta_link === "/loja") ? "/colecoes" : hero.secondary_cta_link} className="inline-flex items-center gap-2 border border-bone/60 text-bone text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-bone hover:text-charcoal">
+                                <Link to={(!hero.secondary_cta_link || hero.secondary_cta_link === "/loja") ? "/colecoes" : hero.secondary_cta_link} className="inline-flex items-center gap-2 border border-bone/80 text-bone text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-bone hover:text-charcoal">
                                     {hero.secondary_cta_label || "Conhecer a coleção"}
                                 </Link>
                             </div>
@@ -53,6 +54,9 @@ export default function Home() {
                     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-bone/70 text-[10px] uppercase tracking-[0.3em] animate-fade-in">Role para descobrir</div>
                 </section>
             )}
+
+            {/* PROMO CAMPAIGN BANNER */}
+            <PromotionCampaignBanner />
 
             {/* NOVIDADES */}
             <Section title="Acabaram de chegar" eyebrow="Novidades" id="novidades">
@@ -73,7 +77,7 @@ export default function Home() {
             </Section>
 
             {/* CATEGORIAS */}
-            <section className="bg-[hsl(var(--bone))] py-20 sm:py-28">
+            <section className="bg-[hsl(var(--blush))] py-20 sm:py-28">
                 <div className="container-boutique">
                     <SectionHeading eyebrow="Explorar" title="Categorias" />
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-5 mt-12">
@@ -96,7 +100,7 @@ export default function Home() {
                             <h2 className="mt-4 font-heading text-5xl sm:text-6xl tracking-[0.03em]">{concept.title}</h2>
                             <p className="mt-5 text-base text-bone/85 leading-relaxed max-w-xl mx-auto">{concept.text}</p>
                             {concept.primary_cta_link && (
-                                <Link to={concept.primary_cta_link} className="mt-8 inline-flex items-center gap-2 border border-bone/50 text-bone text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-bone hover:text-charcoal">
+                                <Link to={concept.primary_cta_link} className="mt-8 inline-flex items-center gap-2 border border-[hsl(var(--gold))] text-[hsl(var(--gold))] text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--gold))] hover:text-white">
                                     {concept.primary_cta_label}
                                 </Link>
                             )}
@@ -113,7 +117,7 @@ export default function Home() {
             </Section>
 
             {/* LOOK COMPLETO */}
-            <section className="bg-[hsl(var(--bone))] py-20 sm:py-28">
+            <section className="bg-[hsl(var(--champagne))] py-20 sm:py-28">
                 <div className="container-boutique grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
                     <div className="relative overflow-hidden aspect-[3/4] max-w-md mx-auto lg:mx-0 w-full">
                         <img src={LOOK_IMAGE} alt="Complete o look" className="w-full h-full object-cover" />
@@ -130,6 +134,17 @@ export default function Home() {
                         </div>
                         <Link to="/loja" className="btn-gold mt-9">Ver peças do look</Link>
                     </div>
+                </div>
+            </section>
+
+            {/* MONTE SEU LOOK */}
+            <section className="bg-background py-16 sm:py-20 border-y border-border">
+                <div className="container-boutique text-center">
+                    <p className="eyebrow">Personalize</p>
+                    <h2 className="mt-3 font-heading text-3xl sm:text-4xl lg:text-5xl tracking-[0.03em]">Monte seu Look</h2>
+                    <div className="flex justify-center mt-5"><div className="gold-rule" /></div>
+                    <p className="mt-6 text-muted-foreground">Crie combinações do seu jeito.</p>
+                    <Link to="/monte-seu-look" className="btn-gold mt-8 inline-block">Montar meu look</Link>
                 </div>
             </section>
 

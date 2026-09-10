@@ -5,6 +5,7 @@ import { Loader2, Mail, Lock, LogIn, ShieldCheck } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
 import { safeReturnTo } from "@/lib/authReturnTo";
+import { track } from "@/lib/analytics";
 
 export default function Login() {
     const [email, setEmail] = useState("");
@@ -19,6 +20,7 @@ export default function Login() {
         setLoading(true);
         try {
             await client.auth.loginViaEmailPassword(email, password, returnTo);
+            track('login');
             window.location.href = returnTo;
         } catch (err) {
             setError(err.message || "E-mail ou senha inválidos");

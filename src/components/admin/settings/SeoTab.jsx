@@ -3,7 +3,7 @@ import { Search } from "lucide-react";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminTextarea from "@/components/admin/AdminTextarea";
-import AdminUpload from "@/components/admin/AdminUpload";
+import AdminImageUploader from "@/components/admin/AdminImageUploader";
 
 export default function SeoTab({ data, onChange }) {
     const set = (k, v) => onChange({ ...data, [k]: v });
@@ -14,7 +14,7 @@ export default function SeoTab({ data, onChange }) {
                 <AdminTextarea label="Descrição padrão" value={data.default_description} onChange={(v) => set("default_description", v)} rows={3} full description="Descrição exibida em resultados de busca (até 160 caracteres)" />
             </AdminFormSection>
             <AdminFormSection title="Imagem de compartilhamento" description="Imagem exibida ao compartilhar o site em redes sociais (1200×630px)">
-                <AdminUpload label="Imagem OG" value={data.sharing_image} onChange={(v) => set("sharing_image", v)} aspect="1.91/1" full />
+                <AdminImageUploader label="Imagem OG" preset="og_image" value={data.sharing_image} onChange={(v) => set("sharing_image", v)} full />
             </AdminFormSection>
             <AdminFormSection title="Analytics & Pixel" description="Apenas IDs públicos — secrets privadas nunca devem ser armazenadas aqui">
                 <AdminInput label="Google Analytics ID" value={data.ga_id} onChange={(v) => set("ga_id", v)} placeholder="G-XXXXXXXXXX" mono />

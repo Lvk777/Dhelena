@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function AdminSelect({ label, value, onChange, options, placeholder, description, error, required, disabled, full }) {
+export default function AdminSelect({ label, value, onChange, options, placeholder, description, error, required, disabled, full, children }) {
     return (
         <div className={full ? "sm:col-span-2" : ""}>
             {label && (
@@ -15,9 +15,11 @@ export default function AdminSelect({ label, value, onChange, options, placehold
                 className={`admin-field cursor-pointer ${error ? "border-rose" : ""}`}
             >
                 {placeholder && <option value="">{placeholder}</option>}
-                {options.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
+                {options
+                    ? options.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                    ))
+                    : children}
             </select>
             {description && !error && <p className="text-[11px] text-muted-foreground mt-1.5">{description}</p>}
             {error && <p className="text-[11px] text-rose mt-1.5">{error}</p>}

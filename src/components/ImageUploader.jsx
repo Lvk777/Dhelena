@@ -1,10 +1,12 @@
 import React, { useState, useRef, useCallback } from "react";
-import { Upload, X, GripVertical, Star, Image as ImageIcon } from "lucide-react";
+import { Upload, X, GripVertical, Star, Image as ImageIcon, AlertCircle } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-
-const ACCEPTED = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const VALID_EXTENSIONS = /\.(jpe?g|png|webp)$/i;
+import CropperModal from "@/components/admin/CropperModal";
+import {
+    validateImageFile, getDimensions, formatFileSize,
+    cropAndResize, computeCropArea, blobToFile,
+    IMAGE_PRESETS, computeOutputSize, PRESET_FOLDERS,
+} from "@/lib/imageProcessor";
 
 const RECOMMENDATIONS = [
     "Foto principal",
@@ -14,54 +16,70 @@ const RECOMMENDATIONS = [
     "Foto no corpo",
 ];
 
+const PRODUCT_PRESET = IMAGE_PRESETS.product_image;
+
 export default function ImageUploader({ images = [], onChange, max = 10 }) {
     const [uploading, setUploading] = useState(false);
     const [dragOver, setDragOver] = useState(false);
+    const [uploadError, setUploadError] = useState("");
+    const [pendingFiles, setPendingFiles] = useState([]);
+    const [cropIndex, setCropIndex] = useState(0);
     const inputRef = useRef(null);
 
-    const [uploadError, setUploadError] = useState("");
-
-    const uploadFiles = useCallback(async (fileList) => {
+    const handleFiles = useCallback(async (fileList) => {
         setUploadError("");
-        // Validar tipo (MIME + extensão), tamanho máximo e bloquear formatos perigosos
-        const files = Array.from(fileList).filter((f) => {
-            const validMime = ACCEPTED.includes(f.type);
-            const validExt = VALID_EXTENSIONS.test(f.name);
-            const isSvg = f.type === "image/svg+xml" || /\.svg$/i.test(f.name);
-            const isDangerous = /\.(html?|js|exe|bat|sh|php|svg)$/i.test(f.name);
-            return (validMime || validExt) && !isSvg && !isDangerous;
-        }).filter((f) => {
-            if (f.size > MAX_FILE_SIZE) {
-                setUploadError(`Arquivo "${f.name}" excede o tamanho máximo de 5MB`);
-                return false;
-            }
-            return true;
-        });
+        const files = Array.from(fileList);
         if (!files.length) return;
+
+        // Validate all files first
+        for (const file of files) {
+            const v = validateImageFile(file);
+            if (!v.valid) { setUploadError(v.error); return; }
+        }
+
+        if (images.length + files.length > max) {
+            setUploadError(`Máximo de ${max} fotos.`);
+            return;
+        }
+
+        // Queue files for cropping one by one
+        setPendingFiles(files);
+        setCropIndex(0);
+    }, [images.length, max]);
+
+    const handleCropConfirm = useCallback(async (file, previewUrl) => {
         setUploading(true);
         try {
-            const urls = [];
-            for (const file of files) {
-                // Normalizar nome: remover acentos, espaços, caracteres especiais
-                const ext = file.name.match(VALID_EXTENSIONS)?.[0] || ".jpg";
-                const baseName = file.name.replace(/\.[^/.]+$/, "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "-").toLowerCase().slice(0, 40);
-                const normalizedFile = new File([file], `${baseName || "foto"}-${Date.now()}${ext}`, { type: file.type });
-                const { file_url } = await base44.integrations.Core.UploadFile({ file: normalizedFile });
-                urls.push(file_url);
-            }
-            onChange([...images, ...urls].slice(0, max));
+            const folder = PRESET_FOLDERS.product_image || "product";
+            const { file_url } = await base44.integrations.Core.UploadFile({ file, folder });
+            onChange([...images, file_url]);
         } catch (e) {
-            console.error("Upload error:", e);
+            console.error("[ImageUploader] Upload error:", e);
             setUploadError("Erro ao enviar arquivo. Tente novamente.");
         } finally {
             setUploading(false);
+            URL.revokeObjectURL(previewUrl);
+
+            // Move to next file or finish
+            const nextIndex = cropIndex + 1;
+            if (nextIndex < pendingFiles.length) {
+                setCropIndex(nextIndex);
+            } else {
+                setPendingFiles([]);
+                setCropIndex(0);
+            }
         }
-    }, [images, onChange, max]);
+    }, [images, onChange, cropIndex, pendingFiles.length]);
+
+    const handleCropCancel = useCallback(() => {
+        setPendingFiles([]);
+        setCropIndex(0);
+    }, []);
 
     const handleDrop = (e) => {
         e.preventDefault();
         setDragOver(false);
-        uploadFiles(e.dataTransfer.files);
+        handleFiles(e.dataTransfer.files);
     };
 
     const removeImage = (idx) => {
@@ -76,6 +94,8 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
         onChange(next);
     };
 
+    const outputSize = computeOutputSize(PRODUCT_PRESET.aspect, PRODUCT_PRESET.maxWidth, PRODUCT_PRESET.maxHeight);
+
     return (
         <div>
             {/* drop zone */}
@@ -83,8 +103,9 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
-                onClick={() => inputRef.current?.click()}
-                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${dragOver ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))]/5" : "border-border hover:border-foreground/30"}`}
+                onClick={() => !uploading && inputRef.current?.click()}
+                className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${dragOver ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))]/5" : "border-border hover:border-foreground/30"} ${uploading ? "pointer-events-none opacity-60" : ""}`}
+                style={{ minHeight: "120px", maxHeight: "160px" }}
             >
                 <input
                     ref={inputRef}
@@ -92,13 +113,21 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
                     accept=".jpg,.jpeg,.png,.webp"
                     multiple
                     className="hidden"
-                    onChange={(e) => { uploadFiles(e.target.files); e.target.value = ""; }}
+                    onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
                 />
-                <Upload className="w-7 h-7 mx-auto text-muted-foreground mb-3" strokeWidth={1.25} />
-                <p className="text-sm text-foreground">
-                    {uploading ? "Enviando..." : "Arraste fotos aqui ou clique para selecionar"}
-                </p>
-                <p className="text-[11px] text-muted-foreground mt-1">JPG, PNG ou WEBP · até 5MB cada · até {max} fotos</p>
+                {uploading ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2">
+                        <span className="w-5 h-5 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
+                        <p className="text-[11px] text-muted-foreground">Enviando...</p>
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center h-full gap-1">
+                        <Upload className="w-5 h-5 text-muted-foreground" strokeWidth={1.25} />
+                        <p className="text-[11px] text-foreground font-medium">Enviar fotos</p>
+                        <p className="text-[10px] text-muted-foreground">ou arraste aqui</p>
+                        <p className="text-[9px] text-muted-foreground/60">JPG, PNG ou WEBP · até 10MB · {max} fotos max</p>
+                    </div>
+                )}
                 {uploadError && <p className="text-[11px] text-[hsl(var(--rose))] mt-2">{uploadError}</p>}
             </div>
 
@@ -163,8 +192,20 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
             )}
 
             <p className="text-[11px] text-muted-foreground mt-3">
-                A primeira foto é a principal. Arraste para reordenar. Recomendamos: {RECOMMENDATIONS.join(" · ")}.
+                A primeira foto e a principal. Arraste para reordenar. Recomendamos: {RECOMMENDATIONS.join(" · ")}.
             </p>
+
+            {/* Cropper modal for multi-image upload */}
+            {pendingFiles.length > 0 && pendingFiles[cropIndex] && (
+                <CropperModal
+                    imageFile={pendingFiles[cropIndex]}
+                    preset={PRODUCT_PRESET}
+                    outputSize={outputSize}
+                    title={`Ajustar foto ${cropIndex + 1} de ${pendingFiles.length}`}
+                    onConfirm={handleCropConfirm}
+                    onCancel={handleCropCancel}
+                />
+            )}
         </div>
     );
 }

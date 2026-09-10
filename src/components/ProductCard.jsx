@@ -38,8 +38,8 @@ export default function ProductCard({ product, index = 0 }) {
 
                 {/* badges */}
                 <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-                    {product.badges.novo && <Badge tone="gold">Novo</Badge>}
-                    {product.badges.ultimas && <Badge tone="rose">Últimas peças</Badge>}
+                    {product.badges.novo && <Badge tone="rose">Novo</Badge>}
+                    {product.badges.ultimas && <Badge tone="gold">Últimas peças</Badge>}
                     {product.badges.promocao && <Badge tone="sale">Promo</Badge>}
                 </div>
 
@@ -91,9 +91,9 @@ export default function ProductCard({ product, index = 0 }) {
 
 function Badge({ children, tone }) {
     const tones = {
-        gold: "bg-[hsl(var(--gold))] text-white",
         rose: "bg-[hsl(var(--rose))] text-white",
-        sale: "bg-charcoal text-bone",
+        gold: "bg-[hsl(var(--gold))] text-white",
+        sale: "bg-[hsl(352_45%_58%)] text-white",
     };
     return <span className={`text-[9px] uppercase tracking-[0.18em] px-2.5 py-1 ${tones[tone]}`}>{children}</span>;
 }

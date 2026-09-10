@@ -4,7 +4,7 @@ import { base44 } from "@/api/base44Client";
 import AdminModal from "@/components/admin/AdminModal";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminTextarea from "@/components/admin/AdminTextarea";
-import AdminUpload from "@/components/admin/AdminUpload";
+import AdminImageUploader from "@/components/admin/AdminImageUploader";
 import AdminToggle from "@/components/admin/AdminToggle";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
@@ -140,7 +140,7 @@ function CategoryForm({ item, onClose, onSaved }) {
                     <AdminInput label="Slug (URL)" value={form.slug} onChange={onSlugChange} description="Gerado automaticamente a partir do nome" placeholder="auto" mono />
                 </AdminFormSection>
                 <AdminFormSection title="Imagem" description="Imagem de destaque da categoria (proporção 3:4)">
-                    <AdminUpload label="Imagem da categoria" value={form.image} onChange={(v) => set("image", v)} aspect="3/4" full />
+                    <AdminImageUploader label="Imagem da categoria" preset="category_image" value={form.image} onChange={(v) => set("image", v)} full />
                 </AdminFormSection>
                 <AdminFormSection title="Detalhes">
                     <AdminTextarea label="Descrição" value={form.description} onChange={(v) => set("description", v)} rows={2} placeholder="Descrição opcional da categoria" full />

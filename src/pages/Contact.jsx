@@ -4,13 +4,34 @@ import { useStore } from "@/context/StoreContext";
 
 export default function Contact() {
     const { showToast } = useStore();
-    const [form, setForm] = useState({ nome: "", email: "", assunto: "", mensagem: "" });
+    const [form, setForm] = useState({ nome: "", email: "", assunto: "", mensagem: "", website: "" });
+    const [sending, setSending] = useState(false);
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-    const submit = (e) => {
+    const submit = async (e) => {
         e.preventDefault();
-        showToast("Mensagem enviada. Retornaremos em breve ♡");
-        setForm({ nome: "", email: "", assunto: "", mensagem: "" });
+        setSending(true);
+        try {
+            const res = await fetch("/api/contact", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: form.nome, email: form.email, subject: form.assunto,
+                    message: form.mensagem, website: form.website, // honeypot
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                showToast(data.error || "Erro ao enviar. Tente novamente.", 'error');
+            } else {
+                showToast("Mensagem enviada. Retornaremos em breve ♡");
+                setForm({ nome: "", email: "", assunto: "", mensagem: "", website: "" });
+            }
+        } catch {
+            showToast("Erro de conexão. Tente novamente.", 'error');
+        } finally {
+            setSending(false);
+        }
     };
 
     return (
@@ -52,7 +73,20 @@ export default function Contact() {
                         <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Mensagem</label>
                         <textarea value={form.mensagem} onChange={(e) => set("mensagem", e.target.value)} rows={5} className="w-full border border-border px-4 py-3.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors resize-none" />
                     </div>
-                    <button type="submit" className="btn-gold w-full">Enviar mensagem</button>
+                    {/* Honeypot — hidden from real users, bots fill it */}
+                    <input
+                        type="text"
+                        name="website"
+                        value={form.website}
+                        onChange={(e) => set("website", e.target.value)}
+                        style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', opacity: 0 }}
+                        tabIndex={-1}
+                        autoComplete="off"
+                        aria-hidden="true"
+                    />
+                    <button type="submit" disabled={sending} className="btn-gold w-full disabled:opacity-40">
+                        {sending ? "Enviando..." : "Enviar mensagem"}
+                    </button>
                 </form>
             </div>
         </div>

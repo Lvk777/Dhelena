@@ -45,6 +45,8 @@ export const dbToProduct = (p) => ({
     rating: p.rating ?? 5,
     soldCount: p.sold_count ?? 0,
     created_date: p.created_date,
+    size_guide_id: p.size_guide_id || null,
+    custom_measurements: p.custom_measurements || null,
 });
 
 export function CatalogProvider({ children }) {
@@ -61,7 +63,7 @@ export function CatalogProvider({ children }) {
                 base44.entities.Product.list("-created_date", 200).catch(() => []),
                 base44.entities.Category.list("sort_order", 100).catch(() => []),
                 base44.entities.Collection.list("sort_order", 100).catch(() => []),
-                base44.entities.Banner.filter({ active: true }, "sort_order", 20).catch(() => []),
+                base44.entities.Banner.filter({ active: true }, "-priority", 20).catch(() => []),
             ]);
             setProducts((prodRes || []).map(dbToProduct));
             setCategories(catRes || []);

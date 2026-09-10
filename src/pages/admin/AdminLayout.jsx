@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Outlet, NavLink, Link } from "react-router-dom";
 import {
     LayoutDashboard, Package, ShoppingCart, FolderTree, Layers, Boxes,
-    Users, Ticket, Image, BarChart3, Settings, Menu, X, LogOut, ExternalLink, Sun, Moon, ShieldCheck
+    Users, Ticket, Image, BarChart3, Settings, Menu, X, LogOut, ExternalLink, Sun, Moon, ShieldCheck, Tag, Ruler, Plug
 } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { base44 } from "@/api/base44Client";
@@ -18,9 +18,13 @@ const MENU = [
     { to: "/admin/clientes", label: "Clientes", icon: Users },
     { to: "/admin/cupons", label: "Cupons", icon: Ticket },
     { to: "/admin/banners", label: "Banners", icon: Image },
+    { to: "/admin/promocoes", label: "Promoções", icon: Tag },
+    { to: "/admin/guias-medidas", label: "Guias de Medidas", icon: Ruler },
+    { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
     { to: "/admin/relatorios", label: "Relatórios", icon: BarChart3 },
     { to: "/admin/auditoria", label: "Auditoria", icon: ShieldCheck },
     { to: "/admin/configuracoes", label: "Configurações", icon: Settings },
+    { to: "/admin/integracoes", label: "Integrações", icon: Plug },
 ];
 
 export default function AdminLayout() {

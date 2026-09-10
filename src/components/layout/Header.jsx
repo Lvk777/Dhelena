@@ -11,7 +11,8 @@ const NAV = [
     { label: "Roupas", to: "/loja?cat=vestidos" },
     { label: "Acessórios", to: "/loja?cat=acessorios" },
     { label: "Coleções", to: "/colecoes" },
-    { label: "Sobre", to: "/sobre" },
+    { label: "Monte seu Look", to: "/monte-seu-look" },
+    { label: "Nossa História", to: "/sobre" },
     { label: "Contato", to: "/contato" },
 ];
 
@@ -46,18 +47,18 @@ export default function Header() {
     return (
         <>
             {/* announcement bar */}
-            <div className="bg-[hsl(var(--charcoal))] text-bone text-[10px] tracking-[0.3em] uppercase text-center py-2 px-4">
+            <div className="bg-[hsl(var(--rose))] text-white text-[10px] tracking-[0.3em] uppercase text-center py-2 px-4">
                 {(settings.store.top_bar_text || "").replace(/R\$\s*[\d.,]+/g, `R$ ${(freeShippingThreshold || 499).toLocaleString("pt-BR")}`)}
             </div>
 
             <header className={`sticky top-0 z-50 transition-all duration-500 ${scrolled ? "bg-background/95 backdrop-blur-md shadow-[0_1px_0_0_rgba(0,0,0,0.04)]" : "bg-background"}`}>
                 <div className="container-boutique">
-                    <div className={`grid grid-cols-3 items-center transition-all duration-500 ${scrolled ? "h-16" : "h-20"}`}>
+                    <div className={`grid grid-cols-[1fr_auto_1fr] items-center transition-all duration-500 ${scrolled ? "h-[72px]" : "h-[80px]"}`}>
                         {/* left: mobile menu + mobile search, or desktop nav */}
-                        <div className="justify-self-start flex items-center gap-0.5 sm:gap-1">
+                        <div className="justify-self-start flex items-center">
                             {/* mobile menu */}
                             <button
-                                className="lg:hidden p-2 -ml-2 text-foreground"
+                                className="xl:hidden p-2 -ml-2 text-foreground"
                                 onClick={() => setMobileOpen(true)}
                                 aria-label="Abrir menu"
                             >
@@ -67,24 +68,24 @@ export default function Header() {
                             {/* mobile search button beside menu */}
                             <button
                                 onClick={() => setSearchOpen((s) => !s)}
-                                className="lg:hidden p-2 text-foreground/80 hover:text-foreground transition-colors"
+                                className="xl:hidden p-2 text-foreground/80 hover:text-foreground transition-colors"
                                 aria-label="Buscar"
                             >
                                 <Search className="w-[18px] h-[18px]" strokeWidth={1.25} />
                             </button>
 
                             {/* nav desktop */}
-                            <nav className="hidden lg:flex items-center gap-7">
-                                {NAV.slice(0, 4).map((n) => (
-                                    <Link key={n.label} to={n.to} className="link-underline text-[11px] uppercase tracking-[0.2em] text-foreground/75 hover:text-foreground transition-colors">
+                            <nav className="hidden xl:flex items-center gap-4">
+                                {NAV.slice(0, 5).map((n) => (
+                                    <Link key={n.label} to={n.to} className="link-underline text-[11px] uppercase tracking-[0.14em] whitespace-nowrap text-foreground/75 hover:text-foreground transition-colors">
                                         {n.label}
                                     </Link>
                                 ))}
                             </nav>
                         </div>
 
-                        {/* logo */}
-                        <Link to="/" className="justify-self-center text-center group">
+                        {/* logo — reserved center area, never overlapped */}
+                        <Link to="/" className="justify-self-center text-center group px-10 xl:px-14">
                             <span className="block font-heading text-2xl sm:text-[28px] leading-none tracking-[0.08em] text-foreground">
                                 D'Helenas
                             </span>
@@ -94,39 +95,41 @@ export default function Header() {
                         </Link>
 
                         {/* right nav + icons */}
-                        <div className="justify-self-end flex items-center gap-1 sm:gap-2">
-                            <nav className="hidden lg:flex items-center gap-7 mr-2">
-                                {NAV.slice(4).map((n) => (
-                                    <Link key={n.label} to={n.to} className="link-underline text-[11px] uppercase tracking-[0.2em] text-foreground/75 hover:text-foreground transition-colors">
+                        <div className="justify-self-end flex items-center gap-4">
+                            <nav className="hidden xl:flex items-center gap-4">
+                                {NAV.slice(5).map((n) => (
+                                    <Link key={n.label} to={n.to} className="link-underline text-[11px] uppercase tracking-[0.14em] whitespace-nowrap text-foreground/75 hover:text-foreground transition-colors">
                                         {n.label}
                                     </Link>
                                 ))}
                             </nav>
-                            {/* search on desktop */}
-                            <button onClick={() => setSearchOpen((s) => !s)} className="hidden lg:block p-2 text-foreground/80 hover:text-foreground transition-colors" aria-label="Buscar">
-                                <Search className="w-[18px] h-[18px]" strokeWidth={1.25} />
-                            </button>
-                            <Link to="/favoritos" className="p-2 text-foreground/80 hover:text-foreground transition-colors relative" aria-label="Favoritos">
-                                <Heart className="w-[18px] h-[18px]" strokeWidth={1.25} />
-                                {favorites.length > 0 && (
-                                    <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[hsl(var(--rose))] text-white text-[9px] flex items-center justify-center">{favorites.length}</span>
-                                )}
-                            </Link>
-                            <Link to={isAuthenticated ? "/minha-conta" : "/login"} className="p-2 text-foreground/80 hover:text-foreground transition-colors hidden sm:block" aria-label="Minha conta">
-                                <User className="w-[18px] h-[18px]" strokeWidth={1.25} />
-                            </Link>
-                            {user?.role === "admin" && (
-                                <Link to="/admin" className="p-2 text-[hsl(var(--gold))] hover:text-foreground transition-colors hidden sm:flex items-center gap-1" title="Painel Administrativo" aria-label="Admin">
-                                    <ShieldCheck className="w-[18px] h-[18px]" strokeWidth={1.5} />
-                                    <span className="text-[10px] uppercase tracking-wider font-semibold hidden md:inline">Admin</span>
+                            <div className="flex items-center gap-2">
+                                {/* search on desktop */}
+                                <button onClick={() => setSearchOpen((s) => !s)} className="hidden xl:block p-2 text-foreground/80 hover:text-foreground transition-colors" aria-label="Buscar">
+                                    <Search className="w-[18px] h-[18px]" strokeWidth={1.25} />
+                                </button>
+                                <Link to="/favoritos" className="p-2 text-foreground/80 hover:text-foreground transition-colors relative" aria-label="Favoritos">
+                                    <Heart className="w-[18px] h-[18px]" strokeWidth={1.25} />
+                                    {favorites.length > 0 && (
+                                        <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[hsl(var(--rose))] text-white text-[9px] flex items-center justify-center">{favorites.length}</span>
+                                    )}
                                 </Link>
-                            )}
-                            <button onClick={() => setCartOpen(true)} className="p-2 text-foreground/80 hover:text-foreground transition-colors relative" aria-label="Sacola">
-                                <ShoppingBag className="w-[18px] h-[18px]" strokeWidth={1.25} />
-                                {cartCount > 0 && (
-                                    <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[hsl(var(--gold))] text-white text-[9px] flex items-center justify-center">{cartCount}</span>
+                                <Link to={isAuthenticated ? "/minha-conta" : "/login"} className="p-2 text-foreground/80 hover:text-foreground transition-colors hidden sm:block" aria-label="Minha conta">
+                                    <User className="w-[18px] h-[18px]" strokeWidth={1.25} />
+                                </Link>
+                                {user?.role === "admin" && (
+                                    <Link to="/admin" className="p-2 text-[hsl(var(--gold))] hover:text-foreground transition-colors hidden sm:flex items-center gap-1" title="Painel Administrativo" aria-label="Admin">
+                                        <ShieldCheck className="w-[18px] h-[18px]" strokeWidth={1.5} />
+                                        <span className="text-[10px] uppercase tracking-wider font-semibold hidden md:inline">Admin</span>
+                                    </Link>
                                 )}
-                            </button>
+                                <button onClick={() => setCartOpen(true)} className="p-2 text-foreground/80 hover:text-foreground transition-colors relative" aria-label="Sacola">
+                                    <ShoppingBag className="w-[18px] h-[18px]" strokeWidth={1.25} />
+                                    {cartCount > 0 && (
+                                        <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[hsl(var(--gold))] text-white text-[9px] flex items-center justify-center">{cartCount}</span>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -153,7 +156,7 @@ export default function Header() {
 
             {/* mobile drawer */}
             {mobileOpen && (
-                <div className="fixed inset-0 z-[60] lg:hidden">
+                <div className="fixed inset-0 z-[60] xl:hidden">
                     <div className="absolute inset-0 bg-charcoal/30 backdrop-blur-sm animate-fade-in" onClick={() => setMobileOpen(false)} />
                     <div className="absolute left-0 top-0 h-full w-[82%] max-w-sm bg-background shadow-xl flex flex-col animate-fade-in">
                         <div className="flex items-center justify-between px-6 h-16 border-b border-border">

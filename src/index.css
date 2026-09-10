@@ -4,24 +4,24 @@
 
 @layer base {
     :root {
-        --background: 0 0% 100%;
+        --background: 20 35% 97%;
         --foreground: 25 8% 16%;
-        --card: 0 0% 100%;
+        --card: 30 20% 99%;
         --card-foreground: 25 8% 16%;
-        --popover: 0 0% 100%;
+        --popover: 30 20% 99%;
         --popover-foreground: 25 8% 16%;
-        --primary: 351 52% 80%;
-        --primary-foreground: 25 8% 16%;
-        --secondary: 30 18% 97%;
+        --primary: 352 50% 70%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 20 30% 95%;
         --secondary-foreground: 25 8% 16%;
-        --muted: 30 14% 96%;
+        --muted: 20 28% 94%;
         --muted-foreground: 25 5% 45%;
         --accent: 44 69% 54%;
         --accent-foreground: 0 0% 100%;
         --destructive: 0 62% 50%;
         --destructive-foreground: 0 0% 98%;
-        --border: 30 14% 92%;
-        --input: 30 14% 92%;
+        --border: 20 18% 89%;
+        --input: 20 18% 89%;
         --ring: 44 69% 54%;
         --radius: 0.125rem;
         --font-heading: 'Cormorant Garamond', ui-serif, Georgia, serif;
@@ -36,10 +36,18 @@
         /* #D98C96 rosa queimado */
         --gold: 44 69% 54%;
         /* #DAAF37 dourado */
-        --bone: 30 18% 97%;
-        /* #F9F7F5 off-white */
+        --bone: 30 20% 98%;
+        /* #FCFAF8 off-white quente */
         --charcoal: 25 8% 16%;
         /* #2D2926 */
+        --blush: 20 38% 96%;
+        /* #F8F2EE blush muito claro */
+        --champagne: 35 35% 93%;
+        /* #EFE3D2 champagne / bege rosado */
+        --rose-light: 350 35% 95%;
+        /* #F5EAEA rosa muito claro */
+        --rose-deep: 350 35% 38%;
+        /* #833F4A marrom rosado profundo */
 
         --sidebar-background: 30 18% 97%;
         --sidebar-foreground: 25 8% 16%;
@@ -111,15 +119,15 @@
     }
 
     .btn-gold {
-        @apply inline-flex items-center justify-center gap-2 bg-accent text-white text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--rose))] hover:tracking-[0.28em] disabled:opacity-50;
+        @apply inline-flex items-center justify-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--rose))]/85 hover:tracking-[0.28em] disabled:opacity-50;
     }
 
     .btn-outline {
-        @apply inline-flex items-center justify-center gap-2 border border-foreground/30 text-foreground text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-all duration-500 hover:border-foreground hover:bg-foreground hover:text-white;
+        @apply inline-flex items-center justify-center gap-2 border border-[hsl(var(--gold))] text-foreground text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--gold))] hover:text-white disabled:opacity-50;
     }
 
     .btn-ghost {
-        @apply inline-flex items-center justify-center gap-2 text-[11px] uppercase tracking-[0.22em] font-medium text-foreground/70 transition-colors duration-300 hover:text-foreground;
+        @apply inline-flex items-center justify-center gap-2 bg-[hsl(var(--blossom))]/40 text-[hsl(var(--rose))] text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-colors duration-300 hover:bg-[hsl(var(--blossom))] disabled:opacity-50;
     }
 
     .btn-danger {
@@ -234,5 +242,29 @@
     .admin-scroll::-webkit-scrollbar-thumb {
         background: hsl(var(--border));
         border-radius: 3px;
+    }
+
+    /* Settings tabs — elegant visible scrollbar for horizontal scroll */
+    .settings-tabs-scroll {
+        scrollbar-width: thin;
+        scrollbar-color: hsl(var(--border)) transparent;
+    }
+
+    .settings-tabs-scroll::-webkit-scrollbar {
+        height: 5px;
+    }
+
+    .settings-tabs-scroll::-webkit-scrollbar-track {
+        background: hsl(var(--blush));
+        border-radius: 3px;
+    }
+
+    .settings-tabs-scroll::-webkit-scrollbar-thumb {
+        background: hsl(var(--gold) / 0.5);
+        border-radius: 3px;
+    }
+
+    .settings-tabs-scroll::-webkit-scrollbar-thumb:hover {
+        background: hsl(var(--gold) / 0.8);
     }
 }
