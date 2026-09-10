@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { pool } from '../config/db.js';
 import { auth, requireAdmin } from '../middleware.js';
 import { logAudit } from '../services.js';
+import { encrypt, decrypt, maskSecret, isSensitive } from '../lib/crypto.js';
 
 const router = Router();
 
@@ -179,54 +180,76 @@ router.delete('/look-promotions/:id', auth, requireAdmin, async (req, res, next)
 });
 
 // ═══════════════════════════════════════════════════════════
-// INTEGRATION CONFIGS (editable from admin panel)
+// INTEGRATION CONFIGS (encrypted secrets, admin-only)
 // ═══════════════════════════════════════════════════════════
 
-const SENSITIVE_PATTERNS = /token|key|secret|password|api_key|access_token/i;
-
-function maskValue(key, value) {
-    if (!value || typeof value !== 'string') return value;
-    if (!SENSITIVE_PATTERNS.test(key)) return value;
-    if (value.length <= 8) return '****';
-    return value.substring(0, 4) + '****';
+/**
+ * Build the frontend-safe response for an integration config.
+ * Sensitive values are NEVER returned — only:
+ *   - configured: true/false
+ *   - masked_value: ****8F2A (last 4 chars of decrypted value)
+ *   - For non-sensitive fields: the actual value
+ */
+function buildSafeConfig(row) {
+    const safeConfig = {};
+    for (const [k, v] of Object.entries(row.config_data || {})) {
+        if (isSensitive(k)) {
+            // Decrypt the stored value to check if it's real
+            const decrypted = decrypt(v);
+            safeConfig[k] = {
+                configured: !!decrypted,
+                masked_value: decrypted ? maskSecret(decrypted) : '',
+            };
+        } else {
+            safeConfig[k] = v;
+        }
+    }
+    return {
+        id: row.id,
+        service_key: row.service_key,
+        service_name: row.service_name,
+        description: row.description,
+        config_data: safeConfig,
+        is_active: row.is_active,
+        updated_at: row.updated_at,
+    };
 }
 
-// Admin: list all integration configs
+// Admin: list all integration configs (masked, never real secrets)
 router.get('/integrations/config', auth, requireAdmin, async (req, res, next) => {
     try {
         const { rows } = await pool.query('SELECT * FROM integration_configs ORDER BY service_name');
-        // Mask sensitive fields before sending to frontend
-        const masked = rows.map(r => {
-            const config = { ...r.config_data };
-            for (const [k, v] of Object.entries(config)) {
-                config[k] = maskValue(k, v);
-            }
-            return { ...r, config_data: config };
-        });
-        res.json(masked);
+        res.json(rows.map(buildSafeConfig));
     } catch (e) { next(e); }
 });
 
-// Admin: upsert integration config
+// Admin: upsert integration config (encrypts sensitive values)
 router.put('/integrations/config/:serviceKey', auth, requireAdmin, async (req, res, next) => {
     try {
         const { serviceKey } = req.params;
         const { service_name, description, config_data, is_active } = req.body;
 
-        // For sensitive fields, if the incoming value is masked (contains ****),
-        // preserve the existing value
+        // Fetch existing config to preserve secrets when field is left blank
         const { rows: existing } = await pool.query(
-            'SELECT config_data FROM integration_configs WHERE service_key = $1', [serviceKey]
+            'SELECT config_data, is_active FROM integration_configs WHERE service_key = $1', [serviceKey]
         );
-        let finalConfig = config_data;
+        const wasActive = existing.length > 0 ? existing[0].is_active : false;
+
+        let finalConfig = {};
         if (existing.length > 0) {
             finalConfig = { ...existing[0].config_data };
-            for (const [k, v] of Object.entries(config_data)) {
-                if (typeof v === 'string' && v.includes('****')) {
-                    // Keep existing value for masked fields
-                    continue;
+        }
+
+        for (const [k, incomingVal] of Object.entries(config_data)) {
+            if (isSensitive(k)) {
+                // Sensitive field: only update if a non-empty string is provided
+                if (typeof incomingVal === 'string' && incomingVal.trim() !== '' && !incomingVal.includes('****')) {
+                    finalConfig[k] = encrypt(incomingVal.trim());
                 }
-                finalConfig[k] = v;
+                // If empty or masked → keep existing encrypted value (already in finalConfig)
+            } else {
+                // Non-sensitive: update directly
+                if (incomingVal !== undefined) finalConfig[k] = incomingVal;
             }
         }
 
@@ -242,14 +265,17 @@ router.put('/integrations/config/:serviceKey', auth, requireAdmin, async (req, r
              RETURNING *`,
             [serviceKey, service_name, description, JSON.stringify(finalConfig), is_active ?? false]
         );
-        await logAudit(req.user.id, 'update', 'IntegrationConfig', serviceKey, { service_name });
-        // Return masked
         const result = rows[0];
-        const maskedConfig = {};
-        for (const [k, v] of Object.entries(result.config_data)) {
-            maskedConfig[k] = maskValue(k, v);
+
+        // Audit: created vs updated
+        const isNew = existing.length === 0;
+        await logAudit(req.user.id, isNew ? 'integration_created' : 'integration_updated', 'IntegrationConfig', serviceKey, { service_name });
+        // If active status changed, log enable/disable
+        if (result.is_active !== wasActive) {
+            await logAudit(req.user.id, result.is_active ? 'integration_enabled' : 'integration_disabled', 'IntegrationConfig', serviceKey, { service_name });
         }
-        res.json({ ...result, config_data: maskedConfig });
+
+        res.json(buildSafeConfig(result));
     } catch (e) { next(e); }
 });
 
@@ -257,12 +283,24 @@ router.put('/integrations/config/:serviceKey', auth, requireAdmin, async (req, r
 router.patch('/integrations/config/:serviceKey/toggle', auth, requireAdmin, async (req, res, next) => {
     try {
         const { serviceKey } = req.params;
+        const { rows: existing } = await pool.query(
+            'SELECT is_active, service_name FROM integration_configs WHERE service_key = $1', [serviceKey]
+        );
+        if (existing.length === 0) return res.status(404).json({ error: 'Integração não encontrada' });
+        const wasActive = existing[0].is_active;
+
         const { rows } = await pool.query(
             'UPDATE integration_configs SET is_active = NOT is_active, updated_at = now() WHERE service_key = $1 RETURNING *',
             [serviceKey]
         );
-        if (rows.length === 0) return res.status(404).json({ error: 'Integração não encontrada' });
-        res.json(rows[0]);
+        const result = rows[0];
+
+        // Audit: enabled or disabled
+        if (result.is_active !== wasActive) {
+            await logAudit(req.user.id, result.is_active ? 'integration_enabled' : 'integration_disabled', 'IntegrationConfig', serviceKey, { service_name: result.service_name });
+        }
+
+        res.json(buildSafeConfig(result));
     } catch (e) { next(e); }
 });
 
