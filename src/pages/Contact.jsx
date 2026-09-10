@@ -22,13 +22,13 @@ export default function Contact() {
             });
             const data = await res.json();
             if (!res.ok) {
-                showToast(data.error || "Erro ao enviar. Tente novamente.");
+                showToast(data.error || "Erro ao enviar. Tente novamente.", 'error');
             } else {
                 showToast("Mensagem enviada. Retornaremos em breve ♡");
                 setForm({ nome: "", email: "", assunto: "", mensagem: "", website: "" });
             }
         } catch {
-            showToast("Erro de conexão. Tente novamente.");
+            showToast("Erro de conexão. Tente novamente.", 'error');
         } finally {
             setSending(false);
         }

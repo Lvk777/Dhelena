@@ -56,8 +56,8 @@ export function StoreProvider({ children }) {
         }
     }, [favorites, isAuthenticated]);
 
-    const showToast = useCallback((message) => {
-        setToast({ message, id: Date.now() });
+    const showToast = useCallback((message, type = 'success') => {
+        setToast({ message, type, id: Date.now() });
         setTimeout(() => setToast(null), 2600);
     }, []);
 

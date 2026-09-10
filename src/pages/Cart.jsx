@@ -35,7 +35,7 @@ export default function Cart() {
         e.preventDefault();
         const result = await applyCouponCtx(couponInput);
         if (result.valid) showToast("Cupom aplicado ✓");
-        else showToast(result.error || "Cupom inválido");
+        else showToast(result.error || "Cupom inválido", 'error');
     };
 
     const calcFrete = (e) => {
