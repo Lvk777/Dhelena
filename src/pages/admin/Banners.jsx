@@ -9,6 +9,7 @@ import AdminToggle from "@/components/admin/AdminToggle";
 import AdminSelect from "@/components/admin/AdminSelect";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
+import ErrorBoundary from "@/components/admin/ErrorBoundary";
 import { logAdminAction } from "@/lib/audit";
 
 export const BANNER_POSITIONS = [
@@ -87,7 +88,24 @@ export default function Banners() {
                     ))}
                 </div>
             )}
-            {editing && <BannerForm item={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
+            {editing && (
+                <ErrorBoundary
+                    message="Não foi possível carregar o formulário. Tente novamente."
+                    fallback={(err, retry) => (
+                        <AdminModal open onClose={() => setEditing(null)} title="Erro" size="md" icon={AlertCircle}>
+                            <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
+                                <AlertCircle className="w-8 h-8 text-rose" strokeWidth={1.5} />
+                                <p className="text-sm text-muted-foreground">
+                                    Não foi possível carregar o formulário. Tente novamente.
+                                </p>
+                                <button onClick={retry} className="btn-outline">Tentar novamente</button>
+                            </div>
+                        </AdminModal>
+                    )}
+                >
+                    <BannerForm item={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
+                </ErrorBoundary>
+            )}
             <AdminConfirmDialog
                 open={!!deleteTarget}
                 onClose={() => setDeleteTarget(null)}
@@ -135,8 +153,8 @@ function BannerForm({ item, onClose, onSaved }) {
         const e = {};
         if (!form.internal_name?.trim()) e.internal_name = "Nome interno é obrigatório";
         if (!form.position) e.position = "Posição é obrigatória";
-        if (!form.image) e.image = "Imagem desktop é obrigatória";
-        if (form.active && !form.image) e.active = "Banner ativo precisa de imagem válida";
+        if (!form.image) e.image = "Adicione uma imagem para publicar este banner.";
+        if (form.active && !form.image) e.active = "Adicione uma imagem para publicar este banner.";
         setErrors(e);
         return Object.keys(e).length === 0;
     };
