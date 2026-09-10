@@ -1,11 +1,12 @@
 import React, { useState } from "react";
-import { Layers, Loader2, Check, Tag, Image, Settings, Eye, Monitor, Smartphone } from "lucide-react";
+import { Layers, Loader2, Check, Tag, Image, Settings, Eye } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import AdminWizard from "@/components/admin/AdminWizard";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminTextarea from "@/components/admin/AdminTextarea";
 import AdminImageUploader from "@/components/admin/AdminImageUploader";
 import AdminToggle from "@/components/admin/AdminToggle";
+import CollectionPreview from "@/components/admin/CollectionPreview";
 import { logAdminAction } from "@/lib/audit";
 
 const slugify = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -33,7 +34,6 @@ export default function CollectionForm({ item, onClose, onSaved }) {
     const [slugEdited, setSlugEdited] = useState(!!item.slug);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
-    const [previewDevice, setPreviewDevice] = useState("desktop");
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
     const onNameChange = (v) => {
@@ -112,7 +112,7 @@ export default function CollectionForm({ item, onClose, onSaved }) {
                 );
             case "preview":
                 return (
-                    <div className="max-w-2xl mx-auto space-y-6">
+                    <div className="max-w-3xl mx-auto space-y-6">
                         <div className="bg-muted/30 rounded-lg border border-border p-6 space-y-2">
                             <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-accent mb-3">Resumo da Coleção</h3>
                             <SummaryRow label="Nome" value={form.name || "—"} />
@@ -124,25 +124,9 @@ export default function CollectionForm({ item, onClose, onSaved }) {
                         <div className="space-y-3">
                             <div className="flex items-center gap-2">
                                 <Eye className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
-                                <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Preview</span>
-                                <div className="flex gap-1 ml-auto">
-                                    <button onClick={() => setPreviewDevice("desktop")} className={`flex items-center gap-1 px-2.5 py-1 text-[10px] uppercase border ${previewDevice === "desktop" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground"}`}>
-                                        <Monitor className="w-3 h-3" /> Desktop
-                                    </button>
-                                    <button onClick={() => setPreviewDevice("mobile")} className={`flex items-center gap-1 px-2.5 py-1 text-[10px] uppercase border ${previewDevice === "mobile" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground"}`}>
-                                        <Smartphone className="w-3 h-3" /> Mobile
-                                    </button>
-                                </div>
+                                <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Como ficará no site</span>
                             </div>
-                            <div className={`rounded-lg overflow-hidden border border-border bg-bone mx-auto ${previewDevice === "mobile" ? "max-w-[200px]" : "max-w-md"}`}>
-                                <div className="aspect-[3/4]">
-                                    {form.image ? <img src={form.image} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Layers className="w-8 h-8 text-muted-foreground/30" /></div>}
-                                </div>
-                                <div className="p-3 text-center">
-                                    <p className="font-medium text-sm">{form.name || "Nome da coleção"}</p>
-                                    {form.description && <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{form.description}</p>}
-                                </div>
-                            </div>
+                            <CollectionPreview form={form} />
                         </div>
                         {error && <p className="text-[11px] text-destructive text-center">{error}</p>}
                     </div>

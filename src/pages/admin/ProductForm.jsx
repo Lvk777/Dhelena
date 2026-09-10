@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { Plus, X, Loader2, Eye, Monitor, Smartphone, Check, Package, ImageIcon, DollarSign, Palette, FolderTree, Settings, Truck } from "lucide-react";
+import { Plus, X, Loader2, Eye, Check, Package, ImageIcon, DollarSign, Palette, FolderTree, Settings, Truck } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useCatalog } from "@/context/CatalogContext";
 import { COLOR_SWATCHES, SIZES_LIST } from "@/data/products";
 import ImageUploader from "@/components/ImageUploader";
 import AdminWizard from "@/components/admin/AdminWizard";
+import ProductPreview from "@/components/admin/ProductPreview";
 import { logAdminAction } from "@/lib/audit";
 
 const TAGS = [
@@ -32,7 +33,6 @@ export default function ProductForm() {
     const navigate = useNavigate();
     const { categories, collections, reload } = useCatalog();
     const [saving, setSaving] = useState(false);
-    const [previewDevice, setPreviewDevice] = useState("desktop");
     const [form, setForm] = useState({
         name: "", sku: "", category: "", subcategory: "", collection: "",
         description: "", short_description: "", details: "",
@@ -310,7 +310,7 @@ export default function ProductForm() {
                 );
             case "review":
                 return (
-                    <div className="max-w-2xl mx-auto space-y-6">
+                    <div className="max-w-3xl mx-auto space-y-6">
                         <div className="bg-muted/30 rounded-lg border border-border p-6 space-y-2">
                             <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-accent mb-3">Resumo do Produto</h3>
                             <SummaryRow label="Nome" value={form.name || "—"} />
@@ -324,29 +324,13 @@ export default function ProductForm() {
                             <SummaryRow label="Fotos" value={`${form.images.length} imagem(ns)`} />
                         </div>
 
-                        {/* Preview */}
+                        {/* Real product page preview */}
                         <div className="space-y-3">
                             <div className="flex items-center gap-2">
                                 <Eye className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
-                                <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Preview</span>
-                                <div className="flex gap-1 ml-auto">
-                                    <button onClick={() => setPreviewDevice("desktop")} className={`flex items-center gap-1 px-2.5 py-1 text-[10px] uppercase border ${previewDevice === "desktop" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground"}`}>
-                                        <Monitor className="w-3 h-3" /> Desktop
-                                    </button>
-                                    <button onClick={() => setPreviewDevice("mobile")} className={`flex items-center gap-1 px-2.5 py-1 text-[10px] uppercase border ${previewDevice === "mobile" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground"}`}>
-                                        <Smartphone className="w-3 h-3" /> Mobile
-                                    </button>
-                                </div>
+                                <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Como ficará no site</span>
                             </div>
-                            <div className={`rounded-lg overflow-hidden border border-border bg-bone mx-auto ${previewDevice === "mobile" ? "max-w-[320px]" : ""}`}>
-                                <div className={`relative ${previewDevice === "mobile" ? "aspect-[3/4]" : "aspect-[16/9]"}`}>
-                                    {form.images[0] ? <img src={form.images[0]} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-muted-foreground/40 text-sm">Sem imagem</div>}
-                                </div>
-                                <div className="p-4 space-y-1">
-                                    <p className="font-medium text-sm">{form.name || "Nome do produto"}</p>
-                                    <p className="text-sm text-muted-foreground">{form.price ? `R$ ${form.price}` : "R$ 0,00"}</p>
-                                </div>
-                            </div>
+                            <ProductPreview form={form} />
                         </div>
                     </div>
                 );

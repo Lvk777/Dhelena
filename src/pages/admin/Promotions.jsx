@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, X, Power, Tag, Calendar, Palette, Percent, Truck, ShoppingCart, Save, Layout, Eye, Monitor, Smartphone, Check } from "lucide-react";
+import { Plus, Trash2, X, Power, Tag, Calendar, Palette, Percent, Truck, ShoppingCart, Save, Layout, Eye, Check } from "lucide-react";
 import AdminWizard from "@/components/admin/AdminWizard";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminSelect from "@/components/admin/AdminSelect";
@@ -7,6 +7,7 @@ import AdminTextarea from "@/components/admin/AdminTextarea";
 import AdminToggle from "@/components/admin/AdminToggle";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminImageUploader from "@/components/admin/AdminImageUploader";
+import PromotionPreview from "@/components/admin/PromotionPreview";
 
 const PROMO_TYPES = [
     { value: "look_discount", label: "Desconto no Look" },
@@ -166,7 +167,6 @@ export default function Promotions() {
 function PromoWizard({ promo, onSave, onCancel }) {
     const [form, setForm] = useState(promo);
     const [saving, setSaving] = useState(false);
-    const [previewDevice, setPreviewDevice] = useState("desktop");
     const set = (field, val) => setForm(prev => ({ ...prev, [field]: val }));
 
     const validateStep = (stepIndex) => {
@@ -273,7 +273,7 @@ function PromoWizard({ promo, onSave, onCancel }) {
                 );
             case "review":
                 return (
-                    <div className="max-w-2xl mx-auto space-y-6">
+                    <div className="max-w-3xl mx-auto space-y-6">
                         {/* Summary */}
                         <div className="bg-muted/30 rounded-lg border border-border p-6 space-y-3">
                             <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-accent mb-4">Resumo da Promoção</h3>
@@ -288,31 +288,13 @@ function PromoWizard({ promo, onSave, onCancel }) {
                             <SummaryRow label="Status" value={getPromoStatus()} />
                         </div>
 
-                        {/* Preview */}
+                        {/* Real context-aware preview */}
                         <div className="space-y-3">
                             <div className="flex items-center gap-2">
                                 <Eye className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
-                                <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Preview</span>
-                                <div className="flex gap-1 ml-auto">
-                                    <button onClick={() => setPreviewDevice("desktop")} className={`flex items-center gap-1 px-2.5 py-1 text-[10px] uppercase border ${previewDevice === "desktop" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground"}`}>
-                                        <Monitor className="w-3 h-3" /> Desktop
-                                    </button>
-                                    <button onClick={() => setPreviewDevice("mobile")} className={`flex items-center gap-1 px-2.5 py-1 text-[10px] uppercase border ${previewDevice === "mobile" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground"}`}>
-                                        <Smartphone className="w-3 h-3" /> Mobile
-                                    </button>
-                                </div>
+                                <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Como ficará no site</span>
                             </div>
-                            <div className={`rounded-lg overflow-hidden border border-border relative bg-bone mx-auto ${previewDevice === "mobile" ? "max-w-[320px] h-48" : "h-56"}`}>
-                                {form.banner_image
-                                    ? <img src={form.banner_image} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                                    : <div className="absolute inset-0" style={{ backgroundColor: (form.campaign_color || '#A5925A') + '15' }} />}
-                                <div className="absolute inset-0 bg-gradient-to-t from-charcoal/60 to-transparent" />
-                                <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 text-bone">
-                                    {form.title && <h3 className="font-heading text-xl tracking-wide" style={{ color: form.campaign_color }}>{form.title}</h3>}
-                                    {form.subtitle && <p className="text-sm italic mt-1 text-bone/85">{form.subtitle}</p>}
-                                    {form.short_text && <p className="text-xs mt-2 text-bone/70">{form.short_text}</p>}
-                                </div>
-                            </div>
+                            <PromotionPreview form={form} />
                         </div>
                     </div>
                 );
