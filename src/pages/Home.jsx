@@ -42,7 +42,7 @@ export default function Home() {
                             <p className="mt-5 font-heading text-2xl sm:text-3xl italic text-bone/90">{hero.subtitle}</p>
                             <p className="mt-4 text-sm sm:text-base text-bone/80 leading-relaxed max-w-md">{hero.text}</p>
                             <div className="mt-9 flex flex-wrap gap-3">
-                                <Link to={hero.button_link || hero.primary_cta_link || "/novidades"} className="inline-flex items-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--rose))]/85">
+                                <Link to={hero.button_link || hero.primary_cta_link || "/novidades"} className="flex w-full items-center justify-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--rose))]/85">
                                     {hero.button_text || hero.primary_cta_label || "Ver novidades"} <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
                                 </Link>
                                 <Link to={(!hero.secondary_cta_link || hero.secondary_cta_link === "/loja") ? "/colecoes" : hero.secondary_cta_link} className="inline-flex items-center gap-2 border border-bone/80 text-bone text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-bone hover:text-charcoal">
