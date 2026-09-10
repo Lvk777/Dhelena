@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Plus, Pencil, Trash2, Image, Loader2, Eye, Monitor, Smartphone, AlertCircle, Tag, MapPin, Link2, Calendar, Check } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Plus, Pencil, Trash2, Image, Loader2, Eye, Monitor, Smartphone, AlertCircle, Tag, MapPin, Link2, Calendar, Check, Wand2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import AdminWizard from "@/components/admin/AdminWizard";
 import AdminInput from "@/components/admin/AdminInput";
@@ -11,6 +11,7 @@ import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import ErrorBoundary from "@/components/admin/ErrorBoundary";
 import { logAdminAction } from "@/lib/audit";
+import { BANNER_POSITION_PRESETS, IMAGE_PRESETS, generateMobileVersion, blobToFile } from "@/lib/imageProcessor";
 
 export const BANNER_POSITIONS = [
     { value: "home_hero", label: "Home — Hero principal" },
@@ -153,7 +154,44 @@ function BannerWizard({ item, onClose, onSaved }) {
     const [saving, setSaving] = useState(false);
     const [previewDevice, setPreviewDevice] = useState("desktop");
     const [stepErrors, setStepErrors] = useState(null);
-    const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setStepErrors(null); };
+    const [generatingMobile, setGeneratingMobile] = useState(false);
+    const [positionChanged, setPositionChanged] = useState(null); // { oldPos, newPos } or null
+    const prevPositionRef = useRef(form.position);
+    const set = (k, v) => {
+        if (k === "position" && v !== prevPositionRef.current) {
+            if (form.image) setPositionChanged({ oldPos: prevPositionRef.current, newPos: v });
+            prevPositionRef.current = v;
+        }
+        setForm((f) => ({ ...f, [k]: v }));
+        setStepErrors(null);
+    };
+
+    // Position presets for desktop and mobile
+    const posPresets = BANNER_POSITION_PRESETS[form.position || "custom"] || BANNER_POSITION_PRESETS.custom;
+    const desktopPreset = posPresets.desktop;
+    const mobilePreset = posPresets.mobile;
+
+    const handleGenerateMobile = async () => {
+        if (!form.image) return;
+        setGeneratingMobile(true);
+        try {
+            const mobilePresetData = IMAGE_PRESETS[mobilePreset];
+            const { blob, ext } = await generateMobileVersion(
+                form.image,
+                mobilePresetData.aspect,
+                mobilePresetData.maxWidth,
+                mobilePresetData.maxHeight,
+                mobilePresetData.quality || 0.8
+            );
+            const file = blobToFile(blob, "mobile-version", ext);
+            const { file_url } = await base44.integrations.Core.UploadFile({ file });
+            set("image_mobile", file_url);
+        } catch (e) {
+            console.error("[BannerWizard] Mobile generation error:", e);
+        } finally {
+            setGeneratingMobile(false);
+        }
+    };
 
     const validateStep = (stepIndex) => {
         const errors = {};
@@ -210,24 +248,71 @@ function BannerWizard({ item, onClose, onSaved }) {
                 );
             case "images":
                 return (
-                    <div className="max-w-xl mx-auto space-y-5">
+                    <div className="max-w-xl mx-auto space-y-4">
                         {errors?._general && (
                             <div className="flex items-center gap-2 text-sm text-rose bg-rose/5 p-3 rounded">
                                 <AlertCircle className="w-4 h-4" /> {errors._general}
                             </div>
                         )}
+                        {positionChanged && (
+                            <div className="flex items-center justify-between gap-3 text-sm bg-amber-500/10 border border-amber-500/30 p-3 rounded">
+                                <span className="flex items-center gap-1.5 text-amber-600">
+                                    <AlertCircle className="w-4 h-4" /> A posição foi alterada. Deseja reajustar a imagem para a nova proporção?
+                                </span>
+                                <div className="flex gap-2 shrink-0">
+                                    <button type="button" onClick={() => setPositionChanged(null)} className="text-[10px] uppercase tracking-[0.1em] px-2.5 py-1 border border-border rounded hover:bg-muted">Manter</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Desktop — independent instance */}
                         <AdminImageUploader
-                            preset={form.position || "custom"}
+                            label="Imagem Desktop"
+                            preset={desktopPreset}
                             value={form.image}
                             onChange={(v) => set("image", v)}
-                            mobileValue={form.image_mobile}
-                            onMobileChange={(v) => set("image_mobile", v)}
-                            enableMobile
                             required
                             error={errors?.image}
-                            full
                         />
-                        <p className="text-[11px] text-muted-foreground">Se a imagem mobile estiver vazia, a desktop será usada como fallback. Formatos: JPEG, PNG, WEBP · máximo 10MB.</p>
+
+                        {/* Mobile — independent instance */}
+                        <AdminImageUploader
+                            label="Imagem Mobile"
+                            preset={mobilePreset}
+                            value={form.image_mobile}
+                            onChange={(v) => set("image_mobile", v)}
+                            description={form.image && !form.image_mobile ? "Opcional - gerar a partir da imagem desktop" : undefined}
+                        />
+
+                        {/* Generate mobile button */}
+                        {form.image && !form.image_mobile && (
+                            <button
+                                type="button"
+                                onClick={handleGenerateMobile}
+                                disabled={generatingMobile}
+                                className="btn-outline w-full py-2.5 text-xs flex items-center justify-center gap-1.5"
+                            >
+                                {generatingMobile ? (
+                                    <>
+                                        <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                        Gerando versao mobile...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Wand2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                                        Gerar versao mobile
+                                    </>
+                                )}
+                            </button>
+                        )}
+
+                        {/* Fallback warning */}
+                        {form.image && !form.image_mobile && (
+                            <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
+                                <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" strokeWidth={1.5} />
+                                Imagem mobile nao enviada. A versao desktop sera adaptada automaticamente.
+                            </p>
+                        )}
                     </div>
                 );
             case "position":

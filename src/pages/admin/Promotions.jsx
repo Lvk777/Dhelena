@@ -6,6 +6,7 @@ import AdminSelect from "@/components/admin/AdminSelect";
 import AdminTextarea from "@/components/admin/AdminTextarea";
 import AdminToggle from "@/components/admin/AdminToggle";
 import AdminFormSection from "@/components/admin/AdminFormSection";
+import AdminImageUploader from "@/components/admin/AdminImageUploader";
 
 const PROMO_TYPES = [
     { value: "look_discount", label: "Desconto no Look" },
@@ -267,12 +268,7 @@ function PromoWizard({ promo, onSave, onCancel }) {
                                 ))}
                             </div>
                         </div>
-                        <AdminInput label="Imagem / banner (URL)" value={form.banner_image || ""} onChange={(v) => set("banner_image", v)} full placeholder="https://..." />
-                        {form.banner_image && (
-                            <div className="relative w-full h-32 overflow-hidden rounded-lg border border-border">
-                                <img src={form.banner_image} alt="Preview" className="w-full h-full object-cover" />
-                            </div>
-                        )}
+                        <AdminImageUploader label="Imagem / banner" preset="promotion_banner" value={form.banner_image || ""} onChange={(v) => set("banner_image", v)} full />
                     </div>
                 );
             case "review":

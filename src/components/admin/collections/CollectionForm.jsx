@@ -4,7 +4,7 @@ import { base44 } from "@/api/base44Client";
 import AdminWizard from "@/components/admin/AdminWizard";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminTextarea from "@/components/admin/AdminTextarea";
-import AdminUpload from "@/components/admin/AdminUpload";
+import AdminImageUploader from "@/components/admin/AdminImageUploader";
 import AdminToggle from "@/components/admin/AdminToggle";
 import { logAdminAction } from "@/lib/audit";
 
@@ -88,14 +88,8 @@ export default function CollectionForm({ item, onClose, onSaved }) {
             case "image":
                 return (
                     <div className="max-w-xl mx-auto space-y-5">
-                        <div>
-                            <label className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground block mb-2">Imagem de capa (3:4)</label>
-                            <AdminUpload value={form.image} onChange={(v) => set("image", v)} aspect="3/4" />
-                        </div>
-                        <div>
-                            <label className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground block mb-2">Banner opcional (16:9)</label>
-                            <AdminUpload value={form.banner_image} onChange={(v) => set("banner_image", v)} aspect="16/9" />
-                        </div>
+                        <AdminImageUploader label="Imagem de capa" preset="collection_cover" value={form.image} onChange={(v) => set("image", v)} required />
+                        <AdminImageUploader label="Banner opcional" preset="collection_banner" value={form.banner_image} onChange={(v) => set("banner_image", v)} />
                     </div>
                 );
             case "settings":
