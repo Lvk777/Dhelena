@@ -67,38 +67,63 @@ function parseSource(req) {
     return { source, medium, campaign, referrer: ref };
 }
 
+// ─── Helper: insert a single analytics event ───────────────────
+async function insertEvent(req, evt) {
+    const { event_name, page, product_id, session_id, utm_source, utm_medium, utm_campaign, referrer } = evt;
+
+    if (!event_name || !ALLOWED_EVENTS.has(event_name)) {
+        logSecurityEvent(req, 'suspicious_request', { reason: 'invalid_analytics_event', event_name });
+        return false;
+    }
+
+    const safePage = (page || '').slice(0, 512);
+    const safeProductId = product_id || null;
+    const safeSessionId = (session_id || '').slice(0, 128);
+
+    const ua = parseUserAgent(req.headers['user-agent']);
+    // Prefer per-event UTM/referrer, fall back to request-level parse
+    let source = utm_source || null;
+    let medium = utm_medium || null;
+    let campaign = utm_campaign || null;
+    let ref = referrer || null;
+    if (!source && !ref) {
+        const parsed = parseSource(req);
+        source = parsed.source;
+        medium = parsed.medium;
+        campaign = parsed.campaign;
+        ref = parsed.referrer;
+    }
+
+    await pool.query(
+        `INSERT INTO analytics_events
+            (anonymous_session_id, user_id, event_name, page, product_id,
+             source, medium, campaign, referrer, device_type, browser, os)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [
+            safeSessionId, req.user?.id || null, event_name, safePage, safeProductId,
+            source, medium, campaign, (ref || '').slice(0, 512),
+            ua.device_type, ua.browser, ua.os,
+        ]
+    );
+    return true;
+}
+
 // ─── POST /api/analytics/events (public insert-only) ─────────────
+// Accepts either a single event object or a batch: { events: [...] }
 router.post('/analytics/events', analyticsLimiter, async (req, res, next) => {
     try {
-        const { event_name, page, product_id, session_id, utm_source, utm_medium, utm_campaign, referrer } = req.body;
+        const events = req.body.events || [req.body];
 
-        // Validate event name against allowlist
-        if (!event_name || !ALLOWED_EVENTS.has(event_name)) {
-            logSecurityEvent(req, 'suspicious_request', { reason: 'invalid_analytics_event', event_name });
-            return res.status(400).json({ error: 'Evento não permitido' });
+        if (!Array.isArray(events) || events.length === 0) {
+            return res.status(400).json({ error: 'Nenhum evento enviado' });
         }
 
-        // Validate page length
-        const safePage = (page || '').slice(0, 512);
-        const safeProductId = product_id || null;
-        const safeSessionId = (session_id || '').slice(0, 128);
+        // Cap batch size to prevent abuse
+        const batch = events.slice(0, 20);
 
-        const ua = parseUserAgent(req.headers['user-agent']);
-        const { source, medium, campaign, referrer: ref } = parseSource(req);
-
-        // IP-based geolocation is NOT done here — would require a GeoIP service.
-        // Only stored if a privacy-respecting GeoIP service is configured later.
-        await pool.query(
-            `INSERT INTO analytics_events
-                (anonymous_session_id, user_id, event_name, page, product_id,
-                 source, medium, campaign, referrer, device_type, browser, os)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-            [
-                safeSessionId, req.user?.id || null, event_name, safePage, safeProductId,
-                source, medium, campaign, (ref || '').slice(0, 512),
-                ua.device_type, ua.browser, ua.os,
-            ]
-        );
+        for (const evt of batch) {
+            await insertEvent(req, evt);
+        }
 
         res.status(201).json({ ok: true });
     } catch (err) { next(err); }

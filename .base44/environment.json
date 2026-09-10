@@ -74,6 +74,12 @@
       "description": "Secret key for signing JWT auth tokens in local dev. Auto-generated; not used when SUPABASE_URL is set.",
       "requiredAtBoot": true,
       "generatedForDevelopment": true
+    },
+    {
+      "name": "ADMIN_PASSWORD",
+      "description": "Admin user password for the seed script. Used to create the admin@dhelenas.com account. Never hardcode — set via Secrets dashboard.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": true
     }
   ]
 }

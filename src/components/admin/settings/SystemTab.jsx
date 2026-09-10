@@ -1,5 +1,5 @@
 import React from "react";
-import { Server, Database, ShieldCheck, GitBranch } from "lucide-react";
+import { Server, Database, ShieldCheck, GitBranch, Lock, Globe, Cloud, Zap } from "lucide-react";
 
 export default function SystemTab() {
     return (
@@ -16,6 +16,31 @@ export default function SystemTab() {
                     <InfoRow icon={Server} label="Build" value="Latest" />
                 </div>
             </div>
+
+            {/* ─── Painel de Segurança ─────────────────────────────── */}
+            <div className="border border-border rounded-xl p-5 bg-background/50">
+                <div className="flex items-center gap-2 mb-4">
+                    <Lock className="w-4 h-4 text-accent" strokeWidth={1.5} />
+                    <h3 className="text-[11px] uppercase tracking-[0.2em] text-foreground font-medium">Segurança</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <SecurityRow icon={Zap} label="Rate Limit" status="active" />
+                    <SecurityRow icon={ShieldCheck} label="Helmet (Headers)" status="active" />
+                    <SecurityRow icon={Globe} label="CORS" status="active" />
+                    <SecurityRow icon={Server} label="Analytics" status="active" />
+                    <SecurityRow icon={Cloud} label="Cloudflare" status="pending" note="DDoS / WAF" />
+                    <SecurityRow icon={Database} label="Redis" status="pending" note="Rate limit distribuído" />
+                    <SecurityRow icon={Lock} label="CSP" status="pending" note="Content-Security-Policy" />
+                    <SecurityRow icon={ShieldCheck} label="Turnstile" status="pending" note="Anti-bot (contato, login)" />
+                    <SecurityRow icon={Cloud} label="Railway" status="pending" note="Deploy produção" />
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-3 leading-relaxed">
+                    Itens marcados como "Ativo" estão em execução no backend.
+                    Itens "Pendente" requerem configuração em produção.
+                    Nenhum secret é exibido aqui.
+                </p>
+            </div>
+
             <div className="border border-border rounded-xl p-5 bg-background/50">
                 <h3 className="text-[11px] uppercase tracking-[0.2em] text-foreground font-medium mb-3">Entidades do sistema</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
@@ -26,6 +51,26 @@ export default function SystemTab() {
                     ))}
                 </div>
             </div>
+        </div>
+    );
+}
+
+function SecurityRow({ icon: Icon, label, status, note }) {
+    const isActive = status === 'active';
+    return (
+        <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+            <Icon className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+            <div className="flex-1">
+                <p className="text-sm font-medium">{label}</p>
+                {note && <p className="text-[10px] text-muted-foreground">{note}</p>}
+            </div>
+            <span className={`text-[10px] uppercase tracking-[0.1em] px-2 py-0.5 rounded-full ${
+                isActive
+                    ? 'bg-green-500/10 text-green-600'
+                    : 'bg-amber-500/10 text-amber-600'
+            }`}>
+                {isActive ? 'Ativo' : 'Pendente'}
+            </span>
         </div>
     );
 }

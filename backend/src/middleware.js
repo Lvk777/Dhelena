@@ -45,9 +45,13 @@ export async function auth(req, res, next) {
                 );
                 if (rows.length > 0) req.user = rows[0];
             }
-        } catch { /* invalid token — continue as anonymous */ }
-    } else {
-        // ── Dev mode: validate Express JWT ──
+        } catch {
+            // Supabase unreachable — fall back to Express JWT (dev/preview mode)
+        }
+    }
+
+    // ── Express JWT fallback (dev mode, or Supabase unreachable) ──
+    if (!req.user) {
         try {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
             const { rows } = await pool.query(

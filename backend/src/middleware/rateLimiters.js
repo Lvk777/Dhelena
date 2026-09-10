@@ -105,6 +105,7 @@ export const searchLimiter = rateLimit({
     legacyHeaders: false,
     keyGenerator,
     handler: (req, res) => {
+        logSecurityEvent(req, 'rate_limit_triggered', { limiter: 'search' });
         res.status(429).json({ error: 'Busca rápida demais. Aguarde um momento.' });
     },
 });
@@ -130,7 +131,8 @@ export const analyticsLimiter = rateLimit({
     legacyHeaders: false,
     keyGenerator,
     handler: (req, res) => {
-        res.status(429).json({ error: 'Rate limit.' });
+        logSecurityEvent(req, 'rate_limit_triggered', { limiter: 'analytics' });
+        res.status(429).json({ error: 'Muitos eventos. Aguarde um momento.' });
     },
 });
 

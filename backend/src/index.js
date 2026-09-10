@@ -25,13 +25,17 @@ app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     hsts: isProduction ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
 }));
+app.use(helmet.frameguard({ action: 'deny' }));
 app.use(helmet.xContentTypeOptions());
 app.use(helmet.referrerPolicy({ policy: 'strict-origin-when-cross-origin' }));
 
 // ─── CORS ─────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || (isProduction ? '' : '*');
+if (isProduction && !corsOrigin) {
+    console.warn('[CORS] ⚠️ CORS_ORIGIN not set in production — CORS will be disabled');
+}
 app.use(cors({
-    origin: corsOrigin === '*' ? true : corsOrigin.split(',').map(s => s.trim()),
+    origin: corsOrigin === '*' ? true : (corsOrigin ? corsOrigin.split(',').map(s => s.trim()) : false),
     credentials: true,
 }));
 

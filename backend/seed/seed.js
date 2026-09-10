@@ -29,7 +29,11 @@ export async function runSeed() {
     // Change it immediately in production via the admin panel or by setting
     // ADMIN_EMAIL and ADMIN_PASSWORD environment variables.
     const adminEmail = process.env.ADMIN_EMAIL || 'admin@dhelenas.com';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (!adminPassword) {
+        console.warn('[Seed] ⚠️ ADMIN_PASSWORD not set — skipping admin user creation. Set ADMIN_PASSWORD env var to create admin.');
+        return;
+    }
     const hash = await bcrypt.hash(adminPassword, 10);
     await pool.query(
         `INSERT INTO profiles (email, password_hash, full_name, role)
