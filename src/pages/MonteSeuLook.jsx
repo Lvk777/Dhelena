@@ -334,31 +334,30 @@ export default function MonteSeuLook() {
                             </div>
                             {/* size — hidden when product has only one size (auto-selected) */}
                             {configProduct.sizes.length > 1 && (
-                            <>
-                            <p className="text-[11px] uppercase tracking-[0.2em] mb-3">Tamanho</p>
-                            <div className="flex flex-wrap gap-2 mb-5">
-                                {configProduct.sizes.map(s => {
-                                    const color = configProduct.colors.find(c => c.id === selColor);
-                                    const perSizeStock = color?.stock[s] ?? 0;
-                                    // "Único" size: stock is stored under standard keys (PP/P/M/G/GG), use total
-                                    const isUnique = s.toLowerCase() === "único" || s.toLowerCase() === "unico";
-                                    const stock = isUnique
-                                        ? Object.values(color?.stock || {}).reduce((a, b) => a + (Number(b) || 0), 0)
-                                        : perSizeStock;
-                                    const disabled = stock === 0;
-                                    return (
-                                        <button
-                                            key={s}
-                                            disabled={disabled}
-                                            onClick={() => setSelSize(s)}
-                                            className={`min-w-[48px] h-11 border text-sm transition-colors ${selSize === s ? "border-foreground bg-foreground text-white" : disabled ? "border-border text-muted-foreground/40 cursor-not-allowed line-through" : "border-border hover:border-foreground"}`}
-                                        >
-                                            {s}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            </>
+                                <div className="mb-5">
+                                    <p className="text-[11px] uppercase tracking-[0.2em] mb-3">Tamanho</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {configProduct.sizes.map(s => {
+                                            const color = configProduct.colors.find(c => c.id === selColor);
+                                            const perSizeStock = color?.stock[s] ?? 0;
+                                            const isUnique = s.toLowerCase() === "único" || s.toLowerCase() === "unico";
+                                            const stock = isUnique
+                                                ? Object.values(color?.stock || {}).reduce((a, b) => a + (Number(b) || 0), 0)
+                                                : perSizeStock;
+                                            const disabled = stock === 0;
+                                            return (
+                                                <button
+                                                    key={s}
+                                                    disabled={disabled}
+                                                    onClick={() => setSelSize(s)}
+                                                    className={`min-w-[48px] h-11 border text-sm transition-colors ${selSize === s ? "border-foreground bg-foreground text-white" : disabled ? "border-border text-muted-foreground/40 cursor-not-allowed line-through" : "border-border hover:border-foreground"}`}
+                                                >
+                                                    {s}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                             )}
                             <button
                                 onClick={handleAddToLook}
