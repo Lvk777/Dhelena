@@ -2,10 +2,17 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
-// ─── Database connection with fallback ──────────────────────────────
-// When Supabase DATABASE_URL is set but unreachable (e.g. IPv6-only),
-// falls back to local Docker PostgreSQL so the dev environment keeps working.
+// ─── Database connection ───────────────────────────────────────────
+// In production: DATABASE_URL is required — no fallback.
+// In development: falls back to local Docker PostgreSQL if Supabase is unreachable.
+const isProduction = process.env.NODE_ENV === 'production';
 const FALLBACK_URL = 'postgresql://dhelenas:dhelenas@postgres:5432/dhelenas';
+
+if (isProduction && !process.env.DATABASE_URL) {
+    console.error('[DB] FATAL: DATABASE_URL is required in production. Exiting.');
+    process.exit(1);
+}
+
 const dbUrl = process.env.DATABASE_URL || FALLBACK_URL;
 const isSupabase = dbUrl.includes('supabase');
 
@@ -23,8 +30,12 @@ async function ensurePool() {
         await _pool.query('SELECT 1');
         console.log(`[DB] Connected to ${isSupabase ? 'Supabase PostgreSQL' : 'local PostgreSQL'}`);
     } catch (err) {
+        if (isProduction) {
+            console.error('[DB] FATAL: Database unreachable in production. Exiting.');
+            process.exit(1);
+        }
         if (isSupabase) {
-            console.warn(`[DB] Supabase unreachable (${err.message}), falling back to local PostgreSQL`);
+            console.warn(`[DB] Supabase unreachable, falling back to local PostgreSQL (dev only)`);
             _pool = new Pool({ connectionString: FALLBACK_URL });
             await _pool.query('SELECT 1');
             console.log('[DB] Connected to local PostgreSQL (fallback)');

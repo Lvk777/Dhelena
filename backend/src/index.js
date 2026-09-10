@@ -105,13 +105,19 @@ async function ensureInitialized() {
             console.log('[Migration] Schema already exists — skipping migrations');
         }
 
-        const { rows } = await pool.query('SELECT COUNT(*) as cnt FROM products');
-        if (parseInt(rows[0].cnt) === 0 && !schemaExists) {
-            console.log('[Seed] Products table empty, running seed...');
-            const { runSeed } = await import('../seed/seed.js');
-            await runSeed();
-        } else if (parseInt(rows[0].cnt) === 0 && schemaExists) {
-            console.log('[Seed] Products table empty but schema pre-exists — skipping seed (run manually if needed)');
+        // Seed: NEVER run automatically in production.
+        // In development, only seed when schema is fresh (no pre-existing tables).
+        if (!isProduction) {
+            const { rows } = await pool.query('SELECT COUNT(*) as cnt FROM products');
+            if (parseInt(rows[0].cnt) === 0 && !schemaExists) {
+                console.log('[Seed] Products table empty, running seed...');
+                const { runSeed } = await import('../seed/seed.js');
+                await runSeed();
+            } else if (parseInt(rows[0].cnt) === 0 && schemaExists) {
+                console.log('[Seed] Products table empty but schema pre-exists — skipping seed (run manually if needed)');
+            }
+        } else {
+            console.log('[Seed] Production mode — automatic seed disabled');
         }
         initialized = true;
         console.log('[API] Database initialized');
