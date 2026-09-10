@@ -76,7 +76,7 @@ export default function Header() {
 
                             {/* nav desktop */}
                             <nav className="hidden xl:flex items-center gap-4">
-                                {NAV.slice(0, 4).map((n) => (
+                                {NAV.slice(0, 5).map((n) => (
                                     <Link key={n.label} to={n.to} className="link-underline text-[11px] uppercase tracking-[0.14em] whitespace-nowrap text-foreground/75 hover:text-foreground transition-colors">
                                         {n.label}
                                     </Link>
@@ -97,7 +97,7 @@ export default function Header() {
                         {/* right nav + icons */}
                         <div className="justify-self-end flex items-center gap-4">
                             <nav className="hidden xl:flex items-center gap-4">
-                                {NAV.slice(4).map((n) => (
+                                {NAV.slice(5).map((n) => (
                                     <Link key={n.label} to={n.to} className="link-underline text-[11px] uppercase tracking-[0.14em] whitespace-nowrap text-foreground/75 hover:text-foreground transition-colors">
                                         {n.label}
                                     </Link>

@@ -24,6 +24,7 @@ export default function MonteSeuLook() {
     const [selSize, setSelSize] = useState(null);
     const [mobileTab, setMobileTab] = useState("products");
     const [promotion, setPromotion] = useState(null);
+    const [lookAdded, setLookAdded] = useState(false);
 
     // Fetch active look promotion
     useEffect(() => {
@@ -71,7 +72,8 @@ export default function MonteSeuLook() {
     const openConfig = (product) => {
         setConfigProduct(product);
         setSelColor(product.colors[0]?.id || null);
-        setSelSize(null);
+        // Auto-select size when product has only one (e.g. "Único")
+        setSelSize(product.sizes.length === 1 ? product.sizes[0] : null);
     };
 
     const handleAddToLook = () => {
@@ -107,10 +109,20 @@ export default function MonteSeuLook() {
         if (lookItems.length === 0) return;
         lookItems.forEach(item => {
             const color = item.product.colors.find(c => c.id === item.colorId);
-            const stock = color?.stock[item.size] || 0;
+            const isUnique = item.size.toLowerCase() === "único" || item.size.toLowerCase() === "unico";
+            const stock = isUnique
+                ? Object.values(color?.stock || {}).reduce((a, b) => a + (Number(b) || 0), 0)
+                : (color?.stock[item.size] || 0);
             addToCart({ productId: item.productId, colorId: item.colorId, size: item.size, qty: 1 }, stock || undefined);
         });
-        setCartOpen(true);
+        setLookAdded(true);
+        showToast("Look adicionado à sua sacola.");
+    };
+
+    const handleContinueShopping = () => {
+        setLookItems([]);
+        setLookAdded(false);
+        setMobileTab("products");
     };
 
     const handleClearLook = () => {
@@ -243,7 +255,7 @@ export default function MonteSeuLook() {
                             <h3 className="font-heading text-lg tracking-[0.04em] mb-5">Resumo</h3>
                             <div className="space-y-3 text-sm">
                                 <div className="flex justify-between">
-                                    <span className="text-muted-foreground">{lookItems.length} {lookItems.length === 1 ? "peça" : "peças"}</span>
+                                    <span className="text-muted-foreground">Subtotal ({lookItems.length} {lookItems.length === 1 ? "peça" : "peças"})</span>
                                     <span className="whitespace-nowrap">{formatBRL(subtotal)}</span>
                                 </div>
                                 {lookDiscount > 0 && (
@@ -263,20 +275,33 @@ export default function MonteSeuLook() {
                                 </div>
                             </div>
 
-                            <button
-                                onClick={handleAddLookToCart}
-                                disabled={lookItems.length === 0}
-                                className="btn-gold w-full mt-5 py-3.5 text-sm disabled:opacity-40 flex items-center justify-center gap-2"
-                            >
-                                <ShoppingBag className="w-4 h-4" strokeWidth={1.5} /> Adicionar look à sacola
-                            </button>
-                            <button
-                                onClick={handleClearLook}
-                                disabled={lookItems.length === 0}
-                                className="btn-outline w-full mt-2 py-3 text-sm disabled:opacity-40 flex items-center justify-center gap-2"
-                            >
-                                <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} /> Limpar look
-                            </button>
+                            {lookAdded ? (
+                                <div className="text-center py-6 mt-5">
+                                    <div className="w-12 h-12 rounded-full bg-[hsl(var(--gold))] mx-auto flex items-center justify-center mb-4">
+                                        <Check className="w-6 h-6 text-white" strokeWidth={1.5} />
+                                    </div>
+                                    <p className="text-sm text-foreground mb-6">Look adicionado à sua sacola.</p>
+                                    <button onClick={() => setCartOpen(true)} className="btn-gold w-full py-3.5 text-sm mb-2">Ver sacola</button>
+                                    <button onClick={handleContinueShopping} className="btn-outline w-full py-3 text-sm">Continuar comprando</button>
+                                </div>
+                            ) : (
+                                <>
+                                    <button
+                                        onClick={handleAddLookToCart}
+                                        disabled={lookItems.length === 0}
+                                        className="btn-gold w-full mt-5 py-3.5 text-sm disabled:opacity-40 flex items-center justify-center gap-2"
+                                    >
+                                        <ShoppingBag className="w-4 h-4" strokeWidth={1.5} /> Adicionar look à sacola
+                                    </button>
+                                    <button
+                                        onClick={handleClearLook}
+                                        disabled={lookItems.length === 0}
+                                        className="btn-outline w-full mt-2 py-3 text-sm disabled:opacity-40 flex items-center justify-center gap-2"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} /> Limpar look
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -307,7 +332,9 @@ export default function MonteSeuLook() {
                                     />
                                 ))}
                             </div>
-                            {/* size */}
+                            {/* size — hidden when product has only one size (auto-selected) */}
+                            {configProduct.sizes.length > 1 && (
+                            <>
                             <p className="text-[11px] uppercase tracking-[0.2em] mb-3">Tamanho</p>
                             <div className="flex flex-wrap gap-2 mb-5">
                                 {configProduct.sizes.map(s => {
@@ -331,6 +358,8 @@ export default function MonteSeuLook() {
                                     );
                                 })}
                             </div>
+                            </>
+                            )}
                             <button
                                 onClick={handleAddToLook}
                                 disabled={!selColor || !selSize}
