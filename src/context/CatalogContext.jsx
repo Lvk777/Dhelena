@@ -63,7 +63,7 @@ export function CatalogProvider({ children }) {
                 base44.entities.Product.list("-created_date", 200).catch(() => []),
                 base44.entities.Category.list("sort_order", 100).catch(() => []),
                 base44.entities.Collection.list("sort_order", 100).catch(() => []),
-                base44.entities.Banner.filter({ active: true }, "sort_order", 20).catch(() => []),
+                base44.entities.Banner.filter({ active: true }, "-priority", 20).catch(() => []),
             ]);
             setProducts((prodRes || []).map(dbToProduct));
             setCategories(catRes || []);

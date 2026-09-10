@@ -8,6 +8,7 @@ import { usePublicSettings } from "@/context/PublicSettingsContext";
 import { COLOR_SWATCHES, formatBRL, installmentValue } from "@/data/products";
 import ProductCard from "@/components/ProductCard";
 import { track } from "@/lib/analytics";
+import PositionBanner from "@/components/PositionBanner";
 
 export default function ProductDetail() {
     const { id } = useParams();
@@ -63,6 +64,7 @@ export default function ProductDetail() {
 
     return (
         <div>
+            <PositionBanner position="product_top" />
             {/* breadcrumb */}
             <div className="container-boutique py-5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                 <Link to="/" className="hover:text-foreground">Início</Link>

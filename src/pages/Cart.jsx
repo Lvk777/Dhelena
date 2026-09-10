@@ -8,6 +8,7 @@ import { usePublicSettings } from "@/context/PublicSettingsContext";
 import { COLOR_SWATCHES, formatBRL, stockFor } from "@/data/products";
 import CheckoutAuthModal from "@/components/CheckoutAuthModal";
 import { useActivePromotions, PromotionStrip } from "@/components/PromoComponents";
+import PositionBanner from "@/components/PositionBanner";
 
 export default function Cart() {
     const { cart, removeFromCart, updateQty, showToast, couponCode, couponResult, couponLoading, applyCoupon: applyCouponCtx, clearCoupon } = useStore();
@@ -58,6 +59,8 @@ export default function Cart() {
     }
 
     return (
+        <div>
+        <PositionBanner position="cart_top" variant="compact" />
         <div className="container-boutique py-14">
             <h1 className="font-heading text-4xl sm:text-5xl tracking-[0.03em] text-center">Sua sacola</h1>
             <div className="flex justify-center mt-5"><div className="gold-rule" /></div>
@@ -146,6 +149,7 @@ export default function Cart() {
             </div>
 
             <CheckoutAuthModal open={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+        </div>
         </div>
     );
 }

@@ -5,6 +5,7 @@ import { useCatalog } from "@/context/CatalogContext";
 import { useStore } from "@/context/StoreContext";
 import { formatBRL } from "@/data/products";
 import { useActivePromotions, PromotionLookCard, PromotionStrip } from "@/components/PromoComponents";
+import PositionBanner from "@/components/PositionBanner";
 
 const LOOK_SECTIONS = [
     { id: "vestido", label: "Vestidos", categories: ["vestidos", "conjuntos"] },
@@ -128,6 +129,7 @@ export default function MonteSeuLook() {
 
     return (
         <div className="min-h-screen bg-[hsl(var(--bone))]">
+            <PositionBanner position="lookbook_top" />
             {/* Hero */}
             <div className="bg-background py-12 sm:py-16 text-center border-b border-border">
                 <div className="container-boutique">
