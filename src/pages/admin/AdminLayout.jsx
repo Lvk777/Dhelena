@@ -20,6 +20,7 @@ const MENU = [
     { to: "/admin/banners", label: "Banners", icon: Image },
     { to: "/admin/promocoes", label: "Promoções", icon: Tag },
     { to: "/admin/guias-medidas", label: "Guias de Medidas", icon: Ruler },
+    { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
     { to: "/admin/relatorios", label: "Relatórios", icon: BarChart3 },
     { to: "/admin/auditoria", label: "Auditoria", icon: ShieldCheck },
     { to: "/admin/configuracoes", label: "Configurações", icon: Settings },

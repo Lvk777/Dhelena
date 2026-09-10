@@ -7,6 +7,7 @@ import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
 import { safeReturnTo } from "@/lib/authReturnTo";
 import { validateCPF, validateEmail, validatePhone, maskCPF, maskPhone } from "@/lib/forms";
+import { track } from "@/lib/analytics";
 
 export default function Register() {
     const [form, setForm] = useState({ name: "", email: "", phone: "", cpf: "", birthDate: "", password: "", confirm: "" });
@@ -34,6 +35,7 @@ export default function Register() {
         setLoading(true);
         try {
             await client.auth.register({ email: form.email, password: form.password, full_name: form.name });
+            track('sign_up');
             setShowOtp(true);
         } catch (err) {
             setError(err.message || "Falha no cadastro");

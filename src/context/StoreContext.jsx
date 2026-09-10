@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
+import { track } from "@/lib/analytics";
 
 const StoreContext = createContext(null);
 
@@ -72,6 +73,7 @@ export function StoreProvider({ children }) {
             const initialQty = maxQty != null ? Math.min(item.qty || 1, maxQty) : item.qty || 1;
             return [...prev, { ...item, qty: initialQty }];
         });
+        track('add_to_cart', { product_id: item.productId });
         showToast("Adicionado à sacola ✓");
     }, [showToast]);
 
@@ -99,6 +101,7 @@ export function StoreProvider({ children }) {
                 base44.entities.Favorite.filter({ product_id: productId }).then((recs) => {
                     recs.forEach((r) => base44.entities.Favorite.delete(r.id));
                 });
+                track('favorite', { product_id: productId });
                 showToast("Removido dos favoritos");
                 return prev.filter((id) => id !== productId);
             } else {

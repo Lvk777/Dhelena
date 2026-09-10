@@ -9,6 +9,7 @@ import { base44 } from "@/api/base44Client";
 import { COLOR_SWATCHES, formatBRL } from "@/data/products";
 import AddressFields from "@/components/AddressFields";
 import { validateCPF, validateEmail, validatePhone, validateCEP, maskCPF, maskPhone } from "@/lib/forms";
+import { track } from "@/lib/analytics";
 
 const STEPS = ["Dados pessoais", "Endereço", "Entrega", "Pagamento", "Confirmação"];
 
@@ -30,6 +31,9 @@ export default function Checkout() {
     const [placing, setPlacing] = useState(false);
     const [errors, setErrors] = useState({});
     const [orderError, setOrderError] = useState("");
+
+    // Track checkout start
+    useEffect(() => { track('begin_checkout'); }, []);
 
     useEffect(() => {
         if (user) {
@@ -106,6 +110,7 @@ export default function Checkout() {
         try {
             const num = await createOrder();
             setOrderNo(num);
+            track('order_created');
             setDone(true);
             clearCart();
             window.scrollTo(0, 0);

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useLocation, useNavigationType } from "react-router-dom";
+import { trackPageView } from "@/lib/analytics";
 
 const getHashId = (hash) => {
     const rawId = hash.slice(1);
@@ -16,6 +17,9 @@ export default function ScrollToTop() {
     const navigationType = useNavigationType();
 
     useEffect(() => {
+        // Track page view on route change
+        trackPageView();
+
         if (navigationType === "POP") return;
 
         if (hash) {

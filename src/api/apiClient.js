@@ -327,6 +327,16 @@ const entities = new Proxy({}, {
     },
 });
 
+// ─── Custom analytics endpoints ───────────────────────────────────
+const custom = {
+    analyticsOverview: ({ period, start, end }) => apiFetch(`/analytics/overview?period=${period || '7d'}${start ? `&start=${start}` : ''}${end ? `&end=${end}` : ''}`),
+    analyticsSources: ({ period }) => apiFetch(`/analytics/sources?period=${period || '7d'}`),
+    analyticsDevices: ({ period }) => apiFetch(`/analytics/devices?period=${period || '7d'}`),
+    analyticsPages: ({ period }) => apiFetch(`/analytics/pages?period=${period || '7d'}`),
+    analyticsFunnel: ({ period }) => apiFetch(`/analytics/funnel?period=${period || '7d'}`),
+    analyticsProducts: ({ period }) => apiFetch(`/analytics/products?period=${period || '7d'}`),
+};
+
 // ─── Public client ────────────────────────────────────────────────
-export const createClient = () => ({ auth, entities, functions, integrations, app });
+export const createClient = () => ({ auth, entities, functions, integrations, app, custom });
 export const client = createClient();

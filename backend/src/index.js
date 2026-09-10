@@ -1,8 +1,10 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import fs from 'fs';
 import { auth, errorHandler } from './middleware.js';
 import { pool } from './config/db.js';
+import { globalLimiter } from './middleware/rateLimiters.js';
 import authRoutes from './routes/auth.js';
 import catalogRoutes from './routes/catalog.js';
 import orderRoutes from './routes/orders.js';
@@ -10,21 +12,42 @@ import userRoutes from './routes/user.js';
 import adminRoutes from './routes/admin.js';
 import uploadRoutes from './routes/upload.js';
 import lookRoutes from './routes/look.js';
+import analyticsRoutes from './routes/analytics.js';
+import contactRoutes from './routes/contact.js';
 
 const app = express();
+const isProduction = process.env.NODE_ENV === 'production';
 
-// ─── CORS ──────────────────────────────────────────────────────────
-const corsOrigin = process.env.CORS_ORIGIN || '*';
+// ─── Security headers (Helmet) ────────────────────────────────────
+app.use(helmet({
+    contentSecurityPolicy: false, // Disabled to not break Supabase/inline styles; configure per-domain in production
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    hsts: isProduction ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
+}));
+app.use(helmet.xContentTypeOptions());
+app.use(helmet.referrerPolicy({ policy: 'strict-origin-when-cross-origin' }));
+
+// ─── CORS ─────────────────────────────────────────────────────────
+const corsOrigin = process.env.CORS_ORIGIN || (isProduction ? '' : '*');
 app.use(cors({
     origin: corsOrigin === '*' ? true : corsOrigin.split(',').map(s => s.trim()),
     credentials: true,
 }));
 
-app.use(express.json({ limit: '10mb' }));
+// ─── Body size limits ─────────────────────────────────────────────
+app.use(express.json({ limit: '100kb' })); // JSON payloads limited to 100kb
+app.use(express.urlencoded({ limit: '100kb', extended: true }));
+
+// ─── Global rate limiter ──────────────────────────────────────────
+app.use(globalLimiter);
+
 app.use(auth);
 
-// ─── Routes ─────────────────────────────────────────────────────────
+// ─── Routes ───────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
+app.use('/api', contactRoutes);
+app.use('/api', analyticsRoutes);
 app.use('/api', catalogRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', userRoutes);
@@ -32,7 +55,7 @@ app.use('/api', adminRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api', lookRoutes);
 
-// ─── Health check ──────────────────────────────────────────────────
+// ─── Health check ─────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
     try {
         await pool.query('SELECT 1');
@@ -42,12 +65,12 @@ app.get('/health', async (req, res) => {
     }
 });
 
-// ─── Static files for uploads (dev only) ───────────────────────────
+// ─── Static files for uploads (dev only) ─────────────────────────
 const uploadDir = process.env.UPLOAD_DIR || './uploads';
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 app.use('/api/uploads', express.static(uploadDir));
 
-// ─── Auto-run migrations + seed on first start ─────────────────────
+// ─── Auto-run migrations + seed on first start ────────────────────
 let initialized = false;
 async function ensureInitialized() {
     if (initialized) return;

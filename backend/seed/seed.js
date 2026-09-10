@@ -24,15 +24,20 @@ export async function runSeed() {
     }
     if (!data) throw new Error('initialData.json not found');
 
-    // 1. Admin user
-    const hash = await bcrypt.hash('admin123', 10);
+    // 1. Admin user — DEVELOPMENT CREDENTIALS ONLY
+    // ⚠️ The admin password below is a DEVELOPMENT PLACEHOLDER only.
+    // Change it immediately in production via the admin panel or by setting
+    // ADMIN_EMAIL and ADMIN_PASSWORD environment variables.
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@dhelenas.com';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+    const hash = await bcrypt.hash(adminPassword, 10);
     await pool.query(
         `INSERT INTO profiles (email, password_hash, full_name, role)
          VALUES ($1, $2, $3, $4)
          ON CONFLICT (email) DO UPDATE SET role = $4, password_hash = $2`,
-        ['admin@dhelenas.com', hash, 'Administrador', 'admin']
+        [adminEmail, hash, 'Administrador', 'admin']
     );
-    console.log('[Seed] Admin user: admin@dhelenas.com / admin123');
+    console.log(`[Seed] Admin user created. ⚠️ DEVELOPMENT CREDENTIALS — change before production.`);
 
     // 2. Categories
     for (const c of data.Category) {

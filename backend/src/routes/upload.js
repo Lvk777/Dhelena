@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { auth, requireAdmin } from '../middleware.js';
+import { uploadLimiter } from '../middleware/rateLimiters.js';
 
 const router = Router();
 const uploadDir = process.env.UPLOAD_DIR || './uploads';
@@ -35,7 +36,7 @@ const upload = multer({
 });
 
 // POST /api/upload — local dev fallback (Supabase Storage used in production via frontend)
-router.post('/upload', auth, requireAdmin, upload.single('file'), (req, res) => {
+router.post('/upload', auth, requireAdmin, uploadLimiter, upload.single('file'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
     res.json({ file_url: `/api/uploads/${req.file.filename}` });
 });

@@ -61,6 +61,7 @@ import AuditLog from '@/pages/admin/AuditLog';
 import SizeGuides from '@/pages/admin/SizeGuides';
 import Integrations from '@/pages/admin/Integrations';
 import Promotions from '@/pages/admin/Promotions';
+import Analytics from '@/pages/admin/Analytics';
 
 const AuthenticatedApp = () => {
     const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -144,6 +145,7 @@ const AuthenticatedApp = () => {
                             <Route path="guias-medidas" element={<SizeGuides />} />
                             <Route path="integracoes" element={<Integrations />} />
                             <Route path="promocoes" element={<Promotions />} />
+                            <Route path="analytics" element={<Analytics />} />
                         </Route>
 
                         <Route path="*" element={<PageNotFound />} />

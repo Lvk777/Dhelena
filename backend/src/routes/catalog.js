@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { pool } from '../config/db.js';
 import { auth, requireAdmin } from '../middleware.js';
 import { logAudit } from '../services.js';
+import { searchLimiter } from '../middleware/rateLimiters.js';
 
 const router = Router();
 
@@ -89,7 +90,7 @@ async function updateRow(table, id, data, dateField = 'updated_at') {
 }
 
 // ─── PRODUCTS ───────────────────────────────────────────────────────
-router.get('/products', async (req, res, next) => {
+router.get('/products', searchLimiter, async (req, res, next) => {
     try {
         const isAdmin = req.user?.role === 'admin';
         const extra = isAdmin ? [] : ['status = $1'];
@@ -100,7 +101,10 @@ router.get('/products', async (req, res, next) => {
         let query = 'SELECT * FROM products';
         if (conditions.length > 0) query += ' WHERE ' + conditions.join(' AND ');
         query += ' ' + buildSort(req, 'created_date', 'DESC');
-        if (req.query.limit) query += ` LIMIT ${parseInt(req.query.limit)}`;
+        // Cap page size to prevent unlimited queries
+        const maxLimit = isAdmin ? 200 : 60;
+        const limit = Math.min(parseInt(req.query.limit) || maxLimit, maxLimit);
+        query += ` LIMIT ${limit}`;
 
         const { rows } = await pool.query(query, allParams);
         res.json(rows);

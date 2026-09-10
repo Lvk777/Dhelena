@@ -3,13 +3,14 @@ import { pool } from '../config/db.js';
 import { auth, requireAdmin } from '../middleware.js';
 import { placeOrder, cancelOrder } from '../orderService.js';
 import { validateCoupon, adjustStock, logAudit } from '../services.js';
+import { orderLimiter, couponLimiter } from '../middleware/rateLimiters.js';
 
 const router = Router();
 
 // ─── ORDERS ────────────────────────────────────────────────────────
 
 // POST /api/orders — placeOrder
-router.post('/orders', auth, async (req, res) => {
+router.post('/orders', auth, orderLimiter, async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'É necessário estar autenticado para criar um pedido' });
     try {
         const idempotencyKey = req.headers['idempotency-key'] || null;
@@ -91,7 +92,7 @@ router.patch('/orders/:id/status', auth, requireAdmin, async (req, res, next) =>
 // ─── COUPONS ───────────────────────────────────────────────────────
 
 // POST /api/coupons/validate
-router.post('/coupons/validate', async (req, res, next) => {
+router.post('/coupons/validate', couponLimiter, async (req, res, next) => {
     try {
         const { code, items } = req.body;
         const subtotal = (items || []).reduce((sum, i) => sum + (Number(i.price || 0) * (i.qty || 1)), 0);

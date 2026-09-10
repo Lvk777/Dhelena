@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db.js';
 import { auth } from '../middleware.js';
+import { loginLimiter, registerLimiter, forgotPasswordLimiter } from '../middleware/rateLimiters.js';
+import { logSecurityEvent } from '../middleware/securityLog.js';
 
 const router = Router();
 
@@ -15,10 +17,20 @@ function signToken(user) {
 }
 
 // POST /api/auth/register
-router.post('/register', async (req, res, next) => {
+router.post('/register', registerLimiter, async (req, res, next) => {
     try {
         const { email, password, full_name } = req.body;
         if (!email || !password) return res.status(400).json({ error: 'Email e senha são obrigatórios' });
+
+        // Validate email format
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({ error: 'E-mail inválido' });
+        }
+
+        // Validate password strength
+        if (password.length < 6) {
+            return res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres' });
+        }
 
         const { rows: existing } = await pool.query('SELECT id FROM profiles WHERE email = $1', [email.toLowerCase()]);
         if (existing.length > 0) return res.status(409).json({ error: 'Email já cadastrado' });
@@ -34,18 +46,28 @@ router.post('/register', async (req, res, next) => {
     } catch (err) { next(err); }
 });
 
-// POST /api/auth/login
-router.post('/login', async (req, res, next) => {
+// POST /api/auth/login (with brute force protection)
+router.post('/login', loginLimiter, async (req, res, next) => {
     try {
         const { email, password } = req.body;
         if (!email || !password) return res.status(400).json({ error: 'Email e senha são obrigatórios' });
 
         const { rows } = await pool.query('SELECT * FROM profiles WHERE email = $1', [email.toLowerCase()]);
-        if (rows.length === 0) return res.status(401).json({ error: 'Email ou senha inválidos' });
+
+        // Generic error message — never reveal if email exists
+        const genericError = 'E-mail ou senha inválidos.';
+
+        if (rows.length === 0) {
+            await logSecurityEvent(req, 'login_failed', { reason: 'email_not_found' });
+            return res.status(401).json({ error: genericError });
+        }
 
         const user = rows[0];
         const valid = await bcrypt.compare(password, user.password_hash);
-        if (!valid) return res.status(401).json({ error: 'Email ou senha inválidos' });
+        if (!valid) {
+            await logSecurityEvent(req, 'login_failed', { reason: 'wrong_password', target_email: email.toLowerCase() });
+            return res.status(401).json({ error: genericError });
+        }
 
         const safeUser = { id: user.id, email: user.email, full_name: user.full_name, phone: user.phone, role: user.role };
         const token = signToken(user);
@@ -73,11 +95,12 @@ router.patch('/me', auth, async (req, res, next) => {
 });
 
 // POST /api/auth/forgot-password
-router.post('/forgot-password', async (req, res, next) => {
+router.post('/forgot-password', forgotPasswordLimiter, async (req, res, next) => {
     try {
         const { email } = req.body;
+        // Always return generic success — never reveal if email exists
         const { rows } = await pool.query('SELECT * FROM profiles WHERE email = $1', [(email || '').toLowerCase()]);
-        if (rows.length === 0) return res.json({}); // Don't reveal if email exists
+        if (rows.length === 0) return res.json({});
 
         const user = rows[0];
         const resetToken = jwt.sign({ id: user.id, purpose: 'reset' }, process.env.JWT_SECRET, { expiresIn: '1h' });
@@ -93,6 +116,10 @@ router.post('/reset-password', async (req, res, next) => {
     try {
         const { resetToken, newPassword } = req.body;
         if (!resetToken || !newPassword) return res.status(400).json({ error: 'Token e nova senha são obrigatórios' });
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres' });
+        }
 
         const decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
         if (decoded.purpose !== 'reset') return res.status(400).json({ error: 'Token inválido' });

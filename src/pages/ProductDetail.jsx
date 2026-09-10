@@ -7,6 +7,7 @@ import { useCatalog } from "@/context/CatalogContext";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
 import { COLOR_SWATCHES, formatBRL, installmentValue } from "@/data/products";
 import ProductCard from "@/components/ProductCard";
+import { track } from "@/lib/analytics";
 
 export default function ProductDetail() {
     const { id } = useParams();
@@ -24,6 +25,9 @@ export default function ProductDetail() {
     const [frete, setFrete] = useState(null);
 
     useEffect(() => { if (product && !color) setColor(product.colors[0]?.id); }, [product, color]);
+
+    // Track product view
+    useEffect(() => { if (product) track('product_view', { product_id: product.id }); }, [product?.id]);
 
     if (loading && !product) {
         return <div className="h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-[hsl(var(--bone))] border-t-[hsl(var(--gold))] rounded-full animate-spin" /></div>;
