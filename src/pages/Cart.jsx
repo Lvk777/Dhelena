@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
 import { COLOR_SWATCHES, formatBRL, stockFor } from "@/data/products";
 import CheckoutAuthModal from "@/components/CheckoutAuthModal";
+import { useActivePromotions, PromotionStrip } from "@/components/PromoComponents";
 
 export default function Cart() {
     const { cart, removeFromCart, updateQty, showToast, couponCode, couponResult, couponLoading, applyCoupon: applyCouponCtx, clearCoupon } = useStore();
@@ -18,6 +19,8 @@ export default function Cart() {
     const [cep, setCep] = useState("");
     const [frete, setFrete] = useState(null);
     const [authModalOpen, setAuthModalOpen] = useState(false);
+    const promos = useActivePromotions();
+    const activePromo = promos[0] || null;
 
     const handleCheckout = () => {
         if (user) navigate("/checkout");
@@ -58,6 +61,12 @@ export default function Cart() {
         <div className="container-boutique py-14">
             <h1 className="font-heading text-4xl sm:text-5xl tracking-[0.03em] text-center">Sua sacola</h1>
             <div className="flex justify-center mt-5"><div className="gold-rule" /></div>
+
+            {activePromo && (
+                <div className="mt-6">
+                    <PromotionStrip promo={activePromo} />
+                </div>
+            )}
 
             <div className="grid lg:grid-cols-3 gap-12 mt-12">
                 {/* items */}

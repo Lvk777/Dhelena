@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Store, ShoppingBag, MapPin, Truck, CreditCard, Plug, Mail, Share2, Search, FileText, Server, Save, Loader2, Check, AlertCircle } from "lucide-react";
+import { Store, ShoppingBag, MapPin, Truck, CreditCard, Mail, Share2, Search, FileText, Server, Save, Loader2, Check, AlertCircle } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import GeneralTab from "@/components/admin/settings/GeneralTab";
 import { logAdminAction } from "@/lib/audit";
@@ -7,7 +7,7 @@ import StoreTab from "@/components/admin/settings/StoreTab";
 import AddressTab from "@/components/admin/settings/AddressTab";
 import ShippingTab from "@/components/admin/settings/ShippingTab";
 import PaymentsTab from "@/components/admin/settings/PaymentsTab";
-import IntegrationsTab from "@/components/admin/settings/IntegrationsTab";
+
 import EmailsTab from "@/components/admin/settings/EmailsTab";
 import SocialTab from "@/components/admin/settings/SocialTab";
 import SeoTab from "@/components/admin/settings/SeoTab";
@@ -34,7 +34,6 @@ const TABS = [
     { key: "address", label: "Endereço", icon: MapPin, component: AddressTab },
     { key: "shipping", label: "Entrega", icon: Truck, component: ShippingTab },
     { key: "payments", label: "Pagamentos", icon: CreditCard, component: PaymentsTab },
-    { key: "integrations", label: "Integrações", icon: Plug, component: IntegrationsTab },
     { key: "emails", label: "E-mails", icon: Mail, component: EmailsTab },
     { key: "social", label: "Redes Sociais", icon: Share2, component: SocialTab },
     { key: "seo", label: "SEO", icon: Search, component: SeoTab },

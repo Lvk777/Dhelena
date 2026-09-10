@@ -4,6 +4,7 @@ import { X, Plus, Trash2, ShoppingBag, Check, Sparkles, Shirt } from "lucide-rea
 import { useCatalog } from "@/context/CatalogContext";
 import { useStore } from "@/context/StoreContext";
 import { formatBRL } from "@/data/products";
+import { useActivePromotions, PromotionLookCard, PromotionStrip } from "@/components/PromoComponents";
 
 const LOOK_SECTIONS = [
     { id: "vestido", label: "Vestidos", categories: ["vestidos", "conjuntos"] },
@@ -23,16 +24,11 @@ export default function MonteSeuLook() {
     const [selColor, setSelColor] = useState(null);
     const [selSize, setSelSize] = useState(null);
     const [mobileTab, setMobileTab] = useState("products");
-    const [promotion, setPromotion] = useState(null);
     const [lookAdded, setLookAdded] = useState(false);
 
-    // Fetch active look promotion
-    useEffect(() => {
-        fetch("/api/look-promotions")
-            .then(r => r.ok ? r.json() : [])
-            .then(data => setPromotion(data[0] || null))
-            .catch(() => {});
-    }, []);
+    // Fetch active look promotions
+    const allPromos = useActivePromotions();
+    const promotion = allPromos[0] || null;
 
     // Filter sections with products
     const sections = useMemo(() => {
@@ -138,11 +134,7 @@ export default function MonteSeuLook() {
                     <Sparkles className="w-6 h-6 text-[hsl(var(--gold))] mx-auto mb-3" strokeWidth={1.25} />
                     <h1 className="font-heading text-4xl sm:text-5xl tracking-[0.03em]">Monte seu Look</h1>
                     <p className="text-muted-foreground mt-3 text-sm">Crie combinações do seu jeito.</p>
-                    {promotion && (
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-[hsl(var(--gold))] mt-4">
-                            {promotion.min_items}+ peças: {Number(promotion.discount_percent)}% OFF
-                        </p>
-                    )}
+                    {promotion && <PromotionStrip promo={promotion} />}
                 </div>
             </div>
 
@@ -252,6 +244,7 @@ export default function MonteSeuLook() {
                     {/* ─── Right: Summary ─── */}
                     <div className={`${mobileTab === "look" ? "block" : "hidden"} lg:block`}>
                         <div className="bg-background border border-border p-6 lg:sticky lg:top-6">
+                            {promotion && <PromotionLookCard promo={promotion} currentCount={lookItems.length} />}
                             <h3 className="font-heading text-lg tracking-[0.04em] mb-5">Resumo</h3>
                             <div className="space-y-3 text-sm">
                                 <div className="flex justify-between">

@@ -88,14 +88,25 @@ router.delete('/size-guides/:id', auth, requireAdmin, async (req, res, next) => 
 });
 
 // ═══════════════════════════════════════════════════════════
-// LOOK PROMOTIONS
+// LOOK PROMOTIONS (extended with campaign fields)
 // ═══════════════════════════════════════════════════════════
 
-// Public: list active promotions
+const PROMO_FIELDS = [
+    'name', 'title', 'subtitle', 'type', 'promo_type', 'min_items',
+    'discount_percent', 'discount_fixed', 'free_shipping', 'buy_quantity',
+    'min_value', 'applicable_category', 'applicable_collection',
+    'required_categories', 'eligible_products', 'eligible_collections',
+    'valid_from', 'valid_until', 'active', 'stacks_with_coupon',
+    'priority', 'campaign_color', 'banner_image', 'short_text'
+];
+
+const PROMO_JSONB = ['required_categories', 'eligible_products', 'eligible_collections'];
+
+// Public: list active promotions (ordered by priority)
 router.get('/look-promotions', async (req, res, next) => {
     try {
         const { rows } = await pool.query(
-            'SELECT * FROM look_promotions WHERE active = true AND (valid_until IS NULL OR valid_until > now()) ORDER BY created_at DESC'
+            'SELECT * FROM look_promotions WHERE active = true AND (valid_until IS NULL OR valid_until > now()) AND (valid_from IS NULL OR valid_from <= now()) ORDER BY priority DESC, created_at DESC'
         );
         res.json(rows);
     } catch (e) { next(e); }
@@ -104,7 +115,7 @@ router.get('/look-promotions', async (req, res, next) => {
 // Admin: list all promotions
 router.get('/look-promotions/admin', auth, requireAdmin, async (req, res, next) => {
     try {
-        const { rows } = await pool.query('SELECT * FROM look_promotions ORDER BY created_at DESC');
+        const { rows } = await pool.query('SELECT * FROM look_promotions ORDER BY priority DESC, created_at DESC');
         res.json(rows);
     } catch (e) { next(e); }
 });
@@ -113,13 +124,19 @@ router.get('/look-promotions/admin', auth, requireAdmin, async (req, res, next) 
 router.post('/look-promotions', auth, requireAdmin, async (req, res, next) => {
     try {
         const b = req.body;
+        const cols = [], ph = [], vals = [];
+        let idx = 1;
+        for (const f of PROMO_FIELDS) {
+            if (b[f] !== undefined) {
+                cols.push(f);
+                ph.push(`$${idx}`);
+                vals.push(PROMO_JSONB.includes(f) ? JSON.stringify(b[f]) : b[f]);
+                idx++;
+            }
+        }
         const { rows } = await pool.query(
-            `INSERT INTO look_promotions (name, type, min_items, discount_percent, discount_fixed, required_categories, eligible_products, eligible_collections, valid_from, valid_until, active, stacks_with_coupon)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-            [b.name, b.type || 'look_discount', b.min_items || 3, b.discount_percent || 0, b.discount_fixed || 0,
-             JSON.stringify(b.required_categories || []), JSON.stringify(b.eligible_products || []),
-             JSON.stringify(b.eligible_collections || []), b.valid_from, b.valid_until,
-             b.active ?? false, b.stacks_with_coupon ?? false]
+            `INSERT INTO look_promotions (${cols.join(', ')}) VALUES (${ph.join(', ')}) RETURNING *`,
+            vals
         );
         await logAudit(req.user.id, 'create', 'LookPromotion', rows[0].id, { name: b.name });
         res.status(201).json(rows[0]);
@@ -133,19 +150,14 @@ router.patch('/look-promotions/:id', auth, requireAdmin, async (req, res, next) 
         const fields = [];
         const vals = [];
         let idx = 1;
-        const map = {
-            name: 'name', type: 'type', min_items: 'min_items',
-            discount_percent: 'discount_percent', discount_fixed: 'discount_fixed',
-            active: 'active', stacks_with_coupon: 'stacks_with_coupon',
-            valid_from: 'valid_from', valid_until: 'valid_until',
-        };
-        for (const [k, col] of Object.entries(map)) {
-            if (b[k] !== undefined) { fields.push(`${col} = $${idx}`); vals.push(b[k]); idx++; }
+        for (const f of PROMO_FIELDS) {
+            if (b[f] !== undefined) {
+                fields.push(`${f} = $${idx}`);
+                vals.push(PROMO_JSONB.includes(f) ? JSON.stringify(b[f]) : b[f]);
+                idx++;
+            }
         }
-        if (b.required_categories !== undefined) { fields.push(`required_categories = $${idx}`); vals.push(JSON.stringify(b.required_categories)); idx++; }
-        if (b.eligible_products !== undefined) { fields.push(`eligible_products = $${idx}`); vals.push(JSON.stringify(b.eligible_products)); idx++; }
-        if (b.eligible_collections !== undefined) { fields.push(`eligible_collections = $${idx}`); vals.push(JSON.stringify(b.eligible_collections)); idx++; }
-
+        if (fields.length === 0) return res.status(400).json({ error: 'Nenhum campo para atualizar' });
         vals.push(req.params.id);
         const { rows } = await pool.query(
             `UPDATE look_promotions SET ${fields.join(', ')}, updated_at = now() WHERE id = $${idx} RETURNING *`,
@@ -163,6 +175,94 @@ router.delete('/look-promotions/:id', auth, requireAdmin, async (req, res, next)
         await pool.query('DELETE FROM look_promotions WHERE id = $1', [req.params.id]);
         await logAudit(req.user.id, 'delete', 'LookPromotion', req.params.id, {});
         res.json({ success: true });
+    } catch (e) { next(e); }
+});
+
+// ═══════════════════════════════════════════════════════════
+// INTEGRATION CONFIGS (editable from admin panel)
+// ═══════════════════════════════════════════════════════════
+
+const SENSITIVE_PATTERNS = /token|key|secret|password|api_key|access_token/i;
+
+function maskValue(key, value) {
+    if (!value || typeof value !== 'string') return value;
+    if (!SENSITIVE_PATTERNS.test(key)) return value;
+    if (value.length <= 8) return '****';
+    return value.substring(0, 4) + '****';
+}
+
+// Admin: list all integration configs
+router.get('/integrations/config', auth, requireAdmin, async (req, res, next) => {
+    try {
+        const { rows } = await pool.query('SELECT * FROM integration_configs ORDER BY service_name');
+        // Mask sensitive fields before sending to frontend
+        const masked = rows.map(r => {
+            const config = { ...r.config_data };
+            for (const [k, v] of Object.entries(config)) {
+                config[k] = maskValue(k, v);
+            }
+            return { ...r, config_data: config };
+        });
+        res.json(masked);
+    } catch (e) { next(e); }
+});
+
+// Admin: upsert integration config
+router.put('/integrations/config/:serviceKey', auth, requireAdmin, async (req, res, next) => {
+    try {
+        const { serviceKey } = req.params;
+        const { service_name, description, config_data, is_active } = req.body;
+
+        // For sensitive fields, if the incoming value is masked (contains ****),
+        // preserve the existing value
+        const { rows: existing } = await pool.query(
+            'SELECT config_data FROM integration_configs WHERE service_key = $1', [serviceKey]
+        );
+        let finalConfig = config_data;
+        if (existing.length > 0) {
+            finalConfig = { ...existing[0].config_data };
+            for (const [k, v] of Object.entries(config_data)) {
+                if (typeof v === 'string' && v.includes('****')) {
+                    // Keep existing value for masked fields
+                    continue;
+                }
+                finalConfig[k] = v;
+            }
+        }
+
+        const { rows } = await pool.query(
+            `INSERT INTO integration_configs (service_key, service_name, description, config_data, is_active)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (service_key) DO UPDATE SET
+                service_name = COALESCE($2, service_name),
+                description = COALESCE($3, description),
+                config_data = $4,
+                is_active = COALESCE($5, is_active),
+                updated_at = now()
+             RETURNING *`,
+            [serviceKey, service_name, description, JSON.stringify(finalConfig), is_active ?? false]
+        );
+        await logAudit(req.user.id, 'update', 'IntegrationConfig', serviceKey, { service_name });
+        // Return masked
+        const result = rows[0];
+        const maskedConfig = {};
+        for (const [k, v] of Object.entries(result.config_data)) {
+            maskedConfig[k] = maskValue(k, v);
+        }
+        res.json({ ...result, config_data: maskedConfig });
+    } catch (e) { next(e); }
+});
+
+// Admin: toggle integration active status
+router.patch('/integrations/config/:serviceKey/toggle', auth, requireAdmin, async (req, res, next) => {
+    try {
+        const { serviceKey } = req.params;
+        const { rows } = await pool.query(
+            'UPDATE integration_configs SET is_active = NOT is_active, updated_at = now() WHERE service_key = $1 RETURNING *',
+            [serviceKey]
+        );
+        if (rows.length === 0) return res.status(404).json({ error: 'Integração não encontrada' });
+        res.json(rows[0]);
     } catch (e) { next(e); }
 });
 

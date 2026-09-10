@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Instagram } from "lucide-react";
 import ProductCard from "@/components/ProductCard";
 import NewsletterCmp from "@/components/Newsletter";
+import { PromotionCampaignBanner } from "@/components/PromoComponents";
 import { useReveal } from "@/hooks/useReveal";
 import { useCatalog } from "@/context/CatalogContext";
 import { LOOK_IMAGE, formatBRL } from "@/data/products";
@@ -53,6 +54,9 @@ export default function Home() {
                     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-bone/70 text-[10px] uppercase tracking-[0.3em] animate-fade-in">Role para descobrir</div>
                 </section>
             )}
+
+            {/* PROMO CAMPAIGN BANNER */}
+            <PromotionCampaignBanner />
 
             {/* NOVIDADES */}
             <Section title="Acabaram de chegar" eyebrow="Novidades" id="novidades">
