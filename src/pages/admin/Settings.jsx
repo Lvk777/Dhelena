@@ -113,17 +113,19 @@ export default function Settings() {
         <div>
             <h1 className="font-heading text-2xl tracking-[0.03em] mb-6">Configurações</h1>
 
-            {/* Tabs */}
-            <div className="flex gap-1 overflow-x-auto no-scrollbar mb-6 border-b border-border -mx-1 px-1">
-                {TABS.map((tab) => (
-                    <button
-                        key={tab.key}
-                        onClick={() => setActiveTab(tab.key)}
-                        className={`flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap transition-colors border-b-2 -mb-px ${activeTab === tab.key ? "border-accent text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-                    >
-                        <tab.icon className="w-4 h-4" strokeWidth={1.5} /> {tab.label}
-                    </button>
-                ))}
+            {/* Tabs — horizontal scroll with visible styled scrollbar */}
+            <div className="mb-6 border-b border-border overflow-x-auto settings-tabs-scroll">
+                <div className="flex gap-1 px-1 min-w-min">
+                    {TABS.map((tab) => (
+                        <button
+                            key={tab.key}
+                            onClick={() => setActiveTab(tab.key)}
+                            className={`flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap transition-colors border-b-2 -mb-px ${activeTab === tab.key ? "border-accent text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                        >
+                            <tab.icon className="w-4 h-4" strokeWidth={1.5} /> {tab.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* Content */}

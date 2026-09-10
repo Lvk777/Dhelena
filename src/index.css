@@ -243,4 +243,28 @@
         background: hsl(var(--border));
         border-radius: 3px;
     }
+
+    /* Settings tabs — elegant visible scrollbar for horizontal scroll */
+    .settings-tabs-scroll {
+        scrollbar-width: thin;
+        scrollbar-color: hsl(var(--border)) transparent;
+    }
+
+    .settings-tabs-scroll::-webkit-scrollbar {
+        height: 5px;
+    }
+
+    .settings-tabs-scroll::-webkit-scrollbar-track {
+        background: hsl(var(--blush));
+        border-radius: 3px;
+    }
+
+    .settings-tabs-scroll::-webkit-scrollbar-thumb {
+        background: hsl(var(--gold) / 0.5);
+        border-radius: 3px;
+    }
+
+    .settings-tabs-scroll::-webkit-scrollbar-thumb:hover {
+        background: hsl(var(--gold) / 0.8);
+    }
 }

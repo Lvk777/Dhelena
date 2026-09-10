@@ -113,6 +113,61 @@ router.get('/look-promotions', async (req, res, next) => {
     } catch (e) { next(e); }
 });
 
+// Public: validate promotion discount for a cart (server-side calculation)
+router.post('/look-promotions/validate', async (req, res, next) => {
+    try {
+        const { items, subtotal } = req.body;
+        const itemCount = items?.length || 0;
+        const cartSubtotal = Number(subtotal) || 0;
+
+        const { rows: activePromos } = await pool.query(
+            `SELECT * FROM look_promotions
+             WHERE active = true
+               AND (valid_until IS NULL OR valid_until > now())
+               AND (valid_from IS NULL OR valid_from <= now())
+             ORDER BY priority DESC, created_at DESC`
+        );
+
+        let appliedPromo = null;
+        let discount = 0;
+
+        for (const promo of activePromos) {
+            let eligible = false;
+            if (promo.min_items && promo.min_items > 0) {
+                eligible = itemCount >= promo.min_items;
+            } else {
+                eligible = true;
+            }
+            if (eligible && promo.min_value && Number(promo.min_value) > 0) {
+                eligible = cartSubtotal >= Number(promo.min_value);
+            }
+            if (eligible) {
+                appliedPromo = promo;
+                if (Number(promo.discount_percent) > 0) {
+                    discount = (cartSubtotal * Number(promo.discount_percent)) / 100;
+                } else if (Number(promo.discount_fixed) > 0) {
+                    discount = Number(promo.discount_fixed);
+                }
+                break;
+            }
+        }
+
+        res.json({
+            promotion: appliedPromo ? {
+                name: appliedPromo.name,
+                title: appliedPromo.title,
+                subtitle: appliedPromo.subtitle,
+                discount_percent: Number(appliedPromo.discount_percent),
+                discount_fixed: Number(appliedPromo.discount_fixed),
+                min_items: appliedPromo.min_items,
+                free_shipping: appliedPromo.free_shipping,
+                campaign_color: appliedPromo.campaign_color,
+            } : null,
+            discount: Math.min(discount, cartSubtotal),
+        });
+    } catch (e) { next(e); }
+});
+
 // Admin: list all promotions
 router.get('/look-promotions/admin', auth, requireAdmin, async (req, res, next) => {
     try {

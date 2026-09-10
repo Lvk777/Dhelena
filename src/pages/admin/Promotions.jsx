@@ -62,6 +62,23 @@ export default function Promotions() {
 
     if (editing) return <PromoEditor promo={editing} onSave={handleSave} onCancel={() => setEditing(null)} />;
 
+    const PROMO_TYPE_LABELS = Object.fromEntries(PROMO_TYPES.map(t => [t.value, t.label]));
+
+    function getPromoStatus(p) {
+        const now = new Date();
+        const start = p.valid_from ? new Date(p.valid_from) : null;
+        const end = p.valid_until ? new Date(p.valid_until) : null;
+        if (!p.active) return { label: "INATIVA", className: "border-border text-muted-foreground" };
+        if (start && start > now) return { label: "AGENDADA", className: "border-blue-400/40 text-blue-600" };
+        if (end && end < now) return { label: "ENCERRADA", className: "border-border text-muted-foreground line-through" };
+        return { label: "ATIVA", className: "border-green-500/40 text-green-600" };
+    }
+
+    function formatDate(dt) {
+        if (!dt) return "—";
+        return new Date(dt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    }
+
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
@@ -87,37 +104,43 @@ export default function Promotions() {
                 <p className="text-muted-foreground text-sm">Nenhuma promoção cadastrada.</p>
             ) : (
                 <div className="space-y-3">
-                    {promos.map(p => (
-                        <div key={p.id} className="bg-background border border-border p-4 flex items-center justify-between">
-                            <div className="flex items-center gap-3 flex-1">
-                                <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: (p.campaign_color || '#A5925A') + '20' }}>
-                                    <Tag className="w-4 h-4" style={{ color: p.campaign_color || '#A5925A' }} strokeWidth={1.5} />
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <p className="font-medium text-sm">{p.name}</p>
-                                        {p.title && <span className="text-[10px] text-muted-foreground">— {p.title}</span>}
-                                        <span className={`text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 border ${p.active ? "border-green-500/40 text-green-600" : "border-border text-muted-foreground"}`}>
-                                            {p.active ? "Ativa" : "Inativa"}
-                                        </span>
-                                        {p.free_shipping && <span className="text-[9px] uppercase tracking-[0.1em] px-2 py-0.5 border border-[hsl(var(--gold))]/30 text-[hsl(var(--gold))]">Frete grátis</span>}
+                    {promos.map(p => {
+                        const status = getPromoStatus(p);
+                        return (
+                            <div key={p.id} className="bg-background border border-border p-4 flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                    <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: (p.campaign_color || '#A5925A') + '20' }}>
+                                        <Tag className="w-4 h-4" style={{ color: p.campaign_color || '#A5925A' }} strokeWidth={1.5} />
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                                        {p.type === "campaign" && p.short_text ? p.short_text : `${p.min_items}+ peças · ${Number(p.discount_percent)}% OFF`}
-                                        {p.stacks_with_coupon ? " · Acumula com cupom" : ""}
-                                        {p.valid_until ? ` · até ${new Date(p.valid_until).toLocaleDateString('pt-BR')}` : ""}
-                                    </p>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <p className="font-medium text-sm">{p.name}</p>
+                                            <span className={`text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 border ${status.className}`}>
+                                                {status.label}
+                                            </span>
+                                            {p.free_shipping && <span className="text-[9px] uppercase tracking-[0.1em] px-2 py-0.5 border border-[hsl(var(--gold))]/30 text-[hsl(var(--gold))]">Frete grátis</span>}
+                                        </div>
+                                        <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
+                                            <span className="text-[11px] text-muted-foreground">Tipo: {PROMO_TYPE_LABELS[p.promo_type || p.type] || p.type}</span>
+                                            <span className="text-[11px] text-muted-foreground">Desconto: {Number(p.discount_percent) > 0 ? `${Number(p.discount_percent)}%` : Number(p.discount_fixed) > 0 ? `R$ ${p.discount_fixed}` : "—"}</span>
+                                            <span className="text-[11px] text-muted-foreground">Início: {formatDate(p.valid_from)}</span>
+                                            <span className="text-[11px] text-muted-foreground">Fim: {formatDate(p.valid_until)}</span>
+                                            <span className="text-[11px] text-muted-foreground">Prioridade: {p.priority || 0}</span>
+                                            {p.applicable_category && <span className="text-[11px] text-muted-foreground">Cat: {p.applicable_category}</span>}
+                                            {p.applicable_collection && <span className="text-[11px] text-muted-foreground">Col: {p.applicable_collection}</span>}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2 shrink-0">
+                                    <button onClick={() => handleToggle(p)} className={`p-1.5 ${p.active ? "text-green-600" : "text-muted-foreground hover:text-foreground"}`} title={p.active ? "Desativar" : "Ativar"}>
+                                        <Power className="w-4 h-4" strokeWidth={1.25} />
+                                    </button>
+                                    <button onClick={() => setEditing(p)} className="text-[11px] uppercase tracking-[0.12em] text-foreground/70 hover:text-foreground border border-border px-3 py-1.5">Editar</button>
+                                    <button onClick={() => handleDelete(p.id)} className="text-muted-foreground hover:text-[hsl(var(--rose))] p-1.5"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
                                 </div>
                             </div>
-                            <div className="flex gap-2">
-                                <button onClick={() => handleToggle(p)} className={`p-1.5 ${p.active ? "text-green-600" : "text-muted-foreground hover:text-foreground"}`} title={p.active ? "Desativar" : "Ativar"}>
-                                    <Power className="w-4 h-4" strokeWidth={1.25} />
-                                </button>
-                                <button onClick={() => setEditing(p)} className="text-[11px] uppercase tracking-[0.12em] text-foreground/70 hover:text-foreground border border-border px-3 py-1.5">Editar</button>
-                                <button onClick={() => handleDelete(p.id)} className="text-muted-foreground hover:text-[hsl(var(--rose))] p-1.5"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
         </div>

@@ -16,14 +16,13 @@ function getStoredUser() { try { return JSON.parse(localStorage.getItem(USER_KEY
 function setStoredUser(user) { user ? localStorage.setItem(USER_KEY, JSON.stringify(user)) : localStorage.removeItem(USER_KEY); }
 
 // ─── Sync Supabase session → localStorage token ────────────────────
+// Only sync when supabase has a session; don't clear JWT token on sign-out events
 if (supabase) {
     supabase.auth.onAuthStateChange((event, session) => {
         if (session?.access_token) {
             setToken(session.access_token);
-        } else {
-            setToken(null);
-            setStoredUser(null);
         }
+        // Don't clear JWT token on SIGNED_OUT — the JWT auth path is independent
     });
 }
 
@@ -114,21 +113,20 @@ function makeEntity(name) {
 // ─── Auth (Supabase when configured, Express JWT fallback) ──────────
 const auth = {
     async me() {
+        // When supabase is configured, try its session first;
+        // fall back to JWT token from localStorage if no supabase session
         if (supabase) {
             const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
-                const err = new Error('Not authenticated');
-                err.status = 401;
-                throw err;
+            if (session?.access_token) {
+                setToken(session.access_token);
             }
-            setToken(session.access_token);
-        } else {
-            const token = getToken();
-            if (!token) {
-                const err = new Error('Not authenticated');
-                err.status = 401;
-                throw err;
-            }
+        }
+        // If no supabase session (or supabase not configured), check JWT token
+        const token = getToken();
+        if (!token) {
+            const err = new Error('Not authenticated');
+            err.status = 401;
+            throw err;
         }
         try {
             const user = await apiFetch('/auth/me');

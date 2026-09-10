@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
     Database, CreditCard, Truck, Mail, MessageCircle, Cloud,
-    CheckCircle2, XCircle, Save, X, Lock, Eye, EyeOff, Power, Loader2
+    CheckCircle2, XCircle, Save, X, Lock, Power, Loader2
 } from "lucide-react";
 
 const INTEGRATION_DEFS = [
@@ -13,7 +13,7 @@ const INTEGRATION_DEFS = [
         fields: [
             { key: "supabase_url", label: "Supabase URL", type: "url", placeholder: "https://xxxx.supabase.co", sensitive: false },
             { key: "supabase_anon_key", label: "Anon Key", type: "text", placeholder: "eyJhbGci...", sensitive: true },
-            { key: "supabase_service_role_key", label: "Service Role Key", type: "text", placeholder: "eyJhbGci...", sensitive: true },
+            { key: "supabase_service_role_key", label: "Service Role Key", type: "text", placeholder: "NUNCA exibido — digite para definir", sensitive: true },
         ],
     },
     {
@@ -22,7 +22,7 @@ const INTEGRATION_DEFS = [
         icon: Database,
         description: "PostgreSQL — conexão principal do backend.",
         fields: [
-            { key: "database_url", label: "DATABASE_URL", type: "text", placeholder: "postgresql://user:pass@host:5432/db", sensitive: true },
+            { key: "database_url", label: "DATABASE_URL", type: "text", placeholder: "NUNCA exibido — digite para definir", sensitive: true },
         ],
     },
     {
@@ -31,7 +31,7 @@ const INTEGRATION_DEFS = [
         icon: CreditCard,
         description: "Gateway de pagamentos — Pix, cartão de crédito e boleto.",
         fields: [
-            { key: "mercado_pago_access_token", label: "Access Token", type: "text", placeholder: "APP_USR-xxxx", sensitive: true },
+            { key: "mercado_pago_access_token", label: "Access Token", type: "text", placeholder: "NUNCA exibido — digite para definir", sensitive: true },
             { key: "mercado_pago_public_key", label: "Public Key", type: "text", placeholder: "APP_USR-xxxx", sensitive: false },
             { key: "mercado_pago_webhook_url", label: "Webhook URL", type: "url", placeholder: "https://...", sensitive: false },
         ],
@@ -42,7 +42,7 @@ const INTEGRATION_DEFS = [
         icon: Truck,
         description: "Cotação e compra de fretes com transportadoras.",
         fields: [
-            { key: "melhor_envio_token", label: "Token", type: "text", placeholder: "Bearer xxxx", sensitive: true },
+            { key: "melhor_envio_token", label: "Token", type: "text", placeholder: "NUNCA exibido — digite para definir", sensitive: true },
             { key: "melhor_envio_postal_code", label: "CEP de Origem", type: "text", placeholder: "00000-000", sensitive: false },
             { key: "melhor_envio_mode", label: "Ambiente", type: "select", options: ["sandbox", "production"], sensitive: false },
         ],
@@ -53,7 +53,7 @@ const INTEGRATION_DEFS = [
         icon: MessageCircle,
         description: "Mensagens automáticas de pedidos via WhatsApp Cloud API.",
         fields: [
-            { key: "whatsapp_access_token", label: "Access Token", type: "text", placeholder: "EAAG...", sensitive: true },
+            { key: "whatsapp_access_token", label: "Access Token", type: "text", placeholder: "NUNCA exibido — digite para definir", sensitive: true },
             { key: "whatsapp_phone_number_id", label: "Phone Number ID", type: "text", placeholder: "000000...", sensitive: false },
             { key: "whatsapp_verify_token", label: "Verify Token (Webhook)", type: "text", placeholder: "meu-token", sensitive: false },
         ],
@@ -64,7 +64,7 @@ const INTEGRATION_DEFS = [
         icon: Mail,
         description: "Envio de e-mails de pedidos, recuperação de senha e notificações.",
         fields: [
-            { key: "resend_api_key", label: "Resend API Key", type: "text", placeholder: "re_xxxx", sensitive: true },
+            { key: "resend_api_key", label: "Resend API Key", type: "text", placeholder: "NUNCA exibido — digite para definir", sensitive: true },
             { key: "email_from", label: "E-mail remetente", type: "email", placeholder: "contato@dhelenas.com.br", sensitive: false },
             { key: "email_from_name", label: "Nome remetente", type: "text", placeholder: "D'Helenas", sensitive: false },
         ],
@@ -101,7 +101,14 @@ export default function Integrations() {
         const existing = configs[def.key];
         const formData = {};
         def.fields.forEach(f => {
-            formData[f.key] = existing?.config_data?.[f.key] || "";
+            if (f.sensitive) {
+                // Sensitive: always start empty — never pre-fill with secret
+                formData[f.key] = "";
+            } else {
+                // Non-sensitive: pre-fill with stored value
+                const raw = existing?.config_data?.[f.key];
+                formData[f.key] = typeof raw === "object" ? "" : (raw || "");
+            }
         });
         setEditForm(formData);
         setEditingKey(def.key);
@@ -135,6 +142,24 @@ export default function Integrations() {
         setConfigs(prev => ({ ...prev, [def.key]: updated }));
     };
 
+    // Check if a field is configured (from API response)
+    const getFieldStatus = (def, fieldKey) => {
+        const cfg = configs[def.key];
+        if (!cfg) return null;
+        const fieldVal = cfg.config_data?.[fieldKey];
+        if (field.sensitive) {
+            // New format: { configured: true, masked_value: "****8F2A" }
+            if (typeof fieldVal === "object" && fieldVal !== null) {
+                return fieldVal;
+            }
+            // Legacy format: masked string
+            if (typeof fieldVal === "string" && fieldVal.includes("****")) {
+                return { configured: true, masked_value: fieldVal };
+            }
+        }
+        return null;
+    };
+
     if (loading) {
         return <div className="py-12 text-center"><div className="w-6 h-6 border-2 border-[hsl(var(--bone))] border-t-[hsl(var(--gold))] rounded-full animate-spin mx-auto" /></div>;
     }
@@ -144,7 +169,7 @@ export default function Integrations() {
             <div className="mb-6">
                 <h1 className="font-heading text-2xl tracking-[0.04em]">Integrações</h1>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                    Configure e gerencie credenciais de cada serviço. Tokens e chaves são exibidos mascarados por segurança.
+                    Configure e gerencie credenciais de cada serviço. Secrets são criptografados (AES-256-GCM) e nunca exibidos.
                 </p>
             </div>
 
@@ -154,7 +179,12 @@ export default function Integrations() {
                     const env = getEnvStatus(def.key);
                     const envConfigured = env && env.status !== "Não configurado";
                     const dbActive = cfg?.is_active ?? false;
-                    const isConfigured = envConfigured || dbActive;
+                    // Check if any sensitive field is configured in DB
+                    const dbSensitiveConfigured = def.fields.some(f => {
+                        const status = getFieldStatus(def, f.key);
+                        return status?.configured;
+                    });
+                    const isConfigured = envConfigured || dbActive || dbSensitiveConfigured;
                     const isEditing = editingKey === def.key;
 
                     return (
@@ -216,8 +246,10 @@ export default function Integrations() {
                             {isEditing && (
                                 <div className="border-t border-border p-5 bg-[hsl(var(--bone))]/30 space-y-3">
                                     {def.fields.map(field => {
-                                        const val = editForm[field.key] || "";
-                                        const isMasked = typeof val === "string" && val.includes("****");
+                                        const fieldStatus = getFieldStatus(def, field.key);
+                                        const isConfiguredField = fieldStatus?.configured;
+                                        const maskedValue = fieldStatus?.masked_value;
+
                                         return (
                                             <div key={field.key}>
                                                 <label className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground flex items-center gap-1.5 mb-1">
@@ -226,7 +258,7 @@ export default function Integrations() {
                                                 </label>
                                                 {field.type === "select" ? (
                                                     <select
-                                                        value={val}
+                                                        value={editForm[field.key] || ""}
                                                         onChange={e => setEditForm(prev => ({ ...prev, [field.key]: e.target.value }))}
                                                         className="w-full border border-border px-3 py-2 text-sm bg-background"
                                                     >
@@ -235,16 +267,22 @@ export default function Integrations() {
                                                     </select>
                                                 ) : (
                                                     <input
-                                                        type={field.type === "url" ? "url" : "text"}
-                                                        value={isMasked ? "" : val}
-                                                        placeholder={isMasked ? val : field.placeholder}
+                                                        type="text"
+                                                        value={editForm[field.key] || ""}
+                                                        placeholder={field.placeholder}
                                                         onChange={e => setEditForm(prev => ({ ...prev, [field.key]: e.target.value }))}
                                                         className="w-full border border-border px-3 py-2 text-sm bg-background"
                                                     />
                                                 )}
-                                                {isMasked && (
+                                                {field.sensitive && isConfiguredField && (
                                                     <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
-                                                        <Lock className="w-2.5 h-2.5" /> Valor já salvo — digite um novo para substituir
+                                                        <CheckCircle2 className="w-3 h-3 text-green-500" /> Configurado ({maskedValue})
+                                                        — deixe vazio para manter
+                                                    </p>
+                                                )}
+                                                {field.sensitive && !isConfiguredField && (
+                                                    <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+                                                        <Lock className="w-2.5 h-2.5" /> Não configurado — digite o valor para definir
                                                     </p>
                                                 )}
                                             </div>

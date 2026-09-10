@@ -86,6 +86,63 @@ export async function placeOrder(userId, body, idempotencyKey) {
             if (couponRows.length > 0) couponId = couponRows[0].id;
         }
 
+        // ── Server-side promotion validation (highest priority active promo) ──
+        // The frontend cannot be trusted for the final discount. Backend recalculates.
+        let promoDiscount = 0;
+        let appliedPromo = null;
+        const { rows: activePromos } = await client.query(
+            `SELECT * FROM look_promotions
+             WHERE active = true
+               AND (valid_until IS NULL OR valid_until > now())
+               AND (valid_from IS NULL OR valid_from <= now())
+             ORDER BY priority DESC, created_at DESC`
+        );
+
+        for (const promo of activePromos) {
+            let eligible = false;
+
+            // Check min_items (for look discounts)
+            if (promo.min_items && promo.min_items > 0) {
+                eligible = items.length >= promo.min_items;
+            } else {
+                eligible = true;
+            }
+
+            // Check min_value
+            if (eligible && promo.min_value && Number(promo.min_value) > 0) {
+                eligible = subtotal >= Number(promo.min_value);
+            }
+
+            // Check applicable_category
+            if (eligible && promo.applicable_category) {
+                eligible = orderItems.some(item => {
+                    const prodCats = item.product_category || '';
+                    return prodCats.toLowerCase().includes(promo.applicable_category.toLowerCase());
+                });
+            }
+
+            if (eligible) {
+                appliedPromo = promo;
+                if (Number(promo.discount_percent) > 0) {
+                    promoDiscount = (subtotal * Number(promo.discount_percent)) / 100;
+                } else if (Number(promo.discount_fixed) > 0) {
+                    promoDiscount = Number(promo.discount_fixed);
+                }
+                break; // Only apply highest priority promo
+            }
+        }
+
+        // Add promo discount (promotions don't stack with each other, but may stack with coupon)
+        if (appliedPromo && !appliedPromo.stacks_with_coupon) {
+            // If promo doesn't stack, use the larger of the two
+            if (promoDiscount > discount) {
+                discount = promoDiscount;
+            }
+        } else if (appliedPromo) {
+            discount += promoDiscount;
+        }
+        discount = Math.min(discount, subtotal); // Never exceed subtotal
+
         // Calculate shipping
         let shippingCost = 0;
         const { rows: shipSettings } = await client.query("SELECT value FROM settings WHERE key = 'shipping'");
@@ -117,6 +174,7 @@ export async function placeOrder(userId, body, idempotencyKey) {
             shipping_cost: Number(shippingCost.toFixed(2)),
             total: Number(total.toFixed(2)),
             coupon_code: coupon_code || null,
+            promotion: appliedPromo ? { name: appliedPromo.name, title: appliedPromo.title, discount_percent: Number(appliedPromo.discount_percent) } : null,
             shipping_method,
             payment_method,
             shipping_address,
