@@ -312,7 +312,12 @@ export default function MonteSeuLook() {
                             <div className="flex flex-wrap gap-2 mb-5">
                                 {configProduct.sizes.map(s => {
                                     const color = configProduct.colors.find(c => c.id === selColor);
-                                    const stock = color?.stock[s] ?? 0;
+                                    const perSizeStock = color?.stock[s] ?? 0;
+                                    // "Único" size: stock is stored under standard keys (PP/P/M/G/GG), use total
+                                    const isUnique = s.toLowerCase() === "único" || s.toLowerCase() === "unico";
+                                    const stock = isUnique
+                                        ? Object.values(color?.stock || {}).reduce((a, b) => a + (Number(b) || 0), 0)
+                                        : perSizeStock;
                                     const disabled = stock === 0;
                                     return (
                                         <button
