@@ -145,13 +145,19 @@ const auth = {
     setToken(token) { setToken(token); },
     async loginViaEmailPassword(email, password, returnTo = '') {
         if (supabase) {
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-            if (error) throw error;
-            setToken(data.session.access_token);
-            const user = await apiFetch('/auth/me');
-            setStoredUser(user);
-            return user;
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+                if (!error && data.session) {
+                    setToken(data.session.access_token);
+                    const user = await apiFetch('/auth/me');
+                    setStoredUser(user);
+                    return user;
+                }
+            } catch {
+                // Supabase Auth failed — fall through to Express JWT
+            }
         }
+        // Express JWT fallback (uses bcrypt hash in profiles table)
         const data = await apiFetch('/auth/login', {
             method: 'POST',
             body: JSON.stringify({ email, password }),

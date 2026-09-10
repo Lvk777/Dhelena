@@ -40,8 +40,11 @@ export async function auth(req, res, next) {
         try {
             const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
             if (!error && user) {
+                // Look up by Supabase Auth ID first, then by email as fallback
+                // (IDs may differ if profile was created by seed, not by Supabase Auth)
                 const { rows } = await pool.query(
-                    'SELECT id, email, full_name, phone, role FROM profiles WHERE id = $1', [user.id]
+                    'SELECT id, email, full_name, phone, role FROM profiles WHERE id = $1 OR email = $2 LIMIT 1',
+                    [user.id, user.email]
                 );
                 if (rows.length > 0) req.user = rows[0];
             }

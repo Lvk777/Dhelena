@@ -207,7 +207,7 @@ export default function AdminWizard({
                                 <button onClick={() => setShowCloseConfirm(false)} className="btn-gold w-full py-2.5 text-sm">
                                     Continuar editando
                                 </button>
-                                <button onClick={() => { setShowCloseConfirm(false); onClose?.(); }} className="btn-outline w-full py-2.5 text-sm text-white">
+                                <button onClick={() => { setShowCloseConfirm(false); onClose?.(); }} className="btn-outline w-full py-2.5 text-sm">
                                     Sair sem salvar
                                 </button>
                             </div>
