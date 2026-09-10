@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
 import {
     Database, CreditCard, Truck, Mail, MessageCircle, Cloud,
-    CheckCircle2, XCircle, Save, X, Lock, Power, Loader2
+    CheckCircle2, XCircle, Save, X, Lock, Power, Loader2, AlertTriangle, Zap
 } from "lucide-react";
+import AdminModal from "@/components/admin/AdminModal";
+import AdminInput from "@/components/admin/AdminInput";
+import AdminSelect from "@/components/admin/AdminSelect";
 
 const INTEGRATION_DEFS = [
     {
@@ -75,9 +78,12 @@ export default function Integrations() {
     const [configs, setConfigs] = useState({});
     const [envStatus, setEnvStatus] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [editingKey, setEditingKey] = useState(null);
+    const [editingDef, setEditingDef] = useState(null);
     const [editForm, setEditForm] = useState({});
     const [saving, setSaving] = useState(false);
+    const [testing, setTesting] = useState(null);
+    const [testResult, setTestResult] = useState(null);
+    const [showConfirmSave, setShowConfirmSave] = useState(false);
 
     const token = localStorage.getItem("dhelena_access_token");
     const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
@@ -102,36 +108,66 @@ export default function Integrations() {
         const formData = {};
         def.fields.forEach(f => {
             if (f.sensitive) {
-                // Sensitive: always start empty — never pre-fill with secret
                 formData[f.key] = "";
             } else {
-                // Non-sensitive: pre-fill with stored value
                 const raw = existing?.config_data?.[f.key];
                 formData[f.key] = typeof raw === "object" ? "" : (raw || "");
             }
         });
         setEditForm(formData);
-        setEditingKey(def.key);
+        setEditingDef(def);
+        setTestResult(null);
     };
 
-    const handleSave = async (def) => {
+    const handleSave = async () => {
+        // Check if this is a critical integration (payment, shipping)
+        const isCritical = ["mercado_pago", "melhor_envio", "database"].includes(editingDef.key);
+        if (isCritical && !showConfirmSave) {
+            setShowConfirmSave(true);
+            return;
+        }
+        setShowConfirmSave(false);
         setSaving(true);
         try {
-            const res = await fetch(`/api/integrations/config/${def.key}`, {
+            const res = await fetch(`/api/integrations/config/${editingDef.key}`, {
                 method: "PUT",
                 headers,
                 body: JSON.stringify({
-                    service_name: def.name,
-                    description: def.description,
+                    service_name: editingDef.name,
+                    description: editingDef.description,
                     config_data: editForm,
-                    is_active: configs[def.key]?.is_active ?? false,
+                    is_active: configs[editingDef.key]?.is_active ?? false,
                 }),
             });
             const saved = await res.json();
-            setConfigs(prev => ({ ...prev, [def.key]: saved }));
-            setEditingKey(null);
+            setConfigs(prev => ({ ...prev, [editingDef.key]: saved }));
+            setEditingDef(null);
         } catch { /* */ }
         finally { setSaving(false); }
+    };
+
+    const handleTestConnection = async () => {
+        setTesting("loading");
+        setTestResult(null);
+        try {
+            // Save first if there are unsaved changes, then test
+            const res = await fetch(`/api/integrations/test/${editingDef.key}`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ config_data: editForm }),
+            });
+            const result = await res.json();
+            if (result.success) {
+                setTesting("success");
+                setTestResult("Conectado");
+            } else {
+                setTesting("error");
+                setTestResult("Falhou");
+            }
+        } catch {
+            setTesting("error");
+            setTestResult("Falhou");
+        }
     };
 
     const toggleActive = async (def) => {
@@ -142,20 +178,13 @@ export default function Integrations() {
         setConfigs(prev => ({ ...prev, [def.key]: updated }));
     };
 
-    // Check if a field is configured (from API response)
-    const getFieldStatus = (def, fieldKey) => {
+    const getFieldStatus = (def, field) => {
         const cfg = configs[def.key];
         if (!cfg) return null;
-        const fieldVal = cfg.config_data?.[fieldKey];
+        const fieldVal = cfg.config_data?.[field.key];
         if (field.sensitive) {
-            // New format: { configured: true, masked_value: "****8F2A" }
-            if (typeof fieldVal === "object" && fieldVal !== null) {
-                return fieldVal;
-            }
-            // Legacy format: masked string
-            if (typeof fieldVal === "string" && fieldVal.includes("****")) {
-                return { configured: true, masked_value: fieldVal };
-            }
+            if (typeof fieldVal === "object" && fieldVal !== null) return fieldVal;
+            if (typeof fieldVal === "string" && fieldVal.includes("****")) return { configured: true, masked_value: fieldVal };
         }
         return null;
     };
@@ -179,17 +208,11 @@ export default function Integrations() {
                     const env = getEnvStatus(def.key);
                     const envConfigured = env && env.status !== "Não configurado";
                     const dbActive = cfg?.is_active ?? false;
-                    // Check if any sensitive field is configured in DB
-                    const dbSensitiveConfigured = def.fields.some(f => {
-                        const status = getFieldStatus(def, f.key);
-                        return status?.configured;
-                    });
+                    const dbSensitiveConfigured = def.fields.some(f => getFieldStatus(def, f.key)?.configured);
                     const isConfigured = envConfigured || dbActive || dbSensitiveConfigured;
-                    const isEditing = editingKey === def.key;
 
                     return (
                         <div key={def.key} className="bg-background border border-border rounded-lg overflow-hidden">
-                            {/* Header */}
                             <div className="p-5">
                                 <div className="flex items-start justify-between mb-3">
                                     <div className="flex items-start gap-3">
@@ -209,7 +232,6 @@ export default function Integrations() {
                                     </span>
                                 </div>
 
-                                {/* Status badges */}
                                 <div className="flex flex-wrap gap-2 mt-2">
                                     {envConfigured && (
                                         <span className="text-[9px] uppercase tracking-[0.1em] px-2 py-0.5 border border-[hsl(var(--gold))]/30 text-[hsl(var(--gold))]">
@@ -223,13 +245,12 @@ export default function Integrations() {
                                     )}
                                 </div>
 
-                                {/* Actions */}
                                 <div className="flex gap-2 mt-4">
                                     <button
-                                        onClick={() => isEditing ? setEditingKey(null) : startEdit(def)}
+                                        onClick={() => startEdit(def)}
                                         className="flex-1 py-2 text-[11px] uppercase tracking-[0.12em] border border-border hover:border-foreground transition-colors"
                                     >
-                                        {isEditing ? "Fechar" : "Editar"}
+                                        Editar
                                     </button>
                                     <button
                                         onClick={() => toggleActive(def)}
@@ -241,69 +262,111 @@ export default function Integrations() {
                                     </button>
                                 </div>
                             </div>
-
-                            {/* Edit form */}
-                            {isEditing && (
-                                <div className="border-t border-border p-5 bg-[hsl(var(--bone))]/30 space-y-3">
-                                    {def.fields.map(field => {
-                                        const fieldStatus = getFieldStatus(def, field.key);
-                                        const isConfiguredField = fieldStatus?.configured;
-                                        const maskedValue = fieldStatus?.masked_value;
-
-                                        return (
-                                            <div key={field.key}>
-                                                <label className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground flex items-center gap-1.5 mb-1">
-                                                    {field.label}
-                                                    {field.sensitive && <Lock className="w-3 h-3" />}
-                                                </label>
-                                                {field.type === "select" ? (
-                                                    <select
-                                                        value={editForm[field.key] || ""}
-                                                        onChange={e => setEditForm(prev => ({ ...prev, [field.key]: e.target.value }))}
-                                                        className="w-full border border-border px-3 py-2 text-sm bg-background"
-                                                    >
-                                                        <option value="">Selecione...</option>
-                                                        {field.options.map(o => <option key={o} value={o}>{o}</option>)}
-                                                    </select>
-                                                ) : (
-                                                    <input
-                                                        type="text"
-                                                        value={editForm[field.key] || ""}
-                                                        placeholder={field.placeholder}
-                                                        onChange={e => setEditForm(prev => ({ ...prev, [field.key]: e.target.value }))}
-                                                        className="w-full border border-border px-3 py-2 text-sm bg-background"
-                                                    />
-                                                )}
-                                                {field.sensitive && isConfiguredField && (
-                                                    <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
-                                                        <CheckCircle2 className="w-3 h-3 text-green-500" /> Configurado ({maskedValue})
-                                                        — deixe vazio para manter
-                                                    </p>
-                                                )}
-                                                {field.sensitive && !isConfiguredField && (
-                                                    <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
-                                                        <Lock className="w-2.5 h-2.5" /> Não configurado — digite o valor para definir
-                                                    </p>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                    <div className="flex gap-2 pt-2">
-                                        <button
-                                            onClick={() => handleSave(def)}
-                                            disabled={saving}
-                                            className="btn-gold px-4 py-2 text-[11px] flex items-center gap-1.5"
-                                        >
-                                            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Salvar
-                                        </button>
-                                        <button onClick={() => setEditingKey(null)} className="btn-outline px-4 py-2 text-[11px]">Cancelar</button>
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     );
                 })}
             </div>
+
+            {/* Integration Modal */}
+            {editingDef && (
+                <AdminModal
+                    open
+                    onClose={() => { setEditingDef(null); setShowConfirmSave(false); setTestResult(null); }}
+                    title={editingDef.name}
+                    subtitle={editingDef.description}
+                    size="md"
+                    icon={editingDef.icon}
+                    footer={
+                        <>
+                            <button onClick={handleTestConnection} disabled={testing === "loading"} className="btn-outline flex items-center gap-1.5">
+                                {testing === "loading" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                                Testar conexão
+                            </button>
+                            <button onClick={() => { setEditingDef(null); setShowConfirmSave(false); setTestResult(null); }} className="btn-ghost">Cancelar</button>
+                            <button onClick={handleSave} disabled={saving} className="btn-gold flex items-center gap-1.5">
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar
+                            </button>
+                        </>
+                    }
+                >
+                    <div className="space-y-4">
+                        {/* Test result banner */}
+                        {testing && testing !== "loading" && (
+                            <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
+                                testing === "success" ? "bg-green-50 text-green-700 border border-green-200"
+                                : "bg-red-50 text-red-700 border border-red-200"
+                            }`}>
+                                {testing === "success" ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                                {testResult}
+                            </div>
+                        )}
+                        {testing === "loading" && (
+                            <div className="flex items-center gap-2 p-3 rounded-lg text-sm bg-muted text-muted-foreground">
+                                <Loader2 className="w-4 h-4 animate-spin" /> Testando conexão...
+                            </div>
+                        )}
+
+                        {/* Fields */}
+                        {editingDef.fields.map(field => {
+                            const fieldStatus = getFieldStatus(editingDef, field.key);
+                            const isConfiguredField = fieldStatus?.configured;
+                            const maskedValue = fieldStatus?.masked_value;
+
+                            return (
+                                <div key={field.key}>
+                                    {field.type === "select" ? (
+                                        <AdminSelect
+                                            label={field.label}
+                                            value={editForm[field.key] || ""}
+                                            onChange={(v) => setEditForm(prev => ({ ...prev, [field.key]: v }))}
+                                            options={field.options.map(o => ({ value: o, label: o === "sandbox" ? "Sandbox" : "Produção" }))}
+                                        />
+                                    ) : (
+                                        <AdminInput
+                                            label={field.label}
+                                            value={editForm[field.key] || ""}
+                                            onChange={(v) => setEditForm(prev => ({ ...prev, [field.key]: v }))}
+                                            placeholder={field.placeholder}
+                                            type={field.sensitive ? "password" : "text"}
+                                        />
+                                    )}
+                                    {field.sensitive && isConfiguredField && (
+                                        <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+                                            <CheckCircle2 className="w-3 h-3 text-green-500" /> Configurado ({maskedValue}) — deixe vazio para manter
+                                        </p>
+                                    )}
+                                    {field.sensitive && !isConfiguredField && (
+                                        <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+                                            <Lock className="w-2.5 h-2.5" /> Não configurado — digite o valor para definir
+                                        </p>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Confirmation dialog for critical integrations */}
+                    {showConfirmSave && (
+                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-charcoal/60 backdrop-blur-sm animate-fade-in">
+                            <div className="bg-background border border-border rounded-xl shadow-2xl max-w-sm w-full mx-4 p-6 text-center">
+                                <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto mb-4" strokeWidth={1.5} />
+                                <p className="text-sm font-medium mb-1">Confirmar alteração</p>
+                                <p className="text-xs text-muted-foreground mb-5">
+                                    Deseja atualizar as credenciais do {editingDef.name}?
+                                </p>
+                                <div className="flex flex-col gap-2">
+                                    <button onClick={() => handleSave()} className="btn-gold w-full py-2.5 text-sm">
+                                        Sim, salvar alterações
+                                    </button>
+                                    <button onClick={() => setShowConfirmSave(false)} className="btn-outline w-full py-2.5 text-sm">
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </AdminModal>
+            )}
         </div>
     );
 }

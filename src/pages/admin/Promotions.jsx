@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, X, Power, Tag, Calendar, Palette, Percent, Truck, ShoppingCart, Save } from "lucide-react";
+import { Plus, Trash2, X, Power, Tag, Calendar, Palette, Percent, Truck, ShoppingCart, Save, Layout, Eye, Monitor, Smartphone, Check } from "lucide-react";
+import AdminWizard from "@/components/admin/AdminWizard";
+import AdminInput from "@/components/admin/AdminInput";
+import AdminSelect from "@/components/admin/AdminSelect";
+import AdminTextarea from "@/components/admin/AdminTextarea";
+import AdminToggle from "@/components/admin/AdminToggle";
+import AdminFormSection from "@/components/admin/AdminFormSection";
 
 const PROMO_TYPES = [
     { value: "look_discount", label: "Desconto no Look" },
@@ -18,6 +24,17 @@ const CAMPAIGN_COLORS = [
     { value: "#3B3B3B", label: "Charcoal" },
     { value: "#C77D5A", label: "Terracota" },
 ];
+
+const WIZARD_STEPS = [
+    { id: "ident", label: "Identificação", icon: Tag },
+    { id: "discount", label: "Desconto", icon: Percent },
+    { id: "apply", label: "Aplicação", icon: ShoppingCart },
+    { id: "period", label: "Período", icon: Calendar },
+    { id: "visual", label: "Visual", icon: Palette },
+    { id: "review", label: "Revisão", icon: Check },
+];
+
+const PROMO_TYPE_LABELS = Object.fromEntries(PROMO_TYPES.map(t => [t.value, t.label]));
 
 export default function Promotions() {
     const [promos, setPromos] = useState([]);
@@ -60,9 +77,7 @@ export default function Promotions() {
         load();
     };
 
-    if (editing) return <PromoEditor promo={editing} onSave={handleSave} onCancel={() => setEditing(null)} />;
-
-    const PROMO_TYPE_LABELS = Object.fromEntries(PROMO_TYPES.map(t => [t.value, t.label]));
+    if (editing) return <PromoWizard promo={editing} onSave={handleSave} onCancel={() => setEditing(null)} />;
 
     function getPromoStatus(p) {
         const now = new Date();
@@ -147,97 +162,63 @@ export default function Promotions() {
     );
 }
 
-function PromoEditor({ promo, onSave, onCancel }) {
+function PromoWizard({ promo, onSave, onCancel }) {
     const [form, setForm] = useState(promo);
+    const [saving, setSaving] = useState(false);
+    const [previewDevice, setPreviewDevice] = useState("desktop");
     const set = (field, val) => setForm(prev => ({ ...prev, [field]: val }));
 
-    return (
-        <div>
-            <div className="flex items-center justify-between mb-6">
-                <h1 className="font-heading text-2xl tracking-[0.04em]">{promo.id ? "Editar Promoção" : "Nova Promoção"}</h1>
-                <button onClick={onCancel} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
-            </div>
+    const validateStep = (stepIndex) => {
+        const errors = {};
+        if (stepIndex === 0 && !form.name?.trim()) errors.name = "Nome da campanha é obrigatório";
+        return Object.keys(errors).length > 0 ? errors : null;
+    };
 
-            <div className="max-w-2xl space-y-5">
-                {/* Identificação */}
-                <Section title="Identificação" icon={Tag}>
-                    <Field label="Nome da campanha">
-                        <input value={form.name} onChange={e => set("name", e.target.value)} className="admin-field w-full" placeholder="Ex: Dia das Mães 2026" />
-                    </Field>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Field label="Título de destaque">
-                            <input value={form.title || ""} onChange={e => set("title", e.target.value)} className="admin-field w-full" placeholder="Ex: DIA DAS MÃES" />
-                        </Field>
-                        <Field label="Subtítulo">
-                            <input value={form.subtitle || ""} onChange={e => set("subtitle", e.target.value)} className="admin-field w-full" placeholder="Ex: 10% OFF em looks com 3+ peças" />
-                        </Field>
-                    </div>
-                    <Field label="Texto curto de divulgação">
-                        <input value={form.short_text || ""} onChange={e => set("short_text", e.target.value)} className="admin-field w-full" placeholder="Ex: Leve 3 peças e ganhe 10% OFF" />
-                    </Field>
-                </Section>
+    const handleSave = async () => {
+        setSaving(true);
+        try { await onSave(form); } finally { setSaving(false); }
+    };
 
-                {/* Tipo e desconto */}
-                <Section title="Tipo e Desconto" icon={Percent}>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Field label="Tipo da promoção">
-                            <select value={form.promo_type || form.type} onChange={e => { set("promo_type", e.target.value); set("type", e.target.value); }} className="admin-field w-full">
-                                {PROMO_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                            </select>
-                        </Field>
-                        <Field label="Prioridade (maior = mais destaque)">
-                            <input type="number" value={form.priority || 0} onChange={e => set("priority", parseInt(e.target.value) || 0)} className="admin-field w-full" />
-                        </Field>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                        <Field label="Desconto (%)">
-                            <input type="number" value={form.discount_percent || 0} onChange={e => set("discount_percent", parseFloat(e.target.value) || 0)} className="admin-field w-full" />
-                        </Field>
-                        <Field label="Desconto fixo (R$)">
-                            <input type="number" step="0.01" value={form.discount_fixed || 0} onChange={e => set("discount_fixed", parseFloat(e.target.value) || 0)} className="admin-field w-full" />
-                        </Field>
-                        <Field label="Valor mínimo (R$)">
-                            <input type="number" step="0.01" value={form.min_value || 0} onChange={e => set("min_value", parseFloat(e.target.value) || 0)} className="admin-field w-full" />
-                        </Field>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Field label="Compre X peças">
-                            <input type="number" value={form.min_items || 0} onChange={e => set("min_items", parseInt(e.target.value) || 0)} className="admin-field w-full" />
-                        </Field>
-                        <Field label="Buy quantity (qty alvo)">
-                            <input type="number" value={form.buy_quantity || 0} onChange={e => set("buy_quantity", parseInt(e.target.value) || 0)} className="admin-field w-full" />
-                        </Field>
-                    </div>
-                </Section>
+    const getPromoStatus = () => {
+        const now = new Date();
+        const start = form.valid_from ? new Date(form.valid_from) : null;
+        const end = form.valid_until ? new Date(form.valid_until) : null;
+        if (!form.active) return "INATIVA";
+        if (start && start > now) return "AGENDADA";
+        if (end && end < now) return "ENCERRADA";
+        return "ATIVA";
+    };
 
-                {/* Aplicação */}
-                <Section title="Aplicação" icon={ShoppingCart}>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Field label="Categoria aplicável">
-                            <input value={form.applicable_category || ""} onChange={e => set("applicable_category", e.target.value)} className="admin-field w-full" placeholder="Ex: vestidos" />
-                        </Field>
-                        <Field label="Coleção aplicável">
-                            <input value={form.applicable_collection || ""} onChange={e => set("applicable_collection", e.target.value)} className="admin-field w-full" placeholder="Ex: verao-2026" />
-                        </Field>
+    const renderStep = (step) => {
+        switch (step.id) {
+            case "ident":
+                return (
+                    <div className="max-w-xl mx-auto space-y-4">
+                        <AdminInput label="Nome da campanha" value={form.name} onChange={(v) => set("name", v)} required full placeholder="Ex: Dia das Mães 2026" error={stepErrors?.name} />
+                        <AdminInput label="Título de destaque" value={form.title || ""} onChange={(v) => set("title", v)} full placeholder="Ex: DIA DAS MÃES" />
+                        <AdminInput label="Subtítulo" value={form.subtitle || ""} onChange={(v) => set("subtitle", v)} full placeholder="Ex: 10% OFF em looks com 3+ peças" />
+                        <AdminTextarea label="Texto curto de divulgação" value={form.short_text || ""} onChange={(v) => set("short_text", v)} rows={2} full placeholder="Ex: Leve 3 peças e ganhe 10% OFF" />
                     </div>
-                </Section>
-
-                {/* Período */}
-                <Section title="Período e Status" icon={Calendar}>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Field label="Data de início">
-                            <input type="datetime-local" value={form.valid_from?.slice(0, 16) || ""} onChange={e => set("valid_from", e.target.value || null)} className="admin-field w-full" />
-                        </Field>
-                        <Field label="Data de término">
-                            <input type="datetime-local" value={form.valid_until?.slice(0, 16) || ""} onChange={e => set("valid_until", e.target.value || null)} className="admin-field w-full" />
-                        </Field>
-                    </div>
-                    <div className="flex flex-col gap-3 pt-1">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                            <input type="checkbox" checked={form.active ?? false} onChange={e => set("active", e.target.checked)} className="w-4 h-4" />
-                            <span className="text-sm">Ativa</span>
-                        </label>
-                        <label className="flex items-center gap-3 cursor-pointer">
+                );
+            case "discount":
+                return (
+                    <div className="max-w-xl mx-auto space-y-4">
+                        <AdminSelect label="Tipo da promoção" value={form.promo_type || form.type} onChange={(v) => { set("promo_type", v); set("type", v); }} required options={PROMO_TYPES} />
+                        {form.promo_type !== "free_shipping" && (
+                            <div className="grid grid-cols-2 gap-4">
+                                <AdminInput label="Desconto (%)" type="number" value={form.discount_percent || 0} onChange={(v) => set("discount_percent", parseFloat(v) || 0)} />
+                                <AdminInput label="Desconto fixo (R$)" type="number" value={form.discount_fixed || 0} onChange={(v) => set("discount_fixed", parseFloat(v) || 0)} />
+                            </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-4">
+                            <AdminInput label="Valor mínimo (R$)" type="number" value={form.min_value || 0} onChange={(v) => set("min_value", parseFloat(v) || 0)} />
+                            <AdminInput label="Compre X peças" type="number" value={form.min_items || 0} onChange={(v) => set("min_items", parseInt(v) || 0)} />
+                        </div>
+                        {form.promo_type === "buy_x" && (
+                            <AdminInput label="Buy quantity (qty alvo)" type="number" value={form.buy_quantity || 0} onChange={(v) => set("buy_quantity", parseInt(v) || 0)} />
+                        )}
+                        <AdminInput label="Prioridade (maior = mais destaque)" type="number" value={form.priority || 0} onChange={(v) => set("priority", parseInt(v) || 0)} />
+                        <label className="flex items-center gap-3 cursor-pointer pt-2">
                             <input type="checkbox" checked={form.free_shipping ?? false} onChange={e => set("free_shipping", e.target.checked)} className="w-4 h-4" />
                             <span className="text-sm flex items-center gap-1.5"><Truck className="w-3.5 h-3.5" /> Frete grátis</span>
                         </label>
@@ -246,62 +227,133 @@ function PromoEditor({ promo, onSave, onCancel }) {
                             <span className="text-sm">Acumula com cupom</span>
                         </label>
                     </div>
-                </Section>
-
-                {/* Visual */}
-                <Section title="Estilo Visual" icon={Palette}>
-                    <Field label="Cor da campanha">
-                        <div className="flex gap-2 flex-wrap">
-                            {CAMPAIGN_COLORS.map(c => (
-                                <button
-                                    key={c.value}
-                                    onClick={() => set("campaign_color", c.value)}
-                                    className={`w-9 h-9 rounded-full border-2 transition-all ${(form.campaign_color || '#A5925A') === c.value ? "border-foreground scale-110" : "border-border"}`}
-                                    style={{ backgroundColor: c.value }}
-                                    title={c.label}
-                                />
-                            ))}
+                );
+            case "apply":
+                return (
+                    <div className="max-w-xl mx-auto space-y-4">
+                        <AdminInput label="Categoria aplicável" value={form.applicable_category || ""} onChange={(v) => set("applicable_category", v)} full placeholder="Ex: vestidos" />
+                        <AdminInput label="Coleção aplicável" value={form.applicable_collection || ""} onChange={(v) => set("applicable_collection", v)} full placeholder="Ex: verao-2026" />
+                        <p className="text-[11px] text-muted-foreground">Deixe ambos vazios para aplicar a todo o site.</p>
+                    </div>
+                );
+            case "period":
+                return (
+                    <div className="max-w-xl mx-auto space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <AdminInput label="Data de início" type="datetime-local" value={form.valid_from?.slice(0, 16) || ""} onChange={(v) => set("valid_from", v || null)} />
+                            <AdminInput label="Data de término" type="datetime-local" value={form.valid_until?.slice(0, 16) || ""} onChange={(v) => set("valid_until", v || null)} />
                         </div>
-                    </Field>
-                    <Field label="Imagem / banner (URL)">
-                        <input value={form.banner_image || ""} onChange={e => set("banner_image", e.target.value)} className="admin-field w-full" placeholder="https://..." />
-                    </Field>
-                    {form.banner_image && (
-                        <div className="relative w-full h-32 overflow-hidden rounded-lg border border-border">
-                            <img src={form.banner_image} alt="Preview" className="w-full h-full object-cover" />
+                        <AdminToggle label="Ativa" checked={form.active ?? false} onChange={(v) => set("active", v)} description="Quando ativa, a promoção é aplicada na loja" />
+                        <div className="flex items-center gap-2 pt-2">
+                            <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Status previsto:</span>
+                            <span className={`text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 border ${
+                                getPromoStatus() === "ATIVA" ? "border-green-500/40 text-green-600"
+                                : getPromoStatus() === "AGENDADA" ? "border-blue-400/40 text-blue-600"
+                                : "border-border text-muted-foreground"
+                            }`}>{getPromoStatus()}</span>
                         </div>
-                    )}
-                </Section>
+                    </div>
+                );
+            case "visual":
+                return (
+                    <div className="max-w-xl mx-auto space-y-4">
+                        <div>
+                            <label className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground block mb-2">Cor da campanha</label>
+                            <div className="flex gap-2 flex-wrap">
+                                {CAMPAIGN_COLORS.map(c => (
+                                    <button key={c.value} onClick={() => set("campaign_color", c.value)}
+                                        className={`w-9 h-9 rounded-full border-2 transition-all ${(form.campaign_color || '#A5925A') === c.value ? "border-foreground scale-110" : "border-border"}`}
+                                        style={{ backgroundColor: c.value }} title={c.label} />
+                                ))}
+                            </div>
+                        </div>
+                        <AdminInput label="Imagem / banner (URL)" value={form.banner_image || ""} onChange={(v) => set("banner_image", v)} full placeholder="https://..." />
+                        {form.banner_image && (
+                            <div className="relative w-full h-32 overflow-hidden rounded-lg border border-border">
+                                <img src={form.banner_image} alt="Preview" className="w-full h-full object-cover" />
+                            </div>
+                        )}
+                    </div>
+                );
+            case "review":
+                return (
+                    <div className="max-w-2xl mx-auto space-y-6">
+                        {/* Summary */}
+                        <div className="bg-muted/30 rounded-lg border border-border p-6 space-y-3">
+                            <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-accent mb-4">Resumo da Promoção</h3>
+                            <SummaryRow label="Campanha" value={form.name || "—"} />
+                            <SummaryRow label="Título" value={form.title || "—"} />
+                            <SummaryRow label="Tipo" value={PROMO_TYPE_LABELS[form.promo_type || form.type] || "—"} />
+                            <SummaryRow label="Desconto" value={Number(form.discount_percent) > 0 ? `${form.discount_percent}%` : Number(form.discount_fixed) > 0 ? `R$ ${form.discount_fixed}` : "—"} />
+                            <SummaryRow label="Aplicação" value={form.applicable_category ? `Categoria: ${form.applicable_category}` : form.applicable_collection ? `Coleção: ${form.applicable_collection}` : "Todo o site"} />
+                            <SummaryRow label="Início" value={form.valid_from ? new Date(form.valid_from).toLocaleDateString('pt-BR') : "—"} />
+                            <SummaryRow label="Fim" value={form.valid_until ? new Date(form.valid_until).toLocaleDateString('pt-BR') : "—"} />
+                            <SummaryRow label="Prioridade" value={String(form.priority || 0)} />
+                            <SummaryRow label="Status" value={getPromoStatus()} />
+                        </div>
 
-                {/* Actions */}
-                <div className="flex gap-3 pt-4 pb-8">
-                    <button onClick={() => onSave(form)} disabled={!form.name} className="btn-gold px-6 py-2.5 text-sm disabled:opacity-40 flex items-center gap-2">
-                        <Save className="w-4 h-4" strokeWidth={1.5} /> Salvar
-                    </button>
-                    <button onClick={onCancel} className="btn-outline px-6 py-2.5 text-sm">Cancelar</button>
-                </div>
-            </div>
-        </div>
+                        {/* Preview */}
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                                <Eye className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+                                <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Preview</span>
+                                <div className="flex gap-1 ml-auto">
+                                    <button onClick={() => setPreviewDevice("desktop")} className={`flex items-center gap-1 px-2.5 py-1 text-[10px] uppercase border ${previewDevice === "desktop" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground"}`}>
+                                        <Monitor className="w-3 h-3" /> Desktop
+                                    </button>
+                                    <button onClick={() => setPreviewDevice("mobile")} className={`flex items-center gap-1 px-2.5 py-1 text-[10px] uppercase border ${previewDevice === "mobile" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground"}`}>
+                                        <Smartphone className="w-3 h-3" /> Mobile
+                                    </button>
+                                </div>
+                            </div>
+                            <div className={`rounded-lg overflow-hidden border border-border relative bg-bone mx-auto ${previewDevice === "mobile" ? "max-w-[320px] h-48" : "h-56"}`}>
+                                {form.banner_image
+                                    ? <img src={form.banner_image} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                                    : <div className="absolute inset-0" style={{ backgroundColor: (form.campaign_color || '#A5925A') + '15' }} />}
+                                <div className="absolute inset-0 bg-gradient-to-t from-charcoal/60 to-transparent" />
+                                <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 text-bone">
+                                    {form.title && <h3 className="font-heading text-xl tracking-wide" style={{ color: form.campaign_color }}>{form.title}</h3>}
+                                    {form.subtitle && <p className="text-sm italic mt-1 text-bone/85">{form.subtitle}</p>}
+                                    {form.short_text && <p className="text-xs mt-2 text-bone/70">{form.short_text}</p>}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            default:
+                return null;
+        }
+    };
+
+    // stepErrors is passed by AdminWizard's render prop
+    let stepErrors = null;
+    const renderWithErrors = (step, wizProps) => {
+        stepErrors = wizProps.stepErrors;
+        return renderStep(step);
+    };
+
+    return (
+        <AdminWizard
+            title={promo.id ? "Editar Promoção" : "Nova Promoção"}
+            subtitle="Configure campanhas de desconto em etapas"
+            icon={Tag}
+            steps={WIZARD_STEPS}
+            validateStep={validateStep}
+            onSave={handleSave}
+            onClose={onCancel}
+            saveLabel="Publicar"
+            saving={saving}
+        >
+            {renderWithErrors}
+        </AdminWizard>
     );
 }
 
-function Section({ title, icon: Icon, children }) {
+function SummaryRow({ label, value }) {
     return (
-        <div className="bg-background border border-border rounded-lg p-5 space-y-4">
-            <div className="flex items-center gap-2">
-                <Icon className="w-4 h-4 text-[hsl(var(--gold))]" strokeWidth={1.5} />
-                <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium">{title}</h3>
-            </div>
-            {children}
-        </div>
-    );
-}
-
-function Field({ label, children }) {
-    return (
-        <div>
-            <label className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground block mb-1.5">{label}</label>
-            {children}
+        <div className="flex justify-between gap-4 text-sm">
+            <span className="text-muted-foreground">{label}</span>
+            <span className="font-medium text-right">{value}</span>
         </div>
     );
 }

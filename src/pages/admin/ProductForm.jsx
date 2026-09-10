@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { ArrowLeft, Plus, X, Loader2, Eye } from "lucide-react";
+import { Plus, X, Loader2, Eye, Monitor, Smartphone, Check, Package, ImageIcon, DollarSign, Palette, FolderTree, Settings, Truck } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useCatalog } from "@/context/CatalogContext";
 import { COLOR_SWATCHES, SIZES_LIST } from "@/data/products";
 import ImageUploader from "@/components/ImageUploader";
+import AdminWizard from "@/components/admin/AdminWizard";
 import { logAdminAction } from "@/lib/audit";
 
 const TAGS = [
@@ -16,12 +17,22 @@ const TAGS = [
     { key: "exclusivo", label: "Exclusivo" },
 ];
 
+const WIZARD_STEPS = [
+    { id: "basic", label: "Informações", icon: Package },
+    { id: "photos", label: "Fotos", icon: ImageIcon },
+    { id: "variants", label: "Variações", icon: Palette },
+    { id: "price", label: "Preço", icon: DollarSign },
+    { id: "category", label: "Organização", icon: FolderTree },
+    { id: "seo", label: "SEO", icon: Settings },
+    { id: "review", label: "Revisão", icon: Check },
+];
+
 export default function ProductForm() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { categories, collections, reload } = useCatalog();
     const [saving, setSaving] = useState(false);
-    const [formError, setFormError] = useState("");
+    const [previewDevice, setPreviewDevice] = useState("desktop");
     const [form, setForm] = useState({
         name: "", sku: "", category: "", subcategory: "", collection: "",
         description: "", short_description: "", details: "",
@@ -129,10 +140,15 @@ export default function ProductForm() {
         status,
     });
 
+    const validateStep = (stepIndex) => {
+        const errors = {};
+        if (stepIndex === 0 && !form.name.trim()) errors.name = "Informe o nome do produto";
+        if (stepIndex === 3 && !form.price) errors.price = "Informe o preço do produto";
+        return Object.keys(errors).length > 0 ? errors : null;
+    };
+
     const save = async (status) => {
-        setFormError("");
-        if (!form.name.trim()) { setFormError("Informe o nome do produto"); return; }
-        if (!form.price) { setFormError("Informe o preço do produto"); return; }
+        if (!form.name.trim()) return;
         setSaving(true);
         try {
             if (id) {
@@ -145,195 +161,247 @@ export default function ProductForm() {
             await reload();
             navigate("/admin/produtos");
         } catch (e) {
-            setFormError("Erro ao salvar: " + (e.message || "tente novamente"));
+            console.error("Erro ao salvar:", e);
         } finally {
             setSaving(false);
+        }
+    };
+
+    const renderStep = (step) => {
+        switch (step.id) {
+            case "basic":
+                return (
+                    <div className="max-w-xl mx-auto space-y-4">
+                        <WizardInput label="Nome do produto" value={form.name} onChange={(v) => set("name", v)} full placeholder="Ex: Vestido Helena Midi" />
+                        <WizardInput label="SKU" value={form.sku} onChange={(v) => set("sku", v)} placeholder="Ex: DH-VD-001" />
+                        <WizardTextarea label="Descrição completa" value={form.description} onChange={(v) => set("description", v)} full rows={4} />
+                        <WizardTextarea label="Descrição resumida" value={form.short_description} onChange={(v) => set("short_description", v)} full rows={2} />
+                        <WizardTextarea label="Detalhes" value={form.details} onChange={(v) => set("details", v)} full rows={2} />
+                    </div>
+                );
+            case "photos":
+                return (
+                    <div className="max-w-xl mx-auto">
+                        <ImageUploader images={form.images} onChange={(urls) => set("images", urls)} />
+                    </div>
+                );
+            case "variants":
+                return (
+                    <div className="max-w-2xl mx-auto space-y-5">
+                        {/* Sizes */}
+                        <div>
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Tamanhos</span>
+                                <button onClick={addSize} className="text-xs text-[hsl(var(--rose))] flex items-center gap-1"><Plus className="w-3 h-3" /> Adicionar tamanho</button>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {form.sizes.map((s) => (
+                                    <div key={s} className="flex items-center gap-1 bg-[hsl(var(--bone))] px-3 py-1.5 text-sm">
+                                        {s}
+                                        <button onClick={() => removeSize(s)} className="text-muted-foreground hover:text-[hsl(var(--rose))]"><X className="w-3 h-3" /></button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Colors */}
+                        <div>
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Cores e estoque</span>
+                                <button onClick={addCustomColor} className="text-xs text-[hsl(var(--rose))] flex items-center gap-1"><Plus className="w-3 h-3" /> Cor personalizada</button>
+                            </div>
+                            <div className="flex flex-wrap gap-2 mb-4">
+                                {Object.entries(COLOR_SWATCHES).map(([key, sw]) => {
+                                    const added = form.colors.find((c) => c.id === key);
+                                    if (added) return null;
+                                    return (
+                                        <button key={key} onClick={() => addColor(key)} className="flex items-center gap-2 border border-border px-3 py-1.5 text-xs hover:border-foreground/40 transition-colors">
+                                            <span className="w-3 h-3 rounded-full border border-border" style={{ background: sw.hex }} />
+                                            {sw.name}
+                                            <Plus className="w-3 h-3" />
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <div className="space-y-4">
+                                {form.colors.map((color, idx) => (
+                                    <div key={idx} className="bg-[hsl(var(--bone))] p-4">
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <input type="color" value={color.hex} onChange={(e) => updateColor(idx, "hex", e.target.value)} className="w-10 h-10 rounded border border-border cursor-pointer" />
+                                            <input value={color.name} onChange={(e) => updateColor(idx, "name", e.target.value)} placeholder="Nome da cor" className="flex-1 border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" />
+                                            <button onClick={() => removeColor(idx)} className="p-2 text-muted-foreground hover:text-[hsl(var(--rose))]"><X className="w-4 h-4" /></button>
+                                        </div>
+                                        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                                            {form.sizes.map((s) => (
+                                                <div key={s}>
+                                                    <label className="block text-[10px] uppercase tracking-[0.12em] text-muted-foreground mb-1">{s}</label>
+                                                    <input type="number" min="0" value={color.stock?.[s] ?? 0} onChange={(e) => updateStock(idx, s, e.target.value)} className="w-full border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                                {form.colors.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma cor adicionada. Clique em uma cor acima para adicionar.</p>}
+                            </div>
+                        </div>
+                    </div>
+                );
+            case "price":
+                return (
+                    <div className="max-w-xl mx-auto space-y-4">
+                        <WizardInput label="Preço de venda (R$)" value={form.price} onChange={(v) => set("price", v)} type="number" placeholder="299.90" full />
+                        <WizardInput label="Preço promocional (opcional)" value={form.sale_price} onChange={(v) => set("sale_price", v)} type="number" placeholder="249.90" full />
+                        <WizardInput label="Preço de custo (admin)" value={form.cost_price} onChange={(v) => set("cost_price", v)} type="number" placeholder="120.00" full />
+                        <div>
+                            <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Parcelas máximas</label>
+                            <input type="number" min="1" max="12" value={form.installments} onChange={(e) => set("installments", e.target.value)} className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" />
+                        </div>
+                    </div>
+                );
+            case "category":
+                return (
+                    <div className="max-w-xl mx-auto space-y-4">
+                        <div>
+                            <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Categoria</label>
+                            <select value={form.category} onChange={(e) => set("category", e.target.value)} className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" >
+                                <option value="">Selecione...</option>
+                                {categories.map((c) => <option key={c.id} value={c.slug}>{c.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Coleção</label>
+                            <select value={form.collection} onChange={(e) => set("collection", e.target.value)} className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" >
+                                <option value="">Selecione...</option>
+                                {collections.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Tags</label>
+                            <div className="flex flex-wrap gap-2">
+                                {TAGS.map((t) => (
+                                    <button key={t.key} type="button" onClick={() => toggleTag(t.key)} className={`text-xs px-3 py-2 border transition-colors ${form.badges[t.key] ? "bg-[hsl(var(--gold))] text-white border-[hsl(var(--gold))]" : "border-border hover:border-foreground/40"}`}>
+                                        {t.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                );
+            case "seo":
+                return (
+                    <div className="max-w-xl mx-auto space-y-4">
+                        <WizardInput label="Composição" value={form.composition} onChange={(v) => set("composition", v)} full />
+                        <WizardInput label="Modelagem" value={form.modeling} onChange={(v) => set("modeling", v)} full />
+                        <WizardInput label="Comprimento" value={form.length} onChange={(v) => set("length", v)} full />
+                        <div className="grid grid-cols-2 gap-4">
+                            <WizardInput label="Forro" value={form.lining} onChange={(v) => set("lining", v)} />
+                            <WizardInput label="Transparência" value={form.transparency} onChange={(v) => set("transparency", v)} />
+                            <WizardInput label="Elasticidade" value={form.elasticity} onChange={(v) => set("elasticity", v)} />
+                            <WizardInput label="Peso (kg)" value={form.weight} onChange={(v) => set("weight", v)} type="number" />
+                        </div>
+                        <WizardTextarea label="Cuidados de lavagem" value={form.care} onChange={(v) => set("care", v)} full rows={2} />
+                        <WizardTextarea label="Guia de medidas" value={form.measurements} onChange={(v) => set("measurements", v)} full rows={3} />
+                        <div className="grid grid-cols-3 gap-4">
+                            <WizardInput label="Altura emb. (cm)" value={form.package_height} onChange={(v) => set("package_height", v)} type="number" />
+                            <WizardInput label="Largura emb. (cm)" value={form.package_width} onChange={(v) => set("package_width", v)} type="number" />
+                            <WizardInput label="Compr. emb. (cm)" value={form.package_length} onChange={(v) => set("package_length", v)} type="number" />
+                        </div>
+                    </div>
+                );
+            case "review":
+                return (
+                    <div className="max-w-2xl mx-auto space-y-6">
+                        <div className="bg-muted/30 rounded-lg border border-border p-6 space-y-2">
+                            <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-accent mb-3">Resumo do Produto</h3>
+                            <SummaryRow label="Nome" value={form.name || "—"} />
+                            <SummaryRow label="SKU" value={form.sku || "—"} />
+                            <SummaryRow label="Preço" value={form.price ? `R$ ${form.price}` : "—"} />
+                            <SummaryRow label="Preço promocional" value={form.sale_price ? `R$ ${form.sale_price}` : "—"} />
+                            <SummaryRow label="Categoria" value={form.category || "—"} />
+                            <SummaryRow label="Coleção" value={form.collection || "—"} />
+                            <SummaryRow label="Cores" value={`${form.colors.length} cor(es)`} />
+                            <SummaryRow label="Tamanhos" value={form.sizes.join(", ") || "—"} />
+                            <SummaryRow label="Fotos" value={`${form.images.length} imagem(ns)`} />
+                        </div>
+
+                        {/* Preview */}
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                                <Eye className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+                                <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Preview</span>
+                                <div className="flex gap-1 ml-auto">
+                                    <button onClick={() => setPreviewDevice("desktop")} className={`flex items-center gap-1 px-2.5 py-1 text-[10px] uppercase border ${previewDevice === "desktop" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground"}`}>
+                                        <Monitor className="w-3 h-3" /> Desktop
+                                    </button>
+                                    <button onClick={() => setPreviewDevice("mobile")} className={`flex items-center gap-1 px-2.5 py-1 text-[10px] uppercase border ${previewDevice === "mobile" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground"}`}>
+                                        <Smartphone className="w-3 h-3" /> Mobile
+                                    </button>
+                                </div>
+                            </div>
+                            <div className={`rounded-lg overflow-hidden border border-border bg-bone mx-auto ${previewDevice === "mobile" ? "max-w-[320px]" : ""}`}>
+                                <div className={`relative ${previewDevice === "mobile" ? "aspect-[3/4]" : "aspect-[16/9]"}`}>
+                                    {form.images[0] ? <img src={form.images[0]} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-muted-foreground/40 text-sm">Sem imagem</div>}
+                                </div>
+                                <div className="p-4 space-y-1">
+                                    <p className="font-medium text-sm">{form.name || "Nome do produto"}</p>
+                                    <p className="text-sm text-muted-foreground">{form.price ? `R$ ${form.price}` : "R$ 0,00"}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            default:
+                return null;
         }
     };
 
     return (
         <div>
             <Link to="/admin/produtos" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4">
-                <ArrowLeft className="w-4 h-4" strokeWidth={1.5} /> Produtos
+                <X className="w-4 h-4" strokeWidth={1.5} /> Produtos
             </Link>
-            <h1 className="font-heading text-2xl tracking-[0.03em] mb-6">{id ? "Editar produto" : "Novo produto"}</h1>
-
-            {/* SEÇÃO 1 — INFORMAÇÕES */}
-            <Section n="1" title="Informações">
-                <Input label="Nome do produto" value={form.name} onChange={(v) => set("name", v)} full placeholder="Ex: Vestido Helena Midi" />
-                <Input label="SKU" value={form.sku} onChange={(v) => set("sku", v)} placeholder="Ex: DH-VD-001" />
-                <Select label="Categoria" value={form.category} onChange={(v) => set("category", v)} options={categories.map((c) => ({ value: c.slug, label: c.name }))} />
-                <Select label="Coleção" value={form.collection} onChange={(v) => set("collection", v)} options={collections.map((c) => ({ value: c.name, label: c.name }))} />
-                <Textarea label="Descrição completa" value={form.description} onChange={(v) => set("description", v)} full rows={4} />
-                <Textarea label="Descrição resumida" value={form.short_description} onChange={(v) => set("short_description", v)} full rows={2} />
-            </Section>
-
-            {/* SEÇÃO 2 — FOTOS */}
-            <Section n="2" title="Fotos">
-                <ImageUploader images={form.images} onChange={(urls) => set("images", urls)} />
-            </Section>
-
-            {/* SEÇÃO 3 — PREÇO */}
-            <Section n="3" title="Preço">
-                <Input label="Preço de venda (R$)" value={form.price} onChange={(v) => set("price", v)} type="number" placeholder="299.90" />
-                <Input label="Preço promocional (opcional)" value={form.sale_price} onChange={(v) => set("sale_price", v)} type="number" placeholder="249.90" />
-                <Input label="Preço de custo (admin)" value={form.cost_price} onChange={(v) => set("cost_price", v)} type="number" placeholder="120.00" />
-                <div>
-                    <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Parcelas máximas</label>
-                    <input type="number" min="1" max="12" value={form.installments} onChange={(e) => set("installments", e.target.value)} className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" />
-                </div>
-            </Section>
-
-            {/* SEÇÃO 4 — VARIAÇÕES */}
-            <Section n="4" title="Variações (cores e tamanhos)">
-                <div className="mb-5">
-                    <div className="flex items-center justify-between mb-3">
-                        <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Tamanhos</span>
-                        <button onClick={addSize} className="text-xs text-[hsl(var(--rose))] flex items-center gap-1"><Plus className="w-3 h-3" /> Adicionar tamanho</button>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        {form.sizes.map((s) => (
-                            <div key={s} className="flex items-center gap-1 bg-[hsl(var(--bone))] px-3 py-1.5 text-sm">
-                                {s}
-                                <button onClick={() => removeSize(s)} className="text-muted-foreground hover:text-[hsl(var(--rose))]"><X className="w-3 h-3" /></button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Cores e estoque</span>
-                    <button onClick={addCustomColor} className="text-xs text-[hsl(var(--rose))] flex items-center gap-1"><Plus className="w-3 h-3" /> Cor personalizada</button>
-                </div>
-
-                {/* quick add from predefined */}
-                <div className="flex flex-wrap gap-2 mb-4">
-                    {Object.entries(COLOR_SWATCHES).map(([key, sw]) => {
-                        const added = form.colors.find((c) => c.id === key);
-                        if (added) return null;
-                        return (
-                            <button key={key} onClick={() => addColor(key)} className="flex items-center gap-2 border border-border px-3 py-1.5 text-xs hover:border-foreground/40 transition-colors">
-                                <span className="w-3 h-3 rounded-full border border-border" style={{ background: sw.hex }} />
-                                {sw.name}
-                                <Plus className="w-3 h-3" />
-                            </button>
-                        );
-                    })}
-                </div>
-
-                {/* color cards */}
-                <div className="space-y-4">
-                    {form.colors.map((color, idx) => (
-                        <div key={idx} className="bg-[hsl(var(--bone))] p-4">
-                            <div className="flex items-center gap-3 mb-3">
-                                <input type="color" value={color.hex} onChange={(e) => updateColor(idx, "hex", e.target.value)} className="w-10 h-10 rounded border border-border cursor-pointer" />
-                                <input value={color.name} onChange={(e) => updateColor(idx, "name", e.target.value)} placeholder="Nome da cor" className="flex-1 border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" />
-                                <button onClick={() => removeColor(idx)} className="p-2 text-muted-foreground hover:text-[hsl(var(--rose))]"><X className="w-4 h-4" /></button>
-                            </div>
-                            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                                {form.sizes.map((s) => (
-                                    <div key={s}>
-                                        <label className="block text-[10px] uppercase tracking-[0.12em] text-muted-foreground mb-1">{s}</label>
-                                        <input type="number" min="0" value={color.stock?.[s] ?? 0} onChange={(e) => updateStock(idx, s, e.target.value)} className="w-full border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                    {form.colors.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma cor adicionada. Clique em uma cor acima para adicionar.</p>}
-                </div>
-            </Section>
-
-            {/* SEÇÃO 5 — ORGANIZAÇÃO */}
-            <Section n="5" title="Organização">
-                <Select label="Subcategoria" value={form.subcategory} onChange={(v) => set("subcategory", v)} options={[]} placeholder="Opcional" />
-                <div className="col-span-2">
-                    <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Tags</label>
-                    <div className="flex flex-wrap gap-2">
-                        {TAGS.map((t) => (
-                            <button key={t.key} type="button" onClick={() => toggleTag(t.key)} className={`text-xs px-3 py-2 border transition-colors ${form.badges[t.key] ? "bg-[hsl(var(--gold))] text-white border-[hsl(var(--gold))]" : "border-border hover:border-foreground/40"}`}>
-                                {t.label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </Section>
-
-            {/* SEÇÃO 6 — DETALHES */}
-            <Section n="6" title="Detalhes da peça">
-                <Input label="Composição" value={form.composition} onChange={(v) => set("composition", v)} />
-                <Input label="Modelagem" value={form.modeling} onChange={(v) => set("modeling", v)} />
-                <Input label="Comprimento" value={form.length} onChange={(v) => set("length", v)} />
-                <Input label="Forro" value={form.lining} onChange={(v) => set("lining", v)} />
-                <Input label="Transparência" value={form.transparency} onChange={(v) => set("transparency", v)} />
-                <Input label="Elasticidade" value={form.elasticity} onChange={(v) => set("elasticity", v)} />
-                <Textarea label="Cuidados de lavagem" value={form.care} onChange={(v) => set("care", v)} full rows={2} />
-                <Textarea label="Guia de medidas" value={form.measurements} onChange={(v) => set("measurements", v)} full rows={3} />
-            </Section>
-
-            {/* SEÇÃO 7 — ENTREGA */}
-            <Section n="7" title="Entrega">
-                <Input label="Peso (kg)" value={form.weight} onChange={(v) => set("weight", v)} type="number" placeholder="0.4" />
-                <Input label="Altura da embalagem (cm)" value={form.package_height} onChange={(v) => set("package_height", v)} type="number" />
-                <Input label="Largura da embalagem (cm)" value={form.package_width} onChange={(v) => set("package_width", v)} type="number" />
-                <Input label="Comprimento da embalagem (cm)" value={form.package_length} onChange={(v) => set("package_length", v)} type="number" />
-            </Section>
-
-            {formError && <p className="text-sm text-destructive text-center mb-4">{formError}</p>}
-
-            {/* ACTIONS */}
-            <div className="flex flex-col sm:flex-row gap-3 mt-8 sticky bottom-0 bg-background py-4 border-t border-border -mx-5 px-5 lg:-mx-8 lg:px-8">
-                <button onClick={() => save("draft")} disabled={saving} className="btn-outline flex-1">
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar rascunho"}
-                </button>
-                {id && (
-                    <Link to={`/produto/${id}`} target="_blank" className="btn-ghost flex-1 border border-border">
-                        <Eye className="w-4 h-4" strokeWidth={1.5} /> Visualizar
-                    </Link>
-                )}
-                <button onClick={() => save("published")} disabled={saving} className="btn-gold flex-1">
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Publicar produto"}
-                </button>
-            </div>
+            <AdminWizard
+                title={id ? "Editar produto" : "Novo produto"}
+                subtitle="Cadastre produtos em etapas"
+                icon={Package}
+                steps={WIZARD_STEPS}
+                validateStep={validateStep}
+                onSave={(status) => save(status)}
+                onClose={() => navigate("/admin/produtos")}
+                saveLabel="Publicar produto"
+                draftLabel="Salvar rascunho"
+                onSaveDraft={(status) => save("draft")}
+                saving={saving}
+            >
+                {renderStep}
+            </AdminWizard>
         </div>
     );
 }
 
-function Section({ n, title, children }) {
+function SummaryRow({ label, value }) {
     return (
-        <div className="bg-background p-5 lg:p-6 mb-4">
-            <h2 className="text-[11px] uppercase tracking-[0.24em] text-[hsl(var(--gold))] mb-4">Seção {n} — {title}</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{children}</div>
+        <div className="flex justify-between gap-4 text-sm">
+            <span className="text-muted-foreground">{label}</span>
+            <span className="font-medium text-right">{value}</span>
         </div>
     );
 }
 
-function Input({ label, value, onChange, type = "text", full, placeholder }) {
+function WizardInput({ label, value, onChange, type = "text", full, placeholder }) {
     return (
-        <div className={full ? "sm:col-span-2" : ""}>
+        <div className={full ? "" : ""}>
             <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
             <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors" />
         </div>
     );
 }
 
-function Textarea({ label, value, onChange, full, rows = 3 }) {
+function WizardTextarea({ label, value, onChange, full, rows = 3 }) {
     return (
-        <div className={full ? "sm:col-span-2" : ""}>
+        <div className={full ? "" : ""}>
             <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
             <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors resize-none" />
-        </div>
-    );
-}
-
-function Select({ label, value, onChange, options, placeholder }) {
-    return (
-        <div>
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
-            <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" >
-                <option value="">{placeholder || "Selecione..."}</option>
-                {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
         </div>
     );
 }
