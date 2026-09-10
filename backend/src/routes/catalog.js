@@ -279,6 +279,22 @@ router.get('/settings', async (req, res, next) => {
     } catch (err) { next(err); }
 });
 
+router.post('/settings', auth, requireAdmin, async (req, res, next) => {
+    try {
+        const { key, value, is_public } = req.body;
+        if (!key) return res.status(400).json({ error: 'key é obrigatório' });
+        const { rows } = await pool.query(
+            `INSERT INTO settings (key, value, is_public, updated_by)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (key) DO UPDATE SET value = $2, is_public = $3, updated_by = $4, updated_at = now()
+             RETURNING *, created_at as created_date, updated_at as updated_date`,
+            [key, JSON.stringify(value), is_public ?? false, req.user.id]
+        );
+        await logAudit(req.user.id, 'setting.create', 'setting', rows[0].id, req.body, req.ip);
+        res.status(201).json(rows[0]);
+    } catch (err) { next(err); }
+});
+
 router.patch('/settings/:id', auth, requireAdmin, async (req, res, next) => {
     try {
         const row = await updateRow('settings', req.params.id, req.body);

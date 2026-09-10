@@ -30,6 +30,7 @@ import Contact from '@/pages/Contact';
 import Collections from '@/pages/Collections';
 import Favorites from '@/pages/Favorites';
 import MonteSeuLook from '@/pages/MonteSeuLook';
+import PolicyPage from '@/pages/PolicyPage';
 
 // Account pages
 import AccountLayout from '@/pages/account/AccountLayout';
@@ -106,6 +107,10 @@ const AuthenticatedApp = () => {
                             <Route path="/colecoes" element={<Collections />} />
                             <Route path="/favoritos" element={<Favorites />} />
                             <Route path="/monte-seu-look" element={<MonteSeuLook />} />
+                            <Route path="/trocas-e-devolucoes" element={<PolicyPage slug="trocas-e-devolucoes" />} />
+                            <Route path="/politica-de-privacidade" element={<PolicyPage slug="politica-de-privacidade" />} />
+                            <Route path="/termos-de-uso" element={<PolicyPage slug="termos-de-uso" />} />
+                            <Route path="/politica-de-entrega" element={<PolicyPage slug="politica-de-entrega" />} />
                             <Route path="/checkout" element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login?returnTo=/checkout" replace />} />}>
                                 <Route index element={<Checkout />} />
                             </Route>

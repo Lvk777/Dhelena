@@ -8,6 +8,7 @@ const DEFAULTS = {
     store: { top_bar_text: "Frete grátis acima de R$ 499 · Parcelamos em até 6x sem juros", free_shipping_threshold: 499, max_installments: 6, interest_free_installments: 6 },
     shipping: { free_shipping_enabled: true, free_shipping_threshold: 499, pickup_enabled: true, pickup_name: "Retirada na boutique" },
     social: { instagram: "", facebook: "", tiktok: "", whatsapp: "" },
+    policies: { return_policy: "", privacy_policy: "", terms_of_use: "", shipping_policy: "" },
 };
 
 export function PublicSettingsProvider({ children }) {
