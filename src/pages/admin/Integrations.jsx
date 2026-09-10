@@ -117,11 +117,12 @@ export default function Integrations() {
         setEditForm(formData);
         setEditingDef(def);
         setTestResult(null);
+        setTesting(null);
     };
 
     const handleSave = async () => {
         // Check if this is a critical integration (payment, shipping)
-        const isCritical = ["mercado_pago", "melhor_envio", "database"].includes(editingDef.key);
+        const isCritical = true;
         if (isCritical && !showConfirmSave) {
             setShowConfirmSave(true);
             return;
@@ -271,7 +272,7 @@ export default function Integrations() {
             {editingDef && (
                 <AdminModal
                     open
-                    onClose={() => { setEditingDef(null); setShowConfirmSave(false); setTestResult(null); }}
+                    onClose={() => { setEditingDef(null); setShowConfirmSave(false); setTestResult(null); setTesting(null); }}
                     title={editingDef.name}
                     subtitle={editingDef.description}
                     size="md"
@@ -290,7 +291,12 @@ export default function Integrations() {
                     }
                 >
                     <div className="space-y-4">
-                        {/* Test result banner */}
+                        {/* Test result banner — only shows after explicit test action */}
+                        {testing === "loading" && (
+                            <div className="flex items-center gap-2 p-3 rounded-lg text-sm bg-muted text-muted-foreground">
+                                <Loader2 className="w-4 h-4 animate-spin" /> Testando conexão...
+                            </div>
+                        )}
                         {testing && testing !== "loading" && (
                             <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
                                 testing === "success" ? "bg-green-50 text-green-700 border border-green-200"
@@ -298,11 +304,6 @@ export default function Integrations() {
                             }`}>
                                 {testing === "success" ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                                 {testResult}
-                            </div>
-                        )}
-                        {testing === "loading" && (
-                            <div className="flex items-center gap-2 p-3 rounded-lg text-sm bg-muted text-muted-foreground">
-                                <Loader2 className="w-4 h-4 animate-spin" /> Testando conexão...
                             </div>
                         )}
 
@@ -352,7 +353,7 @@ export default function Integrations() {
                                 <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto mb-4" strokeWidth={1.5} />
                                 <p className="text-sm font-medium mb-1">Confirmar alteração</p>
                                 <p className="text-xs text-muted-foreground mb-5">
-                                    Deseja atualizar as credenciais do {editingDef.name}?
+                                    Deseja atualizar as credenciais desta integração?
                                 </p>
                                 <div className="flex flex-col gap-2">
                                     <button onClick={() => handleSave()} className="btn-gold w-full py-2.5 text-sm">
