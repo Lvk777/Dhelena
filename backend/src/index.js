@@ -81,21 +81,35 @@ let initialized = false;
 async function ensureInitialized() {
     if (initialized) return;
     try {
-        const migrationsDir = './migrations';
-        if (fs.existsSync(migrationsDir)) {
-            const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
-            for (const file of files) {
-                const sql = fs.readFileSync(`${migrationsDir}/${file}`, 'utf8');
-                await pool.query(sql);
-                console.log(`[Migration] ✓ ${file}`);
+        // Check if core tables already exist (e.g. Supabase with pre-existing schema).
+        // If they do, skip migrations — the schema is already set up and the
+        // connected role may not own the tables (ALTER TABLE requires ownership).
+        const { rows: tableCheck } = await pool.query(
+            "SELECT to_regclass('public.products') AS exists"
+        );
+        const schemaExists = !!tableCheck[0].exists;
+
+        if (!schemaExists) {
+            const migrationsDir = './migrations';
+            if (fs.existsSync(migrationsDir)) {
+                const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
+                for (const file of files) {
+                    const sql = fs.readFileSync(`${migrationsDir}/${file}`, 'utf8');
+                    await pool.query(sql);
+                    console.log(`[Migration] ✓ ${file}`);
+                }
             }
+        } else {
+            console.log('[Migration] Schema already exists — skipping migrations');
         }
 
         const { rows } = await pool.query('SELECT COUNT(*) as cnt FROM products');
-        if (parseInt(rows[0].cnt) === 0) {
+        if (parseInt(rows[0].cnt) === 0 && !schemaExists) {
             console.log('[Seed] Products table empty, running seed...');
             const { runSeed } = await import('../seed/seed.js');
             await runSeed();
+        } else if (parseInt(rows[0].cnt) === 0 && schemaExists) {
+            console.log('[Seed] Products table empty but schema pre-exists — skipping seed (run manually if needed)');
         }
         initialized = true;
         console.log('[API] Database initialized');
