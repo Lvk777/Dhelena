@@ -4,7 +4,7 @@ import { base44 } from "@/api/base44Client";
 import AdminWizard from "@/components/admin/AdminWizard";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminTextarea from "@/components/admin/AdminTextarea";
-import AdminUpload from "@/components/admin/AdminUpload";
+import AdminImageUploader from "@/components/admin/AdminImageUploader";
 import AdminToggle from "@/components/admin/AdminToggle";
 import AdminSelect from "@/components/admin/AdminSelect";
 import AdminFormSection from "@/components/admin/AdminFormSection";
@@ -216,15 +216,18 @@ function BannerWizard({ item, onClose, onSaved }) {
                                 <AlertCircle className="w-4 h-4" /> {errors._general}
                             </div>
                         )}
-                        <div>
-                            <label className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground block mb-2">Imagem Desktop (obrigatória)</label>
-                            <AdminUpload value={form.image} onChange={(v) => set("image", v)} aspect="16/9" error={errors?.image} />
-                        </div>
-                        <div>
-                            <label className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground block mb-2">Imagem Mobile (opcional)</label>
-                            <AdminUpload value={form.image_mobile} onChange={(v) => set("image_mobile", v)} aspect="3/4" />
-                        </div>
-                        <p className="text-[11px] text-muted-foreground">Se a imagem mobile estiver vazia, a desktop será usada como fallback. Formatos: JPEG, PNG, WEBP.</p>
+                        <AdminImageUploader
+                            preset={form.position || "custom"}
+                            value={form.image}
+                            onChange={(v) => set("image", v)}
+                            mobileValue={form.image_mobile}
+                            onMobileChange={(v) => set("image_mobile", v)}
+                            enableMobile
+                            required
+                            error={errors?.image}
+                            full
+                        />
+                        <p className="text-[11px] text-muted-foreground">Se a imagem mobile estiver vazia, a desktop será usada como fallback. Formatos: JPEG, PNG, WEBP · máximo 10MB.</p>
                     </div>
                 );
             case "position":
