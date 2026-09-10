@@ -212,6 +212,22 @@ export function blobToFile(blob, baseName, ext) {
     return new File([blob], `${normalizedName}-${Date.now()}${ext}`, { type: blob.type });
 }
 
+/** Map a preset name to a storage folder for organized uploads. */
+export const PRESET_FOLDERS = {
+    home_hero_desktop: "banner",
+    home_hero_mobile: "banner",
+    banner_horizontal_desktop: "banner",
+    banner_horizontal_mobile: "banner",
+    collection_cover: "collection",
+    collection_banner: "collection",
+    product_image: "product",
+    promotion_banner: "promotion",
+    category_image: "category",
+    logo: "logo",
+    favicon: "favicon",
+    og_image: "og",
+};
+
 /** Compute target output dimensions from an aspect ratio and max bounds. */
 export function computeOutputSize(aspectRatio, maxWidth, maxHeight) {
     let width = maxWidth;

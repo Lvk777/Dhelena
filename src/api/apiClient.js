@@ -257,13 +257,13 @@ const functions = {
     },
 };
 
-// ─── File upload (Supabase Storage when configured, backend fallback) ─
+// ─── File upload (via backend → Supabase Storage with service role key) ─
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_SIZE = 10 * 1024 * 1024;
 
 const integrations = {
     Core: {
-        async UploadFile({ file, bucket = 'product-images' }) {
+        async UploadFile({ file, folder = 'misc' }) {
             // Validate file type
             if (!ALLOWED_TYPES.includes(file.type)) {
                 throw new Error('Formato não permitido. Use JPEG, PNG ou WEBP.');
@@ -272,31 +272,23 @@ const integrations = {
                 throw new Error('Arquivo muito grande. Máximo 10MB.');
             }
 
-            if (supabase) {
-                // Upload to Supabase Storage
-                const ext = file.name.split('.').pop().toLowerCase();
-                const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-                const { error } = await supabase.storage
-                    .from(bucket)
-                    .upload(fileName, file, { contentType: file.type });
-                if (error) throw error;
-
-                const { data: { publicUrl } } = supabase.storage
-                    .from(bucket)
-                    .getPublicUrl(fileName);
-                return { file_url: publicUrl };
-            }
-
-            // Dev mode: upload to backend
+            // Always upload via backend (uses Supabase service role key securely)
             const token = getToken();
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('folder', folder);
+
             const res = await fetch(`${API_BASE}/upload`, {
                 method: 'POST',
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {},
                 body: formData,
             });
-            if (!res.ok) throw new Error('Upload failed');
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Não foi possível enviar a imagem.');
+            }
+
             return res.json();
         },
     },

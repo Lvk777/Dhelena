@@ -5,7 +5,7 @@ import CropperModal from "@/components/admin/CropperModal";
 import {
     validateImageFile, getDimensions, formatFileSize,
     cropAndResize, computeCropArea, blobToFile,
-    IMAGE_PRESETS, computeOutputSize,
+    IMAGE_PRESETS, computeOutputSize, PRESET_FOLDERS,
 } from "@/lib/imageProcessor";
 
 const RECOMMENDATIONS = [
@@ -50,7 +50,8 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
     const handleCropConfirm = useCallback(async (file, previewUrl) => {
         setUploading(true);
         try {
-            const { file_url } = await base44.integrations.Core.UploadFile({ file });
+            const folder = PRESET_FOLDERS.product_image || "product";
+            const { file_url } = await base44.integrations.Core.UploadFile({ file, folder });
             onChange([...images, file_url]);
         } catch (e) {
             console.error("[ImageUploader] Upload error:", e);

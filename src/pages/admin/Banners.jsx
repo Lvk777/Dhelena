@@ -10,6 +10,7 @@ import AdminSelect from "@/components/admin/AdminSelect";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import ErrorBoundary from "@/components/admin/ErrorBoundary";
+import StorefrontPreview from "@/components/admin/StorefrontPreview";
 import { logAdminAction } from "@/lib/audit";
 import { BANNER_POSITION_PRESETS, IMAGE_PRESETS, generateMobileVersion, blobToFile } from "@/lib/imageProcessor";
 
@@ -355,7 +356,7 @@ function BannerWizard({ item, onClose, onSaved }) {
                 );
             case "preview":
                 return (
-                    <div className="max-w-2xl mx-auto space-y-6">
+                    <div className="max-w-3xl mx-auto space-y-6">
                         {/* Summary */}
                         <div className="bg-muted/30 rounded-lg border border-border p-6 space-y-2">
                             <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-accent mb-3">Resumo do Banner</h3>
@@ -367,34 +368,18 @@ function BannerWizard({ item, onClose, onSaved }) {
                             <SummaryRow label="CTA" value={form.button_text || "—"} />
                         </div>
 
-                        {/* Preview */}
+                        {/* Real storefront preview */}
                         <div className="space-y-3">
                             <div className="flex items-center gap-2">
                                 <Eye className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
-                                <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Preview</span>
-                                <div className="flex gap-1 ml-auto">
-                                    <button onClick={() => setPreviewDevice("desktop")} className={`flex items-center gap-1 px-2.5 py-1 text-[10px] uppercase border ${previewDevice === "desktop" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground"}`}>
-                                        <Monitor className="w-3 h-3" /> Desktop
-                                    </button>
-                                    <button onClick={() => setPreviewDevice("mobile")} className={`flex items-center gap-1 px-2.5 py-1 text-[10px] uppercase border ${previewDevice === "mobile" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground"}`}>
-                                        <Smartphone className="w-3 h-3" /> Mobile
-                                    </button>
-                                </div>
+                                <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Como ficará no site</span>
                             </div>
-                            <div className={`rounded-xl overflow-hidden border border-border relative bg-bone mx-auto ${previewDevice === "mobile" ? "max-w-[320px] h-48" : "h-64"}`}>
-                                {previewImage ? <img src={previewImage} alt="" className="absolute inset-0 w-full h-full object-cover" /> : <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/40 text-sm">Sem imagem</div>}
-                                <div className="absolute inset-0 bg-gradient-to-t from-charcoal/70 to-transparent" />
-                                <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 text-bone">
-                                    {form.eyebrow && <p className="text-[10px] uppercase tracking-[0.3em] text-gold mb-2">{form.eyebrow}</p>}
-                                    {form.title && <h3 className="font-heading text-2xl tracking-wide">{form.title}</h3>}
-                                    {form.subtitle && <p className="font-heading text-lg italic mt-1 text-bone/90">{form.subtitle}</p>}
-                                    {form.text && <p className="text-sm mt-2 max-w-md text-bone/80">{form.text}</p>}
-                                    <div className="flex gap-3 mt-4">
-                                        {form.button_text && <span className="bg-accent text-white text-[10px] uppercase tracking-[0.2em] px-5 py-2.5">{form.button_text}</span>}
-                                        {form.secondary_cta_label && <span className="border border-bone/50 text-bone text-[10px] uppercase tracking-[0.2em] px-5 py-2.5">{form.secondary_cta_label}</span>}
-                                    </div>
-                                </div>
-                            </div>
+                            <StorefrontPreview
+                                position={form.position || "custom"}
+                                banner={form}
+                                device={previewDevice}
+                                allowDeviceToggle={true}
+                            />
                         </div>
                     </div>
                 );

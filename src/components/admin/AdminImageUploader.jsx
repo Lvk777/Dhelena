@@ -9,7 +9,7 @@ import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import {
     validateImageFile, getDimensions, formatFileSize, formatAspectRatio,
     cropAndResize, computeCropArea, blobToFile, generateMobileVersion,
-    IMAGE_PRESETS, computeOutputSize, BANNER_POSITION_PRESETS,
+    IMAGE_PRESETS, computeOutputSize, BANNER_POSITION_PRESETS, PRESET_FOLDERS,
 } from "@/lib/imageProcessor";
 
 /**
@@ -68,15 +68,16 @@ export default function AdminImageUploader({
         setStatus(STATES.UPLOADING);
         setErrorMsg("");
         try {
-            const { file_url } = await base44.integrations.Core.UploadFile({ file });
+            const folder = PRESET_FOLDERS[preset] || "misc";
+            const { file_url } = await base44.integrations.Core.UploadFile({ file, folder });
             onChange(file_url);
             setStatus(STATES.DONE);
         } catch (e) {
             console.error("[AdminImageUploader] Upload error:", e);
-            setErrorMsg(e?.message || "Não foi possível enviar a imagem.");
+            setErrorMsg("Não foi possível enviar a imagem. Tente novamente.");
             setStatus(STATES.ERROR);
         }
-    }, [onChange]);
+    }, [onChange, preset]);
 
     const handleFile = useCallback(async (file) => {
         setErrorMsg("");
