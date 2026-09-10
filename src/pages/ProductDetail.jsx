@@ -9,6 +9,7 @@ import { COLOR_SWATCHES, formatBRL, installmentValue } from "@/data/products";
 import ProductCard from "@/components/ProductCard";
 import { track } from "@/lib/analytics";
 import PositionBanner from "@/components/PositionBanner";
+import useSEO from "@/lib/useSEO";
 
 export default function ProductDetail() {
     const { id } = useParams();
@@ -24,6 +25,14 @@ export default function ProductDetail() {
     const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
     const [cep, setCep] = useState("");
     const [frete, setFrete] = useState(null);
+
+    // Dynamic SEO
+    useSEO({
+        title: product ? product.name : "Produto",
+        description: product ? `${product.name} — ${product.description?.substring(0, 150) || "D'Helenas"}` : "D'Helenas — Moda feminina",
+        image: product?.images?.[0],
+        url: `/produto/${id}`,
+    });
 
     useEffect(() => { if (product && !color) setColor(product.colors[0]?.id); }, [product, color]);
 
@@ -86,7 +95,7 @@ export default function ProductDetail() {
                                     onClick={() => setActiveImg(i)}
                                     className={`shrink-0 w-16 h-20 lg:w-20 lg:h-24 overflow-hidden bg-bone border ${activeImg === i ? "border-[hsl(var(--gold))]" : "border-transparent"}`}
                                 >
-                                    <img src={src} alt="" className="w-full h-full object-cover" />
+                                    <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" />
                                 </button>
                             ))}
                         </div>

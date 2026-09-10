@@ -81,6 +81,21 @@ export default function Analytics() {
 
     if (loading) return <div className="h-64 bg-background animate-pulse rounded-lg" />;
 
+    if (!overview || (overview.visitors === 0 && overview.sessions === 0 && overview.orders === 0)) {
+        return (
+            <div>
+                <h1 className="font-heading text-2xl tracking-[0.03em] mb-6">Analytics</h1>
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                        <TrendingUp className="w-8 h-8 text-muted-foreground" strokeWidth={1.5} />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">Sem dados de analytics ainda</p>
+                    <p className="text-xs text-muted-foreground mt-1">Os dados de visitantes e pedidos aparecerão aqui conforme a loja receber tráfego.</p>
+                </div>
+            </div>
+        );
+    }
+
     const cmp = overview?.comparison || {};
 
     // KPI cards data

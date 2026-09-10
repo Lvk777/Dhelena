@@ -2,10 +2,17 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { useCatalog } from "@/context/CatalogContext";
 import { CATEGORY_IMAGES } from "@/data/products";
+import useSEO from "@/lib/useSEO";
 
 export default function Collections() {
     const { collections, products, loading } = useCatalog();
     const fallbackImages = [CATEGORY_IMAGES.vestidos, CATEGORY_IMAGES.conjuntos, CATEGORY_IMAGES.acessorios];
+
+    useSEO({
+        title: "Coleções",
+        description: "Cada coleção é um capítulo da história D'Helenas — pensada para atravessar gerações.",
+        url: "/colecoes",
+    });
 
     if (loading) return <div className="h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-[hsl(var(--bone))] border-t-[hsl(var(--gold))] rounded-full animate-spin" /></div>;
 
@@ -29,7 +36,7 @@ export default function Collections() {
                     return (
                         <div key={col.id} className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
                             <div className={`relative overflow-hidden aspect-[4/3] ${i % 2 ? "lg:order-2" : ""}`}>
-                                <img src={img} alt={col.name} className="w-full h-full object-cover" />
+                                <img src={img} alt={col.name} className="w-full h-full object-cover" loading="lazy" />
                                 <div className="absolute inset-0 bg-charcoal/15" />
                             </div>
                             <div className={i % 2 ? "lg:order-1" : ""}>
@@ -40,7 +47,7 @@ export default function Collections() {
                                 <div className="mt-8 space-y-3">
                                     {items.map((p) => (
                                         <Link key={p.id} to={`/produto/${p.id}`} className="flex items-center gap-3 group">
-                                            <img src={p.images[0]} alt={p.name} className="w-12 h-16 object-cover bg-bone" />
+                                            <img src={p.images[0]} alt={p.name} className="w-12 h-16 object-cover bg-bone" loading="lazy" />
                                             <div>
                                                 <p className="text-sm font-medium group-hover:text-[hsl(var(--rose))] transition-colors">{p.name}</p>
                                                 <p className="text-[11px] text-muted-foreground">{p.category}</p>

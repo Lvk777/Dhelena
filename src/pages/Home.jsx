@@ -91,7 +91,7 @@ export default function Home() {
             {/* BANNER CONCEITUAL */}
             {concept.image && (
                 <section className="relative h-[60vh] min-h-[420px] overflow-hidden">
-                    <img src={concept.image} alt={concept.title} className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={concept.image} alt={concept.title} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
                     <div className="absolute inset-0 bg-charcoal/35" />
                     <div className="relative h-full container-boutique flex items-center justify-center text-center">
                         <div className="max-w-2xl text-bone animate-fade-rise">
@@ -120,7 +120,7 @@ export default function Home() {
             <section className="bg-[hsl(var(--champagne))] py-20 sm:py-28">
                 <div className="container-boutique grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
                     <div className="relative overflow-hidden aspect-[3/4] max-w-md mx-auto lg:mx-0 w-full">
-                        <img src={LOOK_IMAGE} alt="Complete o look" className="w-full h-full object-cover" />
+                        <img src={LOOK_IMAGE} alt="Complete o look" className="w-full h-full object-cover" loading="lazy" />
                     </div>
                     <div>
                         <p className="eyebrow">Editorial</p>
@@ -154,7 +154,7 @@ export default function Home() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mt-12">
                         {instImages.map((src, i) => (
                             <a key={i} href="https://instagram.com" target="_blank" rel="noreferrer" className="group relative aspect-square overflow-hidden bg-bone">
-                                <img src={src} alt="Instagram D'Helenas" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                                <img src={src} alt="Instagram D'Helenas" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
                                 <div className="absolute inset-0 bg-charcoal/0 group-hover:bg-charcoal/30 transition-colors duration-500 flex items-center justify-center">
                                     <Instagram className="w-5 h-5 text-bone opacity-0 group-hover:opacity-100 transition-opacity duration-500" strokeWidth={1.25} />
                                 </div>
@@ -196,7 +196,7 @@ function CategoryCard({ category, index }) {
     return (
         <div ref={ref} className={`reveal ${visible ? "is-visible" : ""}`} style={{ transitionDelay: `${index * 90}ms` }}>
             <Link to={`/loja?cat=${category.slug}`} className="group block relative overflow-hidden aspect-[3/4] bg-bone">
-                <img src={category.image} alt={category.name} className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-105" />
+                <img src={category.image} alt={category.name} className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-105" loading="lazy" />
                 <div className="absolute inset-0 bg-gradient-to-t from-charcoal/55 via-transparent to-transparent" />
                 <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5 text-center">
                     <h3 className="font-heading text-xl sm:text-2xl text-bone tracking-[0.04em]">{category.name}</h3>
