@@ -9,6 +9,7 @@ import orderRoutes from './routes/orders.js';
 import userRoutes from './routes/user.js';
 import adminRoutes from './routes/admin.js';
 import uploadRoutes from './routes/upload.js';
+import lookRoutes from './routes/look.js';
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use('/api', orderRoutes);
 app.use('/api', userRoutes);
 app.use('/api', adminRoutes);
 app.use('/api', uploadRoutes);
+app.use('/api', lookRoutes);
 
 // ─── Health check ──────────────────────────────────────────────────
 app.get('/health', async (req, res) => {

@@ -29,6 +29,7 @@ import About from '@/pages/About';
 import Contact from '@/pages/Contact';
 import Collections from '@/pages/Collections';
 import Favorites from '@/pages/Favorites';
+import MonteSeuLook from '@/pages/MonteSeuLook';
 
 // Account pages
 import AccountLayout from '@/pages/account/AccountLayout';
@@ -57,6 +58,9 @@ import Banners from '@/pages/admin/Banners';
 import Reports from '@/pages/admin/Reports';
 import Settings from '@/pages/admin/Settings';
 import AuditLog from '@/pages/admin/AuditLog';
+import SizeGuides from '@/pages/admin/SizeGuides';
+import Integrations from '@/pages/admin/Integrations';
+import Promotions from '@/pages/admin/Promotions';
 
 const AuthenticatedApp = () => {
     const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -101,6 +105,7 @@ const AuthenticatedApp = () => {
                             <Route path="/contato" element={<Contact />} />
                             <Route path="/colecoes" element={<Collections />} />
                             <Route path="/favoritos" element={<Favorites />} />
+                            <Route path="/monte-seu-look" element={<MonteSeuLook />} />
                         </Route>
 
                         {/* Customer account (protected) */}
@@ -134,6 +139,9 @@ const AuthenticatedApp = () => {
                             <Route path="relatorios" element={<Reports />} />
                             <Route path="auditoria" element={<AuditLog />} />
                             <Route path="configuracoes" element={<Settings />} />
+                            <Route path="guias-medidas" element={<SizeGuides />} />
+                            <Route path="integracoes" element={<Integrations />} />
+                            <Route path="promocoes" element={<Promotions />} />
                         </Route>
 
                         <Route path="*" element={<PageNotFound />} />

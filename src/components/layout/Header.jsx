@@ -11,6 +11,7 @@ const NAV = [
     { label: "Roupas", to: "/loja?cat=vestidos" },
     { label: "Acessórios", to: "/loja?cat=acessorios" },
     { label: "Coleções", to: "/colecoes" },
+    { label: "Monte seu Look", to: "/monte-seu-look" },
     { label: "Nossa História", to: "/sobre" },
     { label: "Contato", to: "/contato" },
 ];

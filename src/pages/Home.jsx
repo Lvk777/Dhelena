@@ -133,6 +133,17 @@ export default function Home() {
                 </div>
             </section>
 
+            {/* MONTE SEU LOOK */}
+            <section className="bg-background py-16 sm:py-20 border-y border-border">
+                <div className="container-boutique text-center">
+                    <p className="eyebrow">Personalize</p>
+                    <h2 className="mt-3 font-heading text-3xl sm:text-4xl lg:text-5xl tracking-[0.03em]">Monte seu Look</h2>
+                    <div className="flex justify-center mt-5"><div className="gold-rule" /></div>
+                    <p className="mt-6 text-muted-foreground">Crie combinações do seu jeito.</p>
+                    <Link to="/monte-seu-look" className="btn-gold mt-8 inline-block">Montar meu look</Link>
+                </div>
+            </section>
+
             {/* INSTAGRAM */}
             {instImages.length > 0 && (
                 <Section title="Siga a D'Helenas" eyebrow="@dhelenas.oficial">

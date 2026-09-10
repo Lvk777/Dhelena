@@ -45,6 +45,8 @@ export const dbToProduct = (p) => ({
     rating: p.rating ?? 5,
     soldCount: p.sold_count ?? 0,
     created_date: p.created_date,
+    size_guide_id: p.size_guide_id || null,
+    custom_measurements: p.custom_measurements || null,
 });
 
 export function CatalogProvider({ children }) {
