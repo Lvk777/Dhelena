@@ -6,7 +6,7 @@ const { Pool } = pg;
 // In production: DATABASE_URL is required — no fallback.
 // In development: falls back to local Docker PostgreSQL if Supabase is unreachable.
 const isProduction = process.env.NODE_ENV === 'production';
-const FALLBACK_URL = 'postgresql://dhelenas:dhelenas@postgres:5432/dhelenas';
+const FALLBACK_URL = 'postgresql://postgres:postgres@postgres:5432/dhelenas';
 
 if (isProduction && !process.env.DATABASE_URL) {
     console.error('[DB] FATAL: DATABASE_URL is required in production. Exiting.');
