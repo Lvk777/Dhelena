@@ -15,9 +15,20 @@ import lookRoutes from './routes/look.js';
 import analyticsRoutes from './routes/analytics.js';
 import contactRoutes from './routes/contact.js';
 import securityRoutes from './routes/security.js';
+import sitemapRoutes from './routes/sitemap.js';
+import webhookRoutes from './routes/webhooks.js';
 
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
+
+// ─── Trust proxy (Railway + Cloudflare) ───────────────────────────
+// In production, requests pass through Cloudflare → Railway proxy → Express.
+// Enable trust proxy so req.ip, req.protocol, and req.secure reflect the
+// real client, not the proxy. Cloudflare sanitizes X-Forwarded-For, so
+// trusting all hops is safe in this architecture.
+if (isProduction) {
+    app.set('trust proxy', true);
+}
 
 // ─── Security headers (Helmet) ────────────────────────────────────
 app.use(helmet({
@@ -60,6 +71,8 @@ app.use('/api', adminRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api', lookRoutes);
 app.use('/api', securityRoutes);
+app.use('/api', sitemapRoutes);
+app.use('/api', webhookRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
@@ -81,21 +94,41 @@ let initialized = false;
 async function ensureInitialized() {
     if (initialized) return;
     try {
-        const migrationsDir = './migrations';
-        if (fs.existsSync(migrationsDir)) {
-            const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
-            for (const file of files) {
-                const sql = fs.readFileSync(`${migrationsDir}/${file}`, 'utf8');
-                await pool.query(sql);
-                console.log(`[Migration] ✓ ${file}`);
+        // Check if core tables already exist (e.g. Supabase with pre-existing schema).
+        // If they do, skip migrations — the schema is already set up and the
+        // connected role may not own the tables (ALTER TABLE requires ownership).
+        const { rows: tableCheck } = await pool.query(
+            "SELECT to_regclass('public.products') AS exists"
+        );
+        const schemaExists = !!tableCheck[0].exists;
+
+        if (!schemaExists) {
+            const migrationsDir = './migrations';
+            if (fs.existsSync(migrationsDir)) {
+                const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
+                for (const file of files) {
+                    const sql = fs.readFileSync(`${migrationsDir}/${file}`, 'utf8');
+                    await pool.query(sql);
+                    console.log(`[Migration] ✓ ${file}`);
+                }
             }
+        } else {
+            console.log('[Migration] Schema already exists — skipping migrations');
         }
 
-        const { rows } = await pool.query('SELECT COUNT(*) as cnt FROM products');
-        if (parseInt(rows[0].cnt) === 0) {
-            console.log('[Seed] Products table empty, running seed...');
-            const { runSeed } = await import('../seed/seed.js');
-            await runSeed();
+        // Seed: NEVER run automatically in production.
+        // In development, only seed when schema is fresh (no pre-existing tables).
+        if (!isProduction) {
+            const { rows } = await pool.query('SELECT COUNT(*) as cnt FROM products');
+            if (parseInt(rows[0].cnt) === 0 && !schemaExists) {
+                console.log('[Seed] Products table empty, running seed...');
+                const { runSeed } = await import('../seed/seed.js');
+                await runSeed();
+            } else if (parseInt(rows[0].cnt) === 0 && schemaExists) {
+                console.log('[Seed] Products table empty but schema pre-exists — skipping seed (run manually if needed)');
+            }
+        } else {
+            console.log('[Seed] Production mode — automatic seed disabled');
         }
         initialized = true;
         console.log('[API] Database initialized');

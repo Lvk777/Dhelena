@@ -83,5 +83,24 @@ export const PAYMENT_LABELS = {
 export const SHIPPING_LABELS = {
     padrao: "Entrega padrão",
     expressa: "Entrega expressa",
-    retirada: "Retirada na boutique",
+    retirada: "Retirada no estoque",
+    melhor_envio: "Melhor Envio",
+};
+
+export const PAYMENT_STATUS_PT = {
+    pending: "Aguardando pagamento",
+    approved: "Pago",
+    rejected: "Recusado",
+    refunded: "Reembolsado",
+    in_process: "Em análise",
+    cancelled: "Cancelado",
+};
+
+export const PAYMENT_STATUS_COLORS = {
+    pending: "text-amber-600",
+    approved: "text-green-600",
+    rejected: "text-red-600",
+    refunded: "text-blue-600",
+    in_process: "text-amber-600",
+    cancelled: "text-muted-foreground",
 };

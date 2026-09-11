@@ -12,6 +12,8 @@ import { PublicSettingsProvider } from '@/context/PublicSettingsContext';
 import Layout from '@/components/layout/Layout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import AdminRoute from '@/components/AdminRoute';
+import MaintenanceGuard from '@/components/MaintenanceGuard';
+import ComingSoon from '@/pages/ComingSoon';
 
 // Auth pages
 import Login from '@/pages/Login';
@@ -30,6 +32,7 @@ import Contact from '@/pages/Contact';
 import Collections from '@/pages/Collections';
 import Favorites from '@/pages/Favorites';
 import MonteSeuLook from '@/pages/MonteSeuLook';
+import PolicyPage from '@/pages/PolicyPage';
 
 // Account pages
 import AccountLayout from '@/pages/account/AccountLayout';
@@ -86,71 +89,80 @@ const AuthenticatedApp = () => {
     return (
         <StoreProvider>
             <PublicSettingsProvider>
-                <CatalogProvider>
-                    <Routes>
-                        {/* Auth */}
-                        <Route path="/login" element={<Login />} />
-                        <Route path="/cadastro" element={<Register />} />
-                        <Route path="/esqueci-minha-senha" element={<ForgotPassword />} />
-                        <Route path="/reset-password" element={<ResetPassword />} />
+                <MaintenanceGuard>
+                    <CatalogProvider>
+                        <Routes>
+                            {/* Auth */}
+                            <Route path="/login" element={<Login />} />
+                            <Route path="/cadastro" element={<Register />} />
+                            <Route path="/esqueci-minha-senha" element={<ForgotPassword />} />
+                            <Route path="/reset-password" element={<ResetPassword />} />
 
-                        {/* Public store */}
-                        <Route element={<Layout />}>
-                            <Route path="/" element={<Home />} />
-                            <Route path="/loja" element={<Shop />} />
-                            <Route path="/novidades" element={<Navigate to="/loja?filtro=novidades" replace />} />
-                            <Route path="/produto/:id" element={<ProductDetail />} />
-                            <Route path="/sacola" element={<Cart />} />
-                            <Route path="/sobre" element={<About />} />
-                            <Route path="/contato" element={<Contact />} />
-                            <Route path="/colecoes" element={<Collections />} />
-                            <Route path="/favoritos" element={<Favorites />} />
-                            <Route path="/monte-seu-look" element={<MonteSeuLook />} />
-                            <Route path="/checkout" element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login?returnTo=/checkout" replace />} />}>
-                                <Route index element={<Checkout />} />
+                            {/* Maintenance page */}
+                            <Route path="/em-breve" element={<ComingSoon />} />
+
+                            {/* Public store */}
+                            <Route element={<Layout />}>
+                                <Route path="/" element={<Home />} />
+                                <Route path="/loja" element={<Shop />} />
+                                <Route path="/novidades" element={<Navigate to="/loja?filtro=novidades" replace />} />
+                                <Route path="/produto/:id" element={<ProductDetail />} />
+                                <Route path="/sacola" element={<Cart />} />
+                                <Route path="/sobre" element={<About />} />
+                                <Route path="/contato" element={<Contact />} />
+                                <Route path="/colecoes" element={<Collections />} />
+                                <Route path="/favoritos" element={<Favorites />} />
+                                <Route path="/monte-seu-look" element={<MonteSeuLook />} />
+                                <Route path="/trocas-e-devolucoes" element={<PolicyPage slug="trocas-e-devolucoes" />} />
+                                <Route path="/politica-de-privacidade" element={<PolicyPage slug="politica-de-privacidade" />} />
+                                <Route path="/termos-de-uso" element={<PolicyPage slug="termos-de-uso" />} />
+                                <Route path="/politica-de-entrega" element={<PolicyPage slug="politica-de-entrega" />} />
+                                <Route path="/checkout" element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login?returnTo=/checkout" replace />} />}>
+                                    <Route index element={<Checkout />} />
+                                </Route>
                             </Route>
-                        </Route>
 
-                        {/* Customer account (protected) */}
-                        <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
-                            <Route path="/minha-conta" element={<AccountLayout />}>
-                                <Route index element={<Overview />} />
-                                <Route path="pedidos" element={<Orders />} />
-                                <Route path="pedidos/:id" element={<OrderDetail />} />
-                                <Route path="rastreamento" element={<Tracking />} />
-                                <Route path="favoritos" element={<AccountFavorites />} />
-                                <Route path="enderecos" element={<Addresses />} />
-                                <Route path="dados" element={<Profile />} />
-                                <Route path="senha" element={<ChangePassword />} />
+                            {/* Customer account (protected) */}
+                            <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+                                <Route path="/minha-conta" element={<AccountLayout />}>
+                                    <Route index element={<Overview />} />
+                                    <Route path="pedidos" element={<Orders />} />
+                                    <Route path="pedidos/:id" element={<OrderDetail />} />
+                                    <Route path="rastreamento" element={<Tracking />} />
+                                    <Route path="favoritos" element={<AccountFavorites />} />
+                                    <Route path="enderecos" element={<Addresses />} />
+                                    <Route path="dados" element={<Profile />} />
+                                    <Route path="senha" element={<ChangePassword />} />
+                                </Route>
                             </Route>
-                        </Route>
 
-                        {/* Admin (admin-only) */}
-                        <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
-                            <Route index element={<Dashboard />} />
-                            <Route path="pedidos" element={<AdminOrders />} />
-                            <Route path="pedidos/:id" element={<AdminOrderDetail />} />
-                            <Route path="produtos" element={<AdminProducts />} />
-                            <Route path="produtos/novo" element={<ProductForm />} />
-                            <Route path="produtos/:id" element={<ProductForm />} />
-                            <Route path="categorias" element={<Categories />} />
-                            <Route path="colecoes" element={<AdminCollections />} />
-                            <Route path="estoque" element={<Inventory />} />
-                            <Route path="clientes" element={<Customers />} />
-                            <Route path="cupons" element={<Coupons />} />
-                            <Route path="banners" element={<Banners />} />
-                            <Route path="relatorios" element={<Reports />} />
-                            <Route path="auditoria" element={<AuditLog />} />
-                            <Route path="configuracoes" element={<Settings />} />
-                            <Route path="guias-medidas" element={<SizeGuides />} />
-                            <Route path="integracoes" element={<Integrations />} />
-                            <Route path="promocoes" element={<Promotions />} />
-                            <Route path="analytics" element={<Analytics />} />
-                        </Route>
+                            {/* Admin (admin-only) */}
+                            <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+                                <Route index element={<Dashboard />} />
+                                <Route path="pedidos" element={<AdminOrders />} />
+                                <Route path="pedidos/:id" element={<AdminOrderDetail />} />
+                                <Route path="produtos" element={<AdminProducts />} />
+                                <Route path="produtos/novo" element={<ProductForm />} />
+                                <Route path="produtos/:id" element={<ProductForm />} />
+                                <Route path="categorias" element={<Categories />} />
+                                <Route path="colecoes" element={<AdminCollections />} />
+                                <Route path="estoque" element={<Inventory />} />
+                                <Route path="clientes" element={<Customers />} />
+                                <Route path="cupons" element={<Coupons />} />
+                                <Route path="banners" element={<Banners />} />
+                                <Route path="relatorios" element={<Reports />} />
+                                <Route path="auditoria" element={<AuditLog />} />
+                                <Route path="configuracoes" element={<Settings />} />
+                                <Route path="guias-medidas" element={<SizeGuides />} />
+                                <Route path="integracoes" element={<Integrations />} />
+                                <Route path="promocoes" element={<Promotions />} />
+                                <Route path="analytics" element={<Analytics />} />
+                            </Route>
 
-                        <Route path="*" element={<PageNotFound />} />
-                    </Routes>
-                </CatalogProvider>
+                            <Route path="*" element={<PageNotFound />} />
+                        </Routes>
+                    </CatalogProvider>
+                </MaintenanceGuard>
             </PublicSettingsProvider>
         </StoreProvider>
     );

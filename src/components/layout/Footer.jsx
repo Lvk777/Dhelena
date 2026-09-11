@@ -34,13 +34,13 @@ export default function Footer() {
                     <FooterCol title="Institucional" links={[
                         { label: "Nossa história", to: "/sobre" },
                         { label: "Contato", to: "/contato" },
-                        { label: "Trocas e devoluções", to: "/contato" },
-                        { label: "Política de privacidade", to: "/contato" },
-                        { label: "Termos de uso", to: "/contato" },
+                        { label: "Trocas e devoluções", to: "/trocas-e-devolucoes" },
+                        { label: "Política de privacidade", to: "/politica-de-privacidade" },
+                        { label: "Termos de uso", to: "/termos-de-uso" },
                     ]} />
 
                     <FooterCol title="Atendimento" links={[
-                        { label: "Entrega", to: "/contato" },
+                        { label: "Política de entrega", to: "/politica-de-entrega" },
                         { label: "Dúvidas frequentes", to: "/contato" },
                         { label: "Coleções", to: "/colecoes" },
                         { label: "Novidades", to: "/loja?filtro=novidades" },

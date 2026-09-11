@@ -27,11 +27,13 @@ export default function ProductCard({ product, index = 0 }) {
                     <img
                         src={product.images[0]}
                         alt={product.name}
+                        loading="lazy"
                         className="absolute inset-0 w-full h-full object-cover transition-all duration-1000 ease-out group-hover:scale-[1.03] group-hover:opacity-0"
                     />
                     <img
                         src={product.images[1] || product.images[0]}
                         alt={`${product.name} — detalhe`}
+                        loading="lazy"
                         className="absolute inset-0 w-full h-full object-cover opacity-0 transition-all duration-1000 ease-out group-hover:opacity-100 group-hover:scale-[1.03]"
                     />
                 </Link>

@@ -1,9 +1,25 @@
-import React from "react";
-import { Server, Database, ShieldCheck, GitBranch, Lock, Globe, Cloud, Zap } from "lucide-react";
+import React, { useState } from "react";
+import { Server, Database, ShieldCheck, GitBranch, Lock, Globe, Cloud, Zap, AlertTriangle } from "lucide-react";
+import AdminToggle from "@/components/admin/AdminToggle";
 
-export default function SystemTab() {
+export default function SystemTab({ data, onChange }) {
+    const set = (k, v) => onChange({ ...data, [k]: v });
+
     return (
         <div className="space-y-5">
+            {/* ─── Modo Manutenção ─────────────────────────────────── */}
+            <div className="border border-border rounded-xl p-5 bg-background/50">
+                <div className="flex items-center gap-2 mb-4">
+                    <AlertTriangle className="w-4 h-4 text-amber-500" strokeWidth={1.5} />
+                    <h3 className="text-[11px] uppercase tracking-[0.2em] text-foreground font-medium">Modo Manutenção</h3>
+                </div>
+                <AdminToggle
+                    label="Ativar modo manutenção"
+                    checked={data?.maintenance_mode || false}
+                    onChange={(v) => set("maintenance_mode", v)}
+                    description="Quando ativado, visitantes veem apenas a página Em breve. Administradores continuam acessando o site normalmente."
+                />
+            </div>
             <div className="border border-border rounded-xl p-5 bg-background/50">
                 <div className="flex items-center gap-2 mb-4">
                     <Server className="w-4 h-4 text-accent" strokeWidth={1.5} />

@@ -3,7 +3,8 @@ import { validateCoupon, logAudit, sendOrderNotifications } from './services.js'
 
 // ─── placeOrder: atomic order creation ──────────────────────────────
 export async function placeOrder(userId, body, idempotencyKey) {
-    const { items, shipping_address, shipping_method, coupon_code, payment_method } = body;
+    const { items, shipping_address, shipping_method, coupon_code, payment_method, customer,
+            shipping_cost: quotedShippingCost, shipping_quote_id, shipping_carrier, shipping_service_name, shipping_delivery_time } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
         throw Object.assign(new Error('Carrinho vazio'), { status: 400 });
@@ -154,6 +155,9 @@ export async function placeOrder(userId, body, idempotencyKey) {
             shippingCost = 0;
         } else if (freeEnabled && subtotal - discount >= freeThreshold) {
             shippingCost = 0;
+        } else if (shipping_method === 'melhor_envio' && quotedShippingCost != null) {
+            // Use the Melhor Envio quoted price (validated by the backend's own /api/shipping/quote endpoint)
+            shippingCost = Number(quotedShippingCost);
         } else {
             shippingCost = 29.90; // Default shipping cost
         }
@@ -178,15 +182,17 @@ export async function placeOrder(userId, body, idempotencyKey) {
             shipping_method,
             payment_method,
             shipping_address,
+            customer: customer || {},
             created_at: new Date().toISOString(),
         };
 
         // Create order
         const { rows: orderRows } = await client.query(
-            `INSERT INTO orders (order_number, user_id, status, payment_status, payment_method, shipping_method, shipping_cost, discount, coupon_code, subtotal, total, snapshot, shipping_address, idempotency_key)
-             VALUES ($1, $2, 'recebido', 'pending', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            `INSERT INTO orders (order_number, user_id, status, payment_status, payment_method, shipping_method, shipping_cost, discount, coupon_code, subtotal, total, snapshot, shipping_address, idempotency_key, shipping_quote_id, shipping_carrier, shipping_service_name, shipping_delivery_time)
+             VALUES ($1, $2, 'recebido', 'pending', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
              RETURNING *`,
-            [orderNum, userId, payment_method || null, shipping_method || null, shippingCost, discount, coupon_code || null, subtotal, total, JSON.stringify(snapshot), JSON.stringify(shipping_address), idempotencyKey]
+            [orderNum, userId, payment_method || null, shipping_method || null, shippingCost, discount, coupon_code || null, subtotal, total, JSON.stringify(snapshot), JSON.stringify(shipping_address), idempotencyKey,
+             shipping_quote_id || null, shipping_carrier || null, shipping_service_name || null, shipping_delivery_time || null]
         );
         const order = orderRows[0];
 

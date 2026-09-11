@@ -13,6 +13,21 @@ export default function Reports() {
 
     if (loading) return <div className="h-64 bg-background animate-pulse" />;
 
+    if (orders.length === 0) {
+        return (
+            <div>
+                <h1 className="font-heading text-2xl tracking-[0.03em] mb-6">Relatórios</h1>
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                        <BarChart className="w-8 h-8 text-muted-foreground" strokeWidth={1.5} />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">Nenhum pedido encontrado</p>
+                    <p className="text-xs text-muted-foreground mt-1">Os relatórios aparecerão aqui quando houver pedidos.</p>
+                </div>
+            </div>
+        );
+    }
+
     const revenue = orders.reduce((s, o) => s + (o.total || 0), 0);
     const avg = orders.length ? revenue / orders.length : 0;
 

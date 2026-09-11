@@ -145,13 +145,19 @@ const auth = {
     setToken(token) { setToken(token); },
     async loginViaEmailPassword(email, password, returnTo = '') {
         if (supabase) {
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-            if (error) throw error;
-            setToken(data.session.access_token);
-            const user = await apiFetch('/auth/me');
-            setStoredUser(user);
-            return user;
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+                if (!error && data.session) {
+                    setToken(data.session.access_token);
+                    const user = await apiFetch('/auth/me');
+                    setStoredUser(user);
+                    return user;
+                }
+            } catch {
+                // Supabase Auth failed — fall through to Express JWT
+            }
         }
+        // Express JWT fallback (uses bcrypt hash in profiles table)
         const data = await apiFetch('/auth/login', {
             method: 'POST',
             body: JSON.stringify({ email, password }),
@@ -251,6 +257,28 @@ const functions = {
                 });
             case 'logAdminAction':
                 return {};
+            // ─── Payment functions ───
+            case 'testPaymentConnection':
+                return apiFetch('/payments/test');
+            case 'testShippingConnection':
+                return apiFetch('/shipping/test');
+            case 'createPixPayment':
+                return apiFetch(`/orders/${args.orderId}/payment/pix`, { method: 'POST', body: JSON.stringify(args) });
+            case 'createCardPayment':
+                return apiFetch(`/orders/${args.orderId}/payment/card`, { method: 'POST', body: JSON.stringify(args) });
+            case 'getPaymentStatus':
+                return apiFetch(`/orders/${args.orderId}/payment/status`);
+            case 'getPaymentMethods':
+                return apiFetch('/payments/methods');
+            case 'getOrderEvents':
+                return apiFetch(`/orders/${args.orderId}/events`);
+            case 'generateShippingLabel':
+                return apiFetch(`/orders/${args.orderId}/shipping/label`, { method: 'POST', body: JSON.stringify(args) });
+            case 'getTrackingInfo':
+                return apiFetch(`/orders/${args.orderId}/tracking`);
+            // ─── Shipping quote ───
+            case 'calculateShipping':
+                return apiFetch('/shipping/quote', { method: 'POST', body: JSON.stringify(args) });
             default:
                 throw new Error(`Unknown function: ${name}`);
         }

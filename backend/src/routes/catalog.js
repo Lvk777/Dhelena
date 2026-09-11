@@ -263,6 +263,18 @@ router.delete('/banners/:id', auth, requireAdmin, async (req, res, next) => {
 });
 
 // ─── SETTINGS ──────────────────────────────────────────────────────
+// Server-side allowlist: only these setting keys may be created/updated via POST.
+// Keys not in this list (e.g. "notifications", "look_promotion") are internal and protected.
+const ALLOWED_SETTING_KEYS = new Set([
+    'general', 'store', 'address', 'shipping', 'payments',
+    'emails', 'social', 'seo', 'policies', 'maintenance',
+]);
+
+// Server-side public-keys list: is_public is determined HERE, never trusted from the client.
+const PUBLIC_SETTING_KEYS = new Set([
+    'general', 'store', 'shipping', 'social', 'seo', 'policies', 'maintenance',
+]);
+
 router.get('/settings', async (req, res, next) => {
     try {
         const isAdmin = req.user?.role === 'admin';
@@ -279,6 +291,27 @@ router.get('/settings', async (req, res, next) => {
     } catch (err) { next(err); }
 });
 
+router.post('/settings', auth, requireAdmin, async (req, res, next) => {
+    try {
+        const { key, value } = req.body;
+        if (!key) return res.status(400).json({ error: 'key é obrigatório' });
+        if (!ALLOWED_SETTING_KEYS.has(key)) {
+            return res.status(403).json({ error: 'Esta configuração não pode ser alterada por esta rota' });
+        }
+        // is_public is determined server-side — never trust the client
+        const is_public = PUBLIC_SETTING_KEYS.has(key);
+        const { rows } = await pool.query(
+            `INSERT INTO settings (key, value, is_public, updated_by)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (key) DO UPDATE SET value = $2, is_public = $3, updated_by = $4, updated_at = now()
+             RETURNING *, created_at as created_date, updated_at as updated_date`,
+            [key, JSON.stringify(value), is_public, req.user.id]
+        );
+        await logAudit(req.user.id, 'setting.create', 'setting', rows[0].id, { key, is_public }, req.ip);
+        res.status(201).json(rows[0]);
+    } catch (err) { next(err); }
+});
+
 router.patch('/settings/:id', auth, requireAdmin, async (req, res, next) => {
     try {
         const row = await updateRow('settings', req.params.id, req.body);
@@ -290,13 +323,20 @@ router.patch('/settings/:id', auth, requireAdmin, async (req, res, next) => {
 
 router.put('/settings/:key', auth, requireAdmin, async (req, res, next) => {
     try {
-        const { value, is_public } = req.body;
+        const { value } = req.body;
+        const key = req.params.key;
+        if (!ALLOWED_SETTING_KEYS.has(key)) {
+            return res.status(403).json({ error: 'Esta configuração não pode ser alterada por esta rota' });
+        }
+        // is_public is determined server-side — never trust the client
+        const is_public = PUBLIC_SETTING_KEYS.has(key);
         const { rows } = await pool.query(
             `UPDATE settings SET value = $1, is_public = $2, updated_by = $3, updated_at = now()
              WHERE key = $4 RETURNING *, created_at as created_date, updated_at as updated_date`,
-            [JSON.stringify(value), is_public ?? false, req.user.id, req.params.key]
+            [JSON.stringify(value), is_public, req.user.id, key]
         );
         if (rows.length === 0) return res.status(404).json({ error: 'Setting não encontrado' });
+        await logAudit(req.user.id, 'setting.update', 'setting', rows[0].id, { key, is_public }, req.ip);
         res.json(rows[0]);
     } catch (err) { next(err); }
 });

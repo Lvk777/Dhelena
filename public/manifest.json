@@ -1,0 +1,10 @@
+{
+  "name": "D'Helenas — Moda que conecta histórias",
+  "short_name": "D'Helenas",
+  "description": "Moda feminina e acessórios. Método Ponte: moda que conecta histórias, mulheres e gerações.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F9F6F2",
+  "theme_color": "#A5925A",
+  "lang": "pt-BR"
+}
