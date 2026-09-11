@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Check, CreditCard, QrCode, Banknote, Loader2, Store } from "lucide-react";
+import { Check, CreditCard, QrCode, Banknote, Loader2 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { useCatalog } from "@/context/CatalogContext";
 import { useAuth } from "@/lib/AuthContext";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
 import { base44 } from "@/api/base44Client";
-import { COLOR_SWATCHES, formatBRL, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
+import { COLOR_SWATCHES, formatBRL } from "@/data/products";
 import AddressFields from "@/components/AddressFields";
 import { validateCPF, validateEmail, validatePhone, validateCEP, maskCPF, maskPhone } from "@/lib/forms";
 import { track } from "@/lib/analytics";

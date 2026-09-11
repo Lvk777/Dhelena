@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Pencil, Trash2, Layers, Star, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Layers, Star } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import CollectionForm from "@/components/admin/collections/CollectionForm";

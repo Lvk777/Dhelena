@@ -55,7 +55,7 @@ export default function Profile() {
                     <Field label="E-mail" value={form.email} disabled />
                     <Field label="Telefone" value={form.phone} onChange={(v) => set("phone", maskPhone(v))} />
                     <Field label="CPF" value={form.cpf} onChange={(v) => set("cpf", maskCPF(v))} />
-                    <Field label="Data de nascimento" type="date" value={form.birth_date} onChange={(v) => set("birth_date", v)} />
+                    <Field label="Data de nascimento" type="date" max={new Date().toISOString().slice(0, 10)} value={form.birth_date} onChange={(v) => set("birth_date", v)} />
                 </div>
                 <div className="flex items-center gap-4 mt-8">
                     <button onClick={save} disabled={saving} className="btn-gold">
@@ -70,7 +70,7 @@ export default function Profile() {
     );
 }
 
-function Field({ label, value, onChange, type = "text", disabled }) {
+function Field({ label, value, onChange = undefined, type = "text", disabled = false, max = undefined }) {
     return (
         <div>
             <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
@@ -79,6 +79,7 @@ function Field({ label, value, onChange, type = "text", disabled }) {
                 value={value}
                 onChange={(e) => onChange?.(e.target.value)}
                 disabled={disabled}
+                max={max}
                 className="w-full border border-border bg-background px-4 py-3.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors disabled:opacity-50 disabled:bg-bone"
             />
         </div>

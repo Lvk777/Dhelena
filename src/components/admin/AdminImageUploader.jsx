@@ -1,15 +1,13 @@
 import React, { useState, useRef, useId, useCallback, useEffect } from "react";
 import {
-    Upload, X, Check, AlertCircle, RefreshCw, Trash2, Crop as CropIcon,
-    Image as ImageIcon, Loader2,
+    Upload, Check, AlertCircle, RefreshCw, Trash2,
 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import CropperModal from "@/components/admin/CropperModal";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import {
     validateImageFile, getDimensions, formatFileSize, formatAspectRatio,
-    cropAndResize, computeCropArea, blobToFile, generateMobileVersion,
-    IMAGE_PRESETS, computeOutputSize, BANNER_POSITION_PRESETS, PRESET_FOLDERS,
+    IMAGE_PRESETS, computeOutputSize, PRESET_FOLDERS,
 } from "@/lib/imageProcessor";
 
 /**

@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, X, Power, Tag, Calendar, Palette, Percent, Truck, ShoppingCart, Save, Layout, Eye, Check } from "lucide-react";
+import { Plus, Trash2, Power, Tag, Calendar, Palette, Percent, Truck, ShoppingCart, Eye, Check } from "lucide-react";
 import AdminWizard from "@/components/admin/AdminWizard";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminSelect from "@/components/admin/AdminSelect";
 import AdminTextarea from "@/components/admin/AdminTextarea";
 import AdminToggle from "@/components/admin/AdminToggle";
-import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminImageUploader from "@/components/admin/AdminImageUploader";
 import PromotionPreview from "@/components/admin/PromotionPreview";
 

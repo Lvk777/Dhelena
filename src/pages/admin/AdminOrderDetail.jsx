@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Truck, Check, Loader2, Copy, FileText, Printer, MapPin, QrCode, CreditCard, Banknote } from "lucide-react";
+import { ArrowLeft, Truck, Loader2, Copy, FileText, Printer, MapPin, QrCode, CreditCard, Banknote } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL, ORDER_STATUS, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
 import OrderTimeline from "@/components/checkout/OrderTimeline";

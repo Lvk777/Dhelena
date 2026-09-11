@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import Cropper from "react-easy-crop";
 import { X, ZoomIn, Check, AlertCircle } from "lucide-react";
 import { cropAndResize, computeCropArea, blobToFile, formatAspectRatio, checkImageQuality } from "@/lib/imageProcessor";

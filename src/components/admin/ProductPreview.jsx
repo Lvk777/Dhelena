@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Heart, Minus, Plus, Ruler, Truck, ChevronDown, Check, Star, ShoppingBag } from "lucide-react";
+import { Heart, Minus, Plus, Ruler, Truck, ChevronDown, ShoppingBag } from "lucide-react";
 import StorefrontFrame, { DeviceToggle } from "@/components/admin/StorefrontFrame";
 
 /**
