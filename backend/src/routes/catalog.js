@@ -6,14 +6,31 @@ import { searchLimiter } from '../middleware/rateLimiters.js';
 
 const router = Router();
 
+// ─── Query-field allowlists ─────────────────────────────────────────
+// Values are parameterized below, but identifiers cannot be parameterized by
+// PostgreSQL.  Never interpolate a client-provided field name into SQL.
+export const CATALOG_FILTER_FIELDS = {
+    products: new Set(['category', 'subcategory', 'collection', 'status']),
+    categories: new Set(['slug', 'parent_id']),
+    collections: new Set(['slug']),
+    banners: new Set(['active', 'position']),
+};
+
+export const CATALOG_SORT_FIELDS = {
+    products: new Set(['created_date', 'updated_date', 'name', 'price', 'sale_price', 'sold_count', 'rating', 'status']),
+    categories: new Set(['sort_order', 'name', 'slug', 'created_at', 'updated_at']),
+    collections: new Set(['sort_order', 'name', 'slug', 'created_at', 'updated_at']),
+    banners: new Set(['sort_order', 'priority', 'start_date', 'end_date', 'created_at', 'updated_at']),
+};
+
 // ─── Helper: build WHERE clause from query params ──────────────────
-function buildFilter(req, extraConditions = []) {
+export function buildFilter(req, allowedFields, extraConditions = []) {
     const conditions = [...extraConditions];
     const params = [];
     let idx = extraConditions.length + 1;
 
     for (const [key, value] of Object.entries(req.query)) {
-        if (['sort', 'limit', 'page'].includes(key)) continue;
+        if (['sort', 'limit', 'page'].includes(key) || !allowedFields.has(key)) continue;
 
         if (value === 'true' || value === 'false') {
             conditions.push(`${key} = $${idx++}`);
@@ -34,12 +51,11 @@ function buildFilter(req, extraConditions = []) {
     return { conditions, params };
 }
 
-function buildSort(req, defaultField, defaultDir = 'ASC') {
+export function buildSort(req, allowedFields, defaultField, defaultDir = 'ASC') {
     const sortField = req.query.sort || defaultField;
     const desc = sortField.startsWith('-');
     const field = desc ? sortField.slice(1) : sortField;
-    // Whitelist field names to prevent SQL injection
-    const safe = field.replace(/[^a-zA-Z_]/g, '');
+    const safe = allowedFields.has(field) ? field : defaultField;
     return `ORDER BY ${safe} ${desc ? 'DESC' : defaultDir === 'DESC' && !desc ? 'DESC' : 'ASC'}`;
 }
 
@@ -95,12 +111,12 @@ router.get('/products', searchLimiter, async (req, res, next) => {
         const isAdmin = req.user?.role === 'admin';
         const extra = isAdmin ? [] : ['status = $1'];
         const extraParams = isAdmin ? [] : ['published'];
-        const { conditions, params } = buildFilter(req, extra);
+        const { conditions, params } = buildFilter(req, CATALOG_FILTER_FIELDS.products, extra);
         const allParams = [...extraParams, ...params];
 
         let query = 'SELECT * FROM products';
         if (conditions.length > 0) query += ' WHERE ' + conditions.join(' AND ');
-        query += ' ' + buildSort(req, 'created_date', 'DESC');
+        query += ' ' + buildSort(req, CATALOG_SORT_FIELDS.products, 'created_date', 'DESC');
         // Cap page size to prevent unlimited queries
         const maxLimit = isAdmin ? 200 : 60;
         const limit = Math.min(parseInt(req.query.limit) || maxLimit, maxLimit);
@@ -151,10 +167,10 @@ router.delete('/products/:id', auth, requireAdmin, async (req, res, next) => {
 // ─── CATEGORIES ────────────────────────────────────────────────────
 router.get('/categories', async (req, res, next) => {
     try {
-        const { conditions, params } = buildFilter(req);
+        const { conditions, params } = buildFilter(req, CATALOG_FILTER_FIELDS.categories);
         let query = 'SELECT *, created_at as created_date, updated_at as updated_date FROM categories';
         if (conditions.length > 0) query += ' WHERE ' + conditions.join(' AND ');
-        query += ' ' + buildSort(req, 'sort_order', 'ASC');
+        query += ' ' + buildSort(req, CATALOG_SORT_FIELDS.categories, 'sort_order', 'ASC');
         if (req.query.limit) query += ` LIMIT ${parseInt(req.query.limit)}`;
         const { rows } = await pool.query(query, params);
         res.json(rows);
@@ -184,10 +200,10 @@ router.delete('/categories/:id', auth, requireAdmin, async (req, res, next) => {
 // ─── COLLECTIONS ───────────────────────────────────────────────────
 router.get('/collections', async (req, res, next) => {
     try {
-        const { conditions, params } = buildFilter(req);
+        const { conditions, params } = buildFilter(req, CATALOG_FILTER_FIELDS.collections);
         let query = 'SELECT *, created_at as created_date, updated_at as updated_date FROM collections';
         if (conditions.length > 0) query += ' WHERE ' + conditions.join(' AND ');
-        query += ' ' + buildSort(req, 'sort_order', 'ASC');
+        query += ' ' + buildSort(req, CATALOG_SORT_FIELDS.collections, 'sort_order', 'ASC');
         if (req.query.limit) query += ` LIMIT ${parseInt(req.query.limit)}`;
         const { rows } = await pool.query(query, params);
         res.json(rows);
@@ -220,7 +236,7 @@ router.get('/banners', async (req, res, next) => {
         const isAdmin = req.user?.role === 'admin';
         const extra = isAdmin ? [] : ['active = $1'];
         const extraParams = isAdmin ? [] : [true];
-        const { conditions, params } = buildFilter(req, extra);
+        const { conditions, params } = buildFilter(req, CATALOG_FILTER_FIELDS.banners, extra);
         const allParams = [...extraParams, ...params];
 
         let query = 'SELECT *, created_at as created_date, updated_at as updated_date FROM banners';
@@ -235,7 +251,7 @@ router.get('/banners', async (req, res, next) => {
             allParams.push(new Date());
         }
 
-        query += ' ' + buildSort(req, isAdmin ? 'sort_order' : 'priority', isAdmin ? 'ASC' : 'DESC');
+        query += ' ' + buildSort(req, CATALOG_SORT_FIELDS.banners, isAdmin ? 'sort_order' : 'priority', isAdmin ? 'ASC' : 'DESC');
         if (req.query.limit) query += ` LIMIT ${parseInt(req.query.limit)}`;
         const { rows } = await pool.query(query, allParams);
         res.json(rows);

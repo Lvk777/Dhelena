@@ -9,6 +9,11 @@ import * as me from '../services/melhorEnvio.js';
 import { buildShippingPackages, getPersistedShippingService } from '../lib/shipping.js';
 
 const router = Router();
+const COUPON_MUTABLE_FIELDS = new Set([
+    'code', 'description', 'discount_type', 'discount_value', 'min_order_value',
+    'max_uses', 'max_uses_per_customer', 'first_purchase_only', 'active',
+    'valid_from', 'valid_until',
+]);
 
 // Every order endpoint is private.  Individual handlers still distinguish
 // owner from admin, but anonymous requests must consistently receive 401
@@ -145,8 +150,7 @@ router.post('/coupons', auth, requireAdmin, async (req, res, next) => {
 
 router.patch('/coupons/:id', auth, requireAdmin, async (req, res, next) => {
     try {
-        const reserved = ['id', 'created_at', 'updated_at'];
-        const keys = Object.keys(req.body).filter(k => !reserved.includes(k));
+        const keys = Object.keys(req.body).filter(k => COUPON_MUTABLE_FIELDS.has(k));
         if (keys.length === 0) return res.status(400).json({ error: 'Nenhum campo para atualizar' });
         const setParts = keys.map((k, i) => `${k} = $${i + 1}`);
         const values = keys.map(k => req.body[k]);

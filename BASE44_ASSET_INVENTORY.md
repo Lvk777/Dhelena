@@ -61,3 +61,19 @@ A migração depende de acesso autorizado ao Supabase Storage e de um destino
 confirmado. Sem isso, o estado correto é manter os ativos atuais e não alterar
 as referências. A substituição do adaptador de compatibilidade `base44` é uma
 refatoração separada e não faz parte desta migração de ativos.
+
+## Script preparado (não executado)
+
+`scripts/prepare-base44-assets.mjs` gera no stdout um manifesto completo e
+reprodutível, com URL de origem, cada registro/campo que a referencia e pasta
+proposta de destino. O comando padrão é somente leitura lógica:
+
+```bash
+node scripts/prepare-base44-assets.mjs
+```
+
+O modo de cópia exige simultaneamente `--apply`, credenciais de Storage e a
+confirmação literal `BASE44_ASSET_MIGRATION_APPROVED=YES`. Mesmo nesse modo ele
+apenas cria cópias sob `base44-migration/<timestamp>/`; não atualiza banco ou
+frontend e não apaga arquivos. A troca de referências continua sendo uma etapa
+manual, revisada e reversível enquanto a origem estiver retida.

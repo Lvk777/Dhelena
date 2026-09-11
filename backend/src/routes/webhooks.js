@@ -11,6 +11,13 @@ import { validateWebhook as validateMEWebhook, getTracking } from '../services/m
 
 const router = Router();
 
+/** Verify the provider resource still represents this exact local order. */
+export function isVerifiedPaymentForOrder(order, { external_reference, total_amount, currency_id }) {
+    const equalAmount = Number.isFinite(Number(total_amount))
+        && Math.round(Number(total_amount) * 100) === Math.round(Number(order.total) * 100);
+    return external_reference === order.order_number && equalAmount && (!currency_id || currency_id === 'BRL');
+}
+
 async function markWebhookProcessed(provider, eventId) {
     await pool.query(
         'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
@@ -130,8 +137,11 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
             await markWebhookProcessed('mercado_pago', eventId);
             return res.status(200).json({ status: 'no_status' });
         }
-        const equalAmount = Number.isFinite(Number(mpTotal)) && Math.round(Number(mpTotal) * 100) === Math.round(Number(orderRef.total) * 100);
-        if (mpReference !== orderRef.order_number || !equalAmount || (mpCurrency && mpCurrency !== 'BRL')) {
+        if (!isVerifiedPaymentForOrder(orderRef, {
+            external_reference: mpReference,
+            total_amount: mpTotal,
+            currency_id: mpCurrency,
+        })) {
             console.warn('[Webhook MP] Rejected order with mismatched reference, amount, or currency');
             await markWebhookProcessed('mercado_pago', eventId);
             return res.status(200).json({ status: 'mismatched_payment' });
