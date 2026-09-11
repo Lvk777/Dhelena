@@ -204,6 +204,7 @@ router.get('/payments/methods', auth, async (req, res) => {
                 boleto: boletoEnabled && types.boleto,
             },
             methods,
+            public_key: process.env.MERCADO_PAGO_PUBLIC_KEY || null,
             environment: process.env.MERCADO_PAGO_ACCESS_TOKEN?.startsWith('TEST-') ? 'Teste' : 'Produção',
         });
     } catch (err) {

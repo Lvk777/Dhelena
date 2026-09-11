@@ -268,6 +268,8 @@ const functions = {
                 return apiFetch(`/orders/${args.orderId}/payment/card`, { method: 'POST', body: JSON.stringify(args) });
             case 'getPaymentStatus':
                 return apiFetch(`/orders/${args.orderId}/payment/status`);
+            case 'getPaymentMethods':
+                return apiFetch('/payments/methods');
             case 'getOrderEvents':
                 return apiFetch(`/orders/${args.orderId}/events`);
             case 'generateShippingLabel':

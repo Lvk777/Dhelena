@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { CreditCard, AlertCircle, Loader2, Check, X, QrCode } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { CreditCard, AlertCircle, Loader2, Check, X, QrCode, Banknote } from "lucide-react";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminToggle from "@/components/admin/AdminToggle";
@@ -9,7 +9,23 @@ import { base44 } from "@/api/base44Client";
 export default function PaymentsTab({ data, onChange }) {
     const [testing, setTesting] = useState(false);
     const [testResult, setTestResult] = useState(null);
+    const [methodsInfo, setMethodsInfo] = useState(null);
+    const [methodsLoading, setMethodsLoading] = useState(false);
     const set = (k, v) => onChange({ ...data, [k]: v });
+
+    useEffect(() => {
+        loadMethods();
+    }, []);
+
+    const loadMethods = async () => {
+        setMethodsLoading(true);
+        try {
+            const res = await base44.functions.invoke("getPaymentMethods");
+            setMethodsInfo(res);
+        } catch (e) {
+            setMethodsInfo({ error: e.response?.data?.error || e.message });
+        } finally { setMethodsLoading(false); }
+    };
 
     const testConnection = async () => {
         setTesting(true);
@@ -48,6 +64,29 @@ export default function PaymentsTab({ data, onChange }) {
                 <AdminInput label="Parcelas sem juros" type="number" value={data.interest_free_installments} onChange={(v) => set("interest_free_installments", parseInt(v) || 0)} />
                 <AdminInput label="Desconto no Pix (%)" type="number" value={data.pix_discount} onChange={(v) => set("pix_discount", parseFloat(v) || 0)} description="Desconto adicional para pagamentos via Pix" />
                 <div />
+            </AdminFormSection>
+
+            <AdminFormSection title="Métodos disponíveis no Mercado Pago" description="Métodos que a conta MP oferece — combine com os toggles acima">
+                <div className="sm:col-span-2">
+                    {methodsLoading && <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Verificando...</div>}
+                    {methodsInfo?.error && <p className="text-xs text-red-600">{methodsInfo.error}</p>}
+                    {methodsInfo && !methodsInfo.error && (
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-xs">
+                                <span className="text-muted-foreground">Ambiente:</span>
+                                <span className="font-medium">{methodsInfo.environment || "—"}</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                                <MethodBadge icon={QrCode} label="Pix" available={methodsInfo.available?.pix} enabled={methodsInfo.enabled?.pix} />
+                                <MethodBadge icon={CreditCard} label="Cartão" available={methodsInfo.available?.credit_card} enabled={methodsInfo.enabled?.credit_card} />
+                                <MethodBadge icon={Banknote} label="Débito" available={methodsInfo.available?.debit_card} enabled={methodsInfo.enabled?.debit_card} />
+                            </div>
+                            {methodsInfo.available && !methodsInfo.available.pix && (
+                                <p className="text-xs text-amber-600 mt-2">⚠ Pix indisponível nesta conta Mercado Pago. Verifique se a chave Pix está cadastrada e o ambiente é correto.</p>
+                            )}
+                        </div>
+                    )}
+                </div>
             </AdminFormSection>
 
             <AdminFormSection title="Status da integração">
@@ -91,6 +130,18 @@ export default function PaymentsTab({ data, onChange }) {
                     </p>
                 </div>
             </AdminFormSection>
+        </div>
+    );
+}
+
+function MethodBadge({ icon: Icon, label, available, enabled }) {
+    return (
+        <div className={`p-3 border rounded-lg text-center ${enabled ? "border-green-500/30 bg-green-500/5" : available ? "border-amber-500/30 bg-amber-500/5" : "border-border bg-muted/5"}`}>
+            <Icon className={`w-5 h-5 mx-auto mb-1 ${enabled ? "text-green-600" : available ? "text-amber-600" : "text-muted-foreground"}`} strokeWidth={1.5} />
+            <p className="text-xs font-medium">{label}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+                {enabled ? "Ativo" : available ? "Disponível (inativo)" : "Indisponível"}
+            </p>
         </div>
     );
 }
