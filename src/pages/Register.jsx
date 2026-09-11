@@ -34,9 +34,20 @@ export default function Register() {
         if (Object.keys(e2).length > 0) return;
         setLoading(true);
         try {
-            await client.auth.register({ email: form.email, password: form.password, full_name: form.name });
+            const registration = await client.auth.register({ email: form.email, password: form.password, full_name: form.name });
             track('sign_up');
-            setShowOtp(true);
+            if (registration?.pending_verification) {
+                setShowOtp(true);
+            } else {
+                try {
+                    await client.auth.updateMe({
+                        phone: form.phone,
+                        cpf: form.cpf,
+                        birth_date: form.birthDate,
+                    });
+                } catch (profileError) { console.error("Profile save error:", profileError); }
+                window.location.href = returnTo;
+            }
         } catch (err) {
             setError(err.message || "Falha no cadastro");
         } finally {

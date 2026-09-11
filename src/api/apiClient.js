@@ -195,8 +195,23 @@ const auth = {
         setStoredUser(data.user);
         return data.user;
     },
-    async verifyOtp() { throw new Error('OTP não implementado'); },
-    async resendOtp() { return {}; },
+    async verifyOtp({ email, otpCode }) {
+        if (!supabase) throw new Error('Verificação por código exige Supabase Auth.');
+        const { data, error } = await supabase.auth.verifyOtp({
+            email,
+            token: otpCode,
+            type: 'signup',
+        });
+        if (error || !data.session) throw error || new Error('Código inválido ou expirado.');
+        setToken(data.session.access_token);
+        return data.session;
+    },
+    async resendOtp(email) {
+        if (!supabase) throw new Error('Reenvio de código exige Supabase Auth.');
+        const { error } = await supabase.auth.resend({ type: 'signup', email });
+        if (error) throw error;
+        return {};
+    },
     async updateMe(data) {
         const user = await apiFetch('/auth/me', { method: 'PATCH', body: JSON.stringify(data) });
         setStoredUser(user);
