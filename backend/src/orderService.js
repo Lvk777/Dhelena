@@ -1,10 +1,12 @@
 import { pool, withTransaction } from './config/db.js';
 import { validateCoupon, logAudit, sendOrderNotifications } from './services.js';
+import * as melhorEnvio from './services/melhorEnvio.js';
+import { buildShippingPackages, selectShippingQuote } from './lib/shipping.js';
 
 // ─── placeOrder: atomic order creation ──────────────────────────────
 export async function placeOrder(userId, body, idempotencyKey) {
     const { items, shipping_address, shipping_method, coupon_code, payment_method, customer,
-            shipping_cost: quotedShippingCost, shipping_quote_id, shipping_carrier, shipping_service_name, shipping_delivery_time } = body;
+            shipping_quote_id } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
         throw Object.assign(new Error('Carrinho vazio'), { status: 400 });
@@ -63,12 +65,17 @@ export async function placeOrder(userId, body, idempotencyKey) {
                 product_name: product.name,
                 product_sku: product.sku,
                 product_image: product.images?.[0] || null,
+                product_category: product.category || '',
                 color_id: colorId,
                 color_name: color.name,
                 size,
                 quantity,
                 unit_price: unitPrice,
                 subtotal: itemSubtotal,
+                weight: Number(product.weight),
+                height: Number(product.package_height),
+                width: Number(product.package_width),
+                length: Number(product.package_length),
             });
         }
 
@@ -144,22 +151,53 @@ export async function placeOrder(userId, body, idempotencyKey) {
         }
         discount = Math.min(discount, subtotal); // Never exceed subtotal
 
-        // Calculate shipping
+        // Calculate shipping exclusively from the server-side cart and product
+        // dimensions.  Prices, carrier and delivery time supplied by the
+        // browser are intentionally ignored.
         let shippingCost = 0;
+        let shippingQuoteId = null;
+        let shippingCarrier = null;
+        let shippingServiceName = null;
+        let shippingDeliveryTime = null;
         const { rows: shipSettings } = await client.query("SELECT value FROM settings WHERE key = 'shipping'");
         const shipConfig = shipSettings[0]?.value || {};
         const freeThreshold = shipConfig.free_shipping_threshold || 499;
         const freeEnabled = shipConfig.free_shipping_enabled !== false;
 
         if (shipping_method === 'retirada') {
+            if (shipConfig.pickup_enabled !== true) {
+                throw Object.assign(new Error('Retirada no estoque não está disponível'), { status: 400 });
+            }
             shippingCost = 0;
-        } else if (freeEnabled && subtotal - discount >= freeThreshold) {
-            shippingCost = 0;
-        } else if (shipping_method === 'melhor_envio' && quotedShippingCost != null) {
-            // Use the Melhor Envio quoted price (validated by the backend's own /api/shipping/quote endpoint)
-            shippingCost = Number(quotedShippingCost);
         } else {
-            shippingCost = 29.90; // Default shipping cost
+            if (shipping_method !== 'melhor_envio' || !shipping_quote_id) {
+                throw Object.assign(new Error('Selecione uma opção de entrega válida'), { status: 400 });
+            }
+            const destinationPostalCode = String(shipping_address?.cep || shipping_address?.zip_code || '').replace(/\D/g, '');
+            if (destinationPostalCode.length !== 8) {
+                throw Object.assign(new Error('CEP de entrega inválido'), { status: 400 });
+            }
+            const { rows: addressRows } = await client.query("SELECT value FROM settings WHERE key = 'address'");
+            const originPostalCode = String(addressRows[0]?.value?.cep || '').replace(/\D/g, '');
+            if (originPostalCode.length !== 8) {
+                throw Object.assign(new Error('CEP de origem não configurado'), { status: 503 });
+            }
+            if (!shipConfig.melhor_envio_enabled) {
+                throw Object.assign(new Error('Melhor Envio não está ativado'), { status: 503 });
+            }
+            const packages = buildShippingPackages(orderItems);
+            const options = await melhorEnvio.calculateShipping({
+                fromPostalCode: originPostalCode,
+                toPostalCode: destinationPostalCode,
+                products: packages,
+                totalValue: subtotal - discount,
+            });
+            const quote = selectShippingQuote(options, shipping_quote_id);
+            shippingQuoteId = String(quote.id);
+            shippingCarrier = quote.company || null;
+            shippingServiceName = quote.service || quote.name || null;
+            shippingDeliveryTime = Number.isInteger(Number(quote.delivery_time)) ? Number(quote.delivery_time) : null;
+            shippingCost = freeEnabled && subtotal - discount >= freeThreshold ? 0 : Number(quote.price);
         }
 
         const total = subtotal - discount + shippingCost;
@@ -180,6 +218,10 @@ export async function placeOrder(userId, body, idempotencyKey) {
             coupon_code: coupon_code || null,
             promotion: appliedPromo ? { name: appliedPromo.name, title: appliedPromo.title, discount_percent: Number(appliedPromo.discount_percent) } : null,
             shipping_method,
+            shipping_quote_id: shippingQuoteId,
+            shipping_carrier: shippingCarrier,
+            shipping_service_name: shippingServiceName,
+            shipping_delivery_time: shippingDeliveryTime,
             payment_method,
             shipping_address,
             customer: customer || {},
@@ -192,7 +234,7 @@ export async function placeOrder(userId, body, idempotencyKey) {
              VALUES ($1, $2, 'recebido', 'pending', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
              RETURNING *`,
             [orderNum, userId, payment_method || null, shipping_method || null, shippingCost, discount, coupon_code || null, subtotal, total, JSON.stringify(snapshot), JSON.stringify(shipping_address), idempotencyKey,
-             shipping_quote_id || null, shipping_carrier || null, shipping_service_name || null, shipping_delivery_time || null]
+              shippingQuoteId, shippingCarrier, shippingServiceName, shippingDeliveryTime]
         );
         const order = orderRows[0];
 

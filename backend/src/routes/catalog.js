@@ -265,13 +265,13 @@ router.delete('/banners/:id', auth, requireAdmin, async (req, res, next) => {
 // ─── SETTINGS ──────────────────────────────────────────────────────
 // Server-side allowlist: only these setting keys may be created/updated via POST.
 // Keys not in this list (e.g. "notifications", "look_promotion") are internal and protected.
-const ALLOWED_SETTING_KEYS = new Set([
+export const ALLOWED_SETTING_KEYS = new Set([
     'general', 'store', 'address', 'shipping', 'payments',
     'emails', 'social', 'seo', 'policies', 'maintenance',
 ]);
 
 // Server-side public-keys list: is_public is determined HERE, never trusted from the client.
-const PUBLIC_SETTING_KEYS = new Set([
+export const PUBLIC_SETTING_KEYS = new Set([
     'general', 'store', 'shipping', 'social', 'seo', 'policies', 'maintenance',
 ]);
 
@@ -314,9 +314,25 @@ router.post('/settings', auth, requireAdmin, async (req, res, next) => {
 
 router.patch('/settings/:id', auth, requireAdmin, async (req, res, next) => {
     try {
-        const row = await updateRow('settings', req.params.id, req.body);
-        if (!row) return res.status(404).json({ error: 'Não encontrado' });
-        await logAudit(req.user.id, 'setting.update', 'setting', req.params.id, req.body, req.ip);
+        // Do not use generic updateRow here.  It would let an admin PATCH an
+        // arbitrary key/is_public field and bypass the settings allowlist.
+        if (!Object.prototype.hasOwnProperty.call(req.body, 'value')) {
+            return res.status(400).json({ error: 'value é obrigatório' });
+        }
+        const { rows: existing } = await pool.query('SELECT key FROM settings WHERE id = $1', [req.params.id]);
+        if (existing.length === 0) return res.status(404).json({ error: 'Não encontrado' });
+        const key = existing[0].key;
+        if (!ALLOWED_SETTING_KEYS.has(key)) {
+            return res.status(403).json({ error: 'Esta configuração não pode ser alterada por esta rota' });
+        }
+        const is_public = PUBLIC_SETTING_KEYS.has(key);
+        const { rows } = await pool.query(
+            `UPDATE settings SET value = $1, is_public = $2, updated_by = $3, updated_at = now()
+             WHERE id = $4 RETURNING *, created_at as created_date, updated_at as updated_date`,
+            [JSON.stringify(req.body.value), is_public, req.user.id, req.params.id]
+        );
+        const row = rows[0];
+        await logAudit(req.user.id, 'setting.update', 'setting', req.params.id, { key, is_public }, req.ip);
         res.json(row);
     } catch (err) { next(err); }
 });

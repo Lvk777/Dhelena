@@ -6,8 +6,17 @@ import { validateCoupon, adjustStock, logAudit } from '../services.js';
 import { orderLimiter, couponLimiter } from '../middleware/rateLimiters.js';
 import * as mp from '../services/mercadoPago.js';
 import * as me from '../services/melhorEnvio.js';
+import { buildShippingPackages } from '../lib/shipping.js';
 
 const router = Router();
+
+// Every order endpoint is private.  Individual handlers still distinguish
+// owner from admin, but anonymous requests must consistently receive 401
+// rather than a null-user exception.
+router.use('/orders', auth, (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: 'Autenticação necessária' });
+    next();
+});
 
 // ─── ORDERS ────────────────────────────────────────────────────────
 
@@ -367,7 +376,7 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
             payer,
             cardToken: card_token,
             installments: installments || 1,
-            paymentMethodId,
+            paymentMethodId: payment_method_id,
             issuerId,
             idempotencyKey,
         });
@@ -507,7 +516,7 @@ router.get('/orders/:id/events', auth, async (req, res) => {
 // POST /api/shipping/quote — calculate freight
 router.post('/shipping/quote', async (req, res) => {
     try {
-        const { to_postal_code, products, total_value } = req.body;
+        const { to_postal_code, items } = req.body;
         if (!to_postal_code) return res.status(400).json({ error: 'CEP de destino é obrigatório' });
 
         // Get origin CEP from settings
@@ -526,11 +535,49 @@ router.post('/shipping/quote', async (req, res) => {
             return res.status(400).json({ error: 'Melhor Envio não está ativado' });
         }
 
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ error: 'Itens do carrinho são obrigatórios' });
+        }
+
+        // Resolve package data from the catalog. The browser may only choose
+        // product IDs and quantities; it must never define dimensions/value.
+        const productIds = [...new Set(items.map((item) => item.productId))];
+        if (productIds.some((id) => typeof id !== 'string' || !id)) {
+            return res.status(400).json({ error: 'Itens de carrinho inválidos' });
+        }
+        const { rows: catalogProducts } = await pool.query(
+            `SELECT id, weight, package_height, package_width, package_length, price, sale_price
+             FROM products WHERE id = ANY($1::uuid[]) AND status = 'published'`,
+            [productIds]
+        );
+        if (catalogProducts.length !== productIds.length) {
+            return res.status(400).json({ error: 'Um ou mais produtos não estão disponíveis' });
+        }
+        const productsById = new Map(catalogProducts.map((product) => [product.id, product]));
+        let totalValue = 0;
+        const catalogItems = items.map((item) => {
+            const quantity = Number.parseInt(item.qty, 10);
+            const product = productsById.get(item.productId);
+            if (!Number.isInteger(quantity) || quantity <= 0 || !product) {
+                throw Object.assign(new Error('Quantidade de item inválida'), { status: 400 });
+            }
+            totalValue += Number(product.sale_price || product.price) * quantity;
+            return {
+                id: product.id,
+                quantity,
+                weight: product.weight,
+                height: product.package_height,
+                width: product.package_width,
+                length: product.package_length,
+            };
+        });
+        const packages = buildShippingPackages(catalogItems);
+
         const options = await me.calculateShipping({
             fromPostalCode,
             toPostalCode: to_postal_code.replace(/\D/g, ''),
-            products: products || [],
-            totalValue: total_value || 0,
+            products: packages,
+            totalValue,
         });
 
         res.json({ options });
