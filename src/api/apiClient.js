@@ -257,6 +257,26 @@ const functions = {
                 });
             case 'logAdminAction':
                 return {};
+            // ─── Payment functions ───
+            case 'testPaymentConnection':
+                return apiFetch('/payments/test');
+            case 'testShippingConnection':
+                return apiFetch('/shipping/test');
+            case 'createPixPayment':
+                return apiFetch(`/orders/${args.orderId}/payment/pix`, { method: 'POST', body: JSON.stringify(args) });
+            case 'createCardPayment':
+                return apiFetch(`/orders/${args.orderId}/payment/card`, { method: 'POST', body: JSON.stringify(args) });
+            case 'getPaymentStatus':
+                return apiFetch(`/orders/${args.orderId}/payment/status`);
+            case 'getOrderEvents':
+                return apiFetch(`/orders/${args.orderId}/events`);
+            case 'generateShippingLabel':
+                return apiFetch(`/orders/${args.orderId}/shipping/label`, { method: 'POST', body: JSON.stringify(args) });
+            case 'getTrackingInfo':
+                return apiFetch(`/orders/${args.orderId}/tracking`);
+            // ─── Shipping quote ───
+            case 'calculateShipping':
+                return apiFetch('/shipping/quote', { method: 'POST', body: JSON.stringify(args) });
             default:
                 throw new Error(`Unknown function: ${name}`);
         }

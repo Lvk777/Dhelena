@@ -25,9 +25,10 @@ const DEFAULTS = {
     social: { instagram: "", facebook: "", tiktok: "", whatsapp: "" },
     seo: { default_title: "D'Helenas — Boutique Digital", default_description: "", sharing_image: "", ga_id: "", meta_pixel_id: "" },
     policies: { return_policy: "", privacy_policy: "", terms_of_use: "", shipping_policy: "" },
+    maintenance: { maintenance_mode: false },
 };
 
-const PUBLIC_KEYS = ["general", "store", "shipping", "social", "seo", "policies"];
+const PUBLIC_KEYS = ["general", "store", "shipping", "social", "seo", "policies", "maintenance"];
 
 const SECTIONS = [
     { key: "general", label: "Geral", icon: Store, component: GeneralTab },

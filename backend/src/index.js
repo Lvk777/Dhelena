@@ -16,6 +16,7 @@ import analyticsRoutes from './routes/analytics.js';
 import contactRoutes from './routes/contact.js';
 import securityRoutes from './routes/security.js';
 import sitemapRoutes from './routes/sitemap.js';
+import webhookRoutes from './routes/webhooks.js';
 
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -71,6 +72,7 @@ app.use('/api', uploadRoutes);
 app.use('/api', lookRoutes);
 app.use('/api', securityRoutes);
 app.use('/api', sitemapRoutes);
+app.use('/api', webhookRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────
 app.get('/health', async (req, res) => {

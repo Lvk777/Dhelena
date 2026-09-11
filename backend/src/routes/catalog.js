@@ -267,12 +267,12 @@ router.delete('/banners/:id', auth, requireAdmin, async (req, res, next) => {
 // Keys not in this list (e.g. "notifications", "look_promotion") are internal and protected.
 const ALLOWED_SETTING_KEYS = new Set([
     'general', 'store', 'address', 'shipping', 'payments',
-    'emails', 'social', 'seo', 'policies',
+    'emails', 'social', 'seo', 'policies', 'maintenance',
 ]);
 
 // Server-side public-keys list: is_public is determined HERE, never trusted from the client.
 const PUBLIC_SETTING_KEYS = new Set([
-    'general', 'store', 'shipping', 'social', 'seo', 'policies',
+    'general', 'store', 'shipping', 'social', 'seo', 'policies', 'maintenance',
 ]);
 
 router.get('/settings', async (req, res, next) => {

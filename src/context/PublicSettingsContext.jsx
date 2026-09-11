@@ -9,6 +9,7 @@ const DEFAULTS = {
     shipping: { free_shipping_enabled: true, free_shipping_threshold: 499, pickup_enabled: true, pickup_name: "Retirada no estoque" },
     social: { instagram: "", facebook: "", tiktok: "", whatsapp: "" },
     policies: { return_policy: "", privacy_policy: "", terms_of_use: "", shipping_policy: "" },
+    maintenance: { maintenance_mode: false },
 };
 
 export function PublicSettingsProvider({ children }) {

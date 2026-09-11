@@ -1,13 +1,30 @@
-import React from "react";
-import { Truck, AlertCircle } from "lucide-react";
+import React, { useState } from "react";
+import { Truck, AlertCircle, Loader2, Check, X } from "lucide-react";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminTextarea from "@/components/admin/AdminTextarea";
 import AdminToggle from "@/components/admin/AdminToggle";
 import AdminSelect from "@/components/admin/AdminSelect";
+import { base44 } from "@/api/base44Client";
 
 export default function ShippingTab({ data, onChange }) {
+    const [testing, setTesting] = useState(false);
+    const [testResult, setTestResult] = useState(null);
     const set = (k, v) => onChange({ ...data, [k]: v });
+
+    const testConnection = async () => {
+        setTesting(true);
+        setTestResult(null);
+        try {
+            const res = await base44.functions.invoke('testShippingConnection');
+            setTestResult(res.data || res);
+        } catch (e) {
+            setTestResult({ connected: false, error: e.message || "Erro ao testar conexão" });
+        } finally {
+            setTesting(false);
+        }
+    };
+
     return (
         <div className="space-y-5">
             <AdminFormSection title="Retirada no estoque" icon={Truck}>
@@ -32,17 +49,45 @@ export default function ShippingTab({ data, onChange }) {
                     <AdminToggle label="Ativar Melhor Envio" checked={data.melhor_envio_enabled} onChange={(v) => set("melhor_envio_enabled", v)} description="Calcula frete real com transportadoras via Melhor Envio" />
                 </div>
                 <AdminSelect label="Ambiente" value={data.melhor_envio_mode} onChange={(v) => set("melhor_envio_mode", v)} options={[{ value: "sandbox", label: "Sandbox (teste)" }, { value: "production", label: "Produção" }]} />
+                <AdminInput label="Prazo adicional de preparação (dias)" type="number" value={data.melhor_envio_extra_days} onChange={(v) => set("melhor_envio_extra_days", parseInt(v) || 0)} description="Dias extras somados ao prazo da transportadora" />
                 <div className="sm:col-span-2">
-                    <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border border-border">
-                        <AlertCircle className="w-4 h-4 text-muted-foreground shrink-0" strokeWidth={1.5} />
-                        <div className="text-xs">
-                            <p className="text-muted-foreground">Status: <span className="text-foreground font-medium">Não configurado</span></p>
-                            <p className="text-muted-foreground mt-0.5">Configure o secret <code className="text-foreground">MELHOR_ENVIO_TOKEN</code> no ambiente seguro da Base44 (Settings → Environment Variables)</p>
+                    {testResult && (
+                        <div className={`flex items-start gap-2 p-3 rounded-lg border mb-3 ${
+                            testResult.connected
+                                ? "bg-green-500/5 border-green-500/20"
+                                : "bg-red-500/5 border-red-500/20"
+                        }`}>
+                            {testResult.connected ? (
+                                <Check className="w-4 h-4 text-green-600 shrink-0 mt-0.5" strokeWidth={1.5} />
+                            ) : (
+                                <X className="w-4 h-4 text-red-600 shrink-0 mt-0.5" strokeWidth={1.5} />
+                            )}
+                            <div className="text-xs">
+                                <p className="font-medium">
+                                    Status: <span className={testResult.connected ? "text-green-600" : "text-red-600"}>
+                                        {testResult.connected ? "Conectado" : "Erro"}
+                                    </span>
+                                </p>
+                                {testResult.environment && (
+                                    <p className="text-muted-foreground mt-0.5">Ambiente: {testResult.environment}</p>
+                                )}
+                                {testResult.error && (
+                                    <p className="text-red-600 mt-0.5">{testResult.error}</p>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                    <button onClick={() => console.log("Melhor Envio: integração pendente de configuração no ambiente")} className="btn-outline mt-3 text-xs">
-                        Testar conexão
+                    )}
+                    <button
+                        onClick={testConnection}
+                        disabled={testing}
+                        className="btn-outline text-xs flex items-center gap-2"
+                    >
+                        {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Truck className="w-3 h-3" />}
+                        {testing ? "Testando..." : "Testar conexão"}
                     </button>
+                    <p className="text-[10px] text-muted-foreground mt-2">
+                        O token nunca é exibido. Apenas o backend faz a chamada ao Melhor Envio.
+                    </p>
                 </div>
             </AdminFormSection>
         </div>
