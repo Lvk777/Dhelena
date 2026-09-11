@@ -338,15 +338,16 @@ if (isProduction) {
 ### Por que `1`
 
 - Railway adiciona o único hop de proxy em que o backend confia.
-- O backend não aceita uma cadeia arbitrária de `X-Forwarded-For` enviada por clientes.
-- Mantenha o domínio Railway fora do tráfego público e aplique limites por IP real na borda Cloudflare.
+- O backend limita a cadeia de `X-Forwarded-For`, mas não consegue autenticar a origem Cloudflare por configuração Express isolada.
+- Bloqueie acesso direto ao domínio Railway antes de usar `req.ip` como identidade; até isso, um cliente pode influenciar o cabeçalho encaminhado pelo proxy.
+- Aplique limites e logs por IP real na borda Cloudflare.
 
 ### Resultado
 
-- `req.ip` → IP do proxy Cloudflare no backend; a borda Cloudflare aplica limites pelo IP real
+- Via Cloudflare, `req.ip` → normalmente o IP do proxy Cloudflare; via domínio Railway público, não é identidade confiável do visitante
 - `req.protocol` → `https`
 - `req.secure` → `true`
-- Rate limiter e audit logs no backend registram o proxy Cloudflare, não o visitante; use regras Cloudflare para rate limit e observabilidade por IP real
+- Rate limiter e audit logs no backend são contenção/telemetria de origem; use regras Cloudflare para rate limit e observabilidade por IP real
 
 ---
 

@@ -6,7 +6,7 @@ import { pool } from '../config/db.js';
 export async function logSecurityEvent(req, eventName, metadata = {}) {
     try {
         // req.ip is derived by Express after the constrained trust-proxy rule.
-        // Never persist an untrusted X-Forwarded-For value supplied by a client.
+        // Treat it as a proxy identity until direct Railway access is blocked.
         const ip = req.ip || req.socket?.remoteAddress || 'unknown';
         // Mask IP for privacy (keep first 3 octets for IPv4)
         const maskedIp = maskIp(ip);

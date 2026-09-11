@@ -33,11 +33,11 @@ if (isProduction) {
 // ─── Trust proxy (Railway + Cloudflare) ───────────────────────────
 // In production, requests pass through Cloudflare → Railway proxy → Express.
 // Trust only the immediately connected proxy. This makes protocol detection
-// work without trusting an arbitrary X-Forwarded-For chain from a direct hit.
+// work without trusting an arbitrary X-Forwarded-For chain. It does not prove
+// that the upstream request came from Cloudflare: direct Railway traffic must
+// be blocked at infrastructure level before req.ip is a trusted identity.
 if (isProduction) {
-    // Trust only Railway's immediately-connected proxy.  Trusting every hop
-    // lets a client hitting a Railway domain directly forge X-Forwarded-For.
-    // Cloudflare must remain the public edge and enforce its own rate limits.
+    // Cloudflare must remain the public edge and enforce visitor-IP limits.
     app.set('trust proxy', 1);
 }
 
