@@ -686,7 +686,7 @@ SMTP_HOST=
 SMTP_PORT=
 SMTP_USER=
 SMTP_PASSWORD=
-EMAIL_FROM="D'Helenas <noreply@dhelenas.com.br>"
+EMAIL_FROM="D'Helenas <noreply@dhelenas.com>"
 
 # WhatsApp Business Cloud API
 WHATSAPP_ACCESS_TOKEN=
