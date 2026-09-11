@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import { pool } from './config/db.js';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 // ─── Supabase admin client (lazy init, only when configured) ───────
 let _supabaseAdmin = undefined;
 
@@ -40,12 +42,23 @@ export async function auth(req, res, next) {
         try {
             const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
             if (!error && user) {
-                // Look up by Supabase Auth ID first, then by email as fallback
-                // (IDs may differ if profile was created by seed, not by Supabase Auth)
-                const { rows } = await pool.query(
-                    'SELECT id, email, full_name, phone, role FROM profiles WHERE id = $1 OR email = $2 LIMIT 1',
-                    [user.id, user.email]
+                // Prefer the immutable Supabase Auth id.
+                let { rows } = await pool.query(
+                    'SELECT id, email, full_name, phone, cpf, birth_date, role FROM profiles WHERE id = $1 LIMIT 1',
+                    [user.id]
                 );
+                // Some legacy profiles pre-date the Supabase trigger and have a
+                // different UUID. A fallback is safe only after getUser() has
+                // cryptographically validated the Supabase token and only when
+                // that verified e-mail maps to exactly one profile. It preserves
+                // existing orders/admin access without accepting Express JWTs.
+                if (rows.length === 0 && user.email) {
+                    const legacy = await pool.query(
+                        'SELECT id, email, full_name, phone, cpf, birth_date, role FROM profiles WHERE lower(email) = lower($1) LIMIT 2',
+                        [user.email]
+                    );
+                    if (legacy.rows.length === 1) rows = legacy.rows;
+                }
                 if (rows.length > 0) req.user = rows[0];
             }
         } catch {
@@ -53,12 +66,14 @@ export async function auth(req, res, next) {
         }
     }
 
-    // ── Express JWT fallback (dev mode, or Supabase unreachable) ──
-    if (!req.user) {
+    // Express JWT is strictly a local-development compatibility mode.  In
+    // production a Supabase outage or invalid Supabase token must never turn
+    // into acceptance of a different JWT issuer.
+    if (!req.user && !isProduction && !supabaseAdmin) {
         try {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
             const { rows } = await pool.query(
-                'SELECT id, email, full_name, phone, role FROM profiles WHERE id = $1', [decoded.id]
+                'SELECT id, email, full_name, phone, cpf, birth_date, role FROM profiles WHERE id = $1', [decoded.id]
             );
             if (rows.length > 0) req.user = rows[0];
         } catch { /* invalid token — continue as anonymous */ }

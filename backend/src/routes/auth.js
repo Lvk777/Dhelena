@@ -6,8 +6,10 @@ import { auth } from '../middleware.js';
 import { loginLimiter, registerLimiter, forgotPasswordLimiter } from '../middleware/rateLimiters.js';
 import { logSecurityEvent } from '../middleware/securityLog.js';
 import { recordLoginEvent } from './security.js';
+import { normalizeBirthDate } from '../lib/validation.js';
 
 const router = Router();
+const isProduction = process.env.NODE_ENV === 'production';
 
 function signToken(user) {
     return jwt.sign(
@@ -20,6 +22,7 @@ function signToken(user) {
 // POST /api/auth/register
 router.post('/register', registerLimiter, async (req, res, next) => {
     try {
+        if (isProduction) return res.status(404).json({ error: 'Use o cadastro Supabase.' });
         const { email, password, full_name } = req.body;
         if (!email || !password) return res.status(400).json({ error: 'Email e senha são obrigatórios' });
 
@@ -50,6 +53,7 @@ router.post('/register', registerLimiter, async (req, res, next) => {
 // POST /api/auth/login (with brute force protection)
 router.post('/login', loginLimiter, async (req, res, next) => {
     try {
+        if (isProduction) return res.status(404).json({ error: 'Use o login Supabase.' });
         const { email, password } = req.body;
         if (!email || !password) return res.status(400).json({ error: 'Email e senha são obrigatórios' });
 
@@ -89,10 +93,13 @@ router.get('/me', auth, async (req, res) => {
 router.patch('/me', auth, async (req, res, next) => {
     try {
         if (!req.user) return res.status(401).json({ error: 'Não autenticado' });
-        const { full_name, phone } = req.body;
+        const { full_name, phone, cpf, birth_date } = req.body;
+        const normalizedBirthDate = normalizeBirthDate(birth_date);
         const { rows } = await pool.query(
-            'UPDATE profiles SET full_name = COALESCE($1, full_name), phone = COALESCE($2, phone), updated_at = now() WHERE id = $3 RETURNING id, email, full_name, phone, role',
-            [full_name || null, phone || null, req.user.id]
+            `UPDATE profiles SET full_name = COALESCE($1, full_name), phone = COALESCE($2, phone),
+             cpf = COALESCE($3, cpf), birth_date = COALESCE($4, birth_date), updated_at = now()
+             WHERE id = $5 RETURNING id, email, full_name, phone, cpf, birth_date, role`,
+            [full_name || null, phone || null, cpf || null, normalizedBirthDate, req.user.id]
         );
         res.json(rows[0]);
     } catch (err) { next(err); }
@@ -101,6 +108,9 @@ router.patch('/me', auth, async (req, res, next) => {
 // POST /api/auth/forgot-password
 router.post('/forgot-password', forgotPasswordLimiter, async (req, res, next) => {
     try {
+        // Password reset is handled directly by Supabase Auth in production.
+        // Never issue a legacy reset token from the production API.
+        if (isProduction) return res.json({});
         const { email } = req.body;
         // Always return generic success — never reveal if email exists
         const { rows } = await pool.query('SELECT * FROM profiles WHERE email = $1', [(email || '').toLowerCase()]);
@@ -118,6 +128,7 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req, res, next) =>
 // POST /api/auth/reset-password
 router.post('/reset-password', async (req, res, next) => {
     try {
+        if (isProduction) return res.status(404).json({ error: 'Use a recuperação de senha Supabase.' });
         const { resetToken, newPassword } = req.body;
         if (!resetToken || !newPassword) return res.status(400).json({ error: 'Token e nova senha são obrigatórios' });
 
