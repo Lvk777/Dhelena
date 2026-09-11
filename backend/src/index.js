@@ -20,6 +20,15 @@ import sitemapRoutes from './routes/sitemap.js';
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
 
+// ─── Trust proxy (Railway + Cloudflare) ───────────────────────────
+// In production, requests pass through Cloudflare → Railway proxy → Express.
+// Enable trust proxy so req.ip, req.protocol, and req.secure reflect the
+// real client, not the proxy. Cloudflare sanitizes X-Forwarded-For, so
+// trusting all hops is safe in this architecture.
+if (isProduction) {
+    app.set('trust proxy', true);
+}
+
 // ─── Security headers (Helmet) ────────────────────────────────────
 app.use(helmet({
     contentSecurityPolicy: false, // Disabled to not break Supabase/inline styles; configure per-domain in production
