@@ -23,3 +23,23 @@ export function selectShippingQuote(options, quoteId) {
     }
     return quote;
 }
+
+/**
+ * Whitelist the only checkout shipping fields a browser may influence. All
+ * amounts, dimensions, service names and deadlines stay outside this object.
+ */
+export function getCheckoutShippingInput(body = {}) {
+    return {
+        shipping_method: body.shipping_method,
+        shipping_quote_id: body.shipping_quote_id,
+        shipping_address: body.shipping_address,
+    };
+}
+
+/** A shipping label must use the quote persisted at checkout, never request input. */
+export function getPersistedShippingService(order) {
+    if (!order?.shipping_quote_id) {
+        throw Object.assign(new Error('Pedido sem serviço de frete confirmado'), { status: 409 });
+    }
+    return String(order.shipping_quote_id);
+}

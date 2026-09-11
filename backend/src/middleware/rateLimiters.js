@@ -1,8 +1,11 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
-// ─── Helper: key generator (IP + optional user) ───────────────────
+// ─── Helper: key generator (trusted proxy IP + optional user) ─────
 const keyGenerator = (req) => {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+    // Never read X-Forwarded-For directly: a client can forge it when the
+    // origin is reached directly. Express applies app.set('trust proxy', 1)
+    // before deriving req.ip. Per-visitor limiting belongs at Cloudflare.
+    const ip = ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown');
     return req.user?.id ? `${ip}:${req.user.id}` : ip;
 };
 

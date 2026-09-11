@@ -1,12 +1,12 @@
 import { pool, withTransaction } from './config/db.js';
 import { validateCoupon, logAudit, sendOrderNotifications } from './services.js';
 import * as melhorEnvio from './services/melhorEnvio.js';
-import { buildShippingPackages, selectShippingQuote } from './lib/shipping.js';
+import { buildShippingPackages, getCheckoutShippingInput, selectShippingQuote } from './lib/shipping.js';
 
 // ─── placeOrder: atomic order creation ──────────────────────────────
 export async function placeOrder(userId, body, idempotencyKey) {
-    const { items, shipping_address, shipping_method, coupon_code, payment_method, customer,
-            shipping_quote_id } = body;
+    const { items, coupon_code, payment_method, customer } = body;
+    const { shipping_address, shipping_method, shipping_quote_id } = getCheckoutShippingInput(body);
 
     if (!items || !Array.isArray(items) || items.length === 0) {
         throw Object.assign(new Error('Carrinho vazio'), { status: 400 });

@@ -214,7 +214,7 @@ Rotas de webhook que não devem receber challenge:
 | admin-protection | `/admin/*` | 50 req/min por IP |
 | api-general | `/api/*` | 200 req/min por IP |
 
-> O backend já tem rate limiting próprio (`globalLimiter`). Cloudflare é camada adicional.
+> O backend mantém um limite de contenção por proxy/origem. O limite por IP real do visitante deve ser configurado na borda Cloudflare; não trate o limite do backend como substituto enquanto a origem Railway puder ser acessada diretamente.
 
 ---
 
@@ -346,7 +346,7 @@ if (isProduction) {
 - `req.ip` → IP do proxy Cloudflare no backend; a borda Cloudflare aplica limites pelo IP real
 - `req.protocol` → `https`
 - `req.secure` → `true`
-- Rate limiter e audit logs no backend identificam o proxy; use as regras de rate limit da Cloudflare para limitar pelo IP real do visitante
+- Rate limiter e audit logs no backend registram o proxy Cloudflare, não o visitante; use regras Cloudflare para rate limit e observabilidade por IP real
 
 ---
 

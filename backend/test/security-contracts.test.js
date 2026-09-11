@@ -4,7 +4,7 @@ import test from 'node:test';
 import { normalizeBirthDate } from '../src/lib/validation.js';
 import { validateWebhookSignature } from '../src/services/mercadoPago.js';
 import { validateWebhook as validateMelhorEnvioWebhook } from '../src/services/melhorEnvio.js';
-import { buildShippingPackages, selectShippingQuote } from '../src/lib/shipping.js';
+import { buildShippingPackages, getCheckoutShippingInput, getPersistedShippingService, selectShippingQuote } from '../src/lib/shipping.js';
 import { ALLOWED_SETTING_KEYS, PUBLIC_SETTING_KEYS } from '../src/routes/catalog.js';
 import { getMaintenanceRedirect } from '../../src/lib/maintenance.js';
 
@@ -51,6 +51,30 @@ test('shipping accepts only catalog dimensions and a provider-returned service',
     assert.throws(() => buildShippingPackages([{ id: 'catalog-product', quantity: 1, weight: 0, height: 10, width: 15, length: 20 }]));
     assert.equal(selectShippingQuote([{ id: 1, price: 22.5 }], '1').price, 22.5);
     assert.throws(() => selectShippingQuote([{ id: 1, price: 22.5 }], 'tampered'));
+});
+
+test('checkout discards browser-supplied shipping cost, dimensions and service metadata', () => {
+    const trusted = getCheckoutShippingInput({
+        shipping_method: 'melhor_envio',
+        shipping_quote_id: 'provider-service-42',
+        shipping_address: { cep: '01001-000' },
+        shipping_cost: 0.01,
+        shipping_deadline: 0,
+        weight: 1,
+        height: 1,
+        width: 1,
+        length: 1,
+        shipping_service: 'invented-service',
+    });
+    assert.deepEqual(trusted, {
+        shipping_method: 'melhor_envio',
+        shipping_quote_id: 'provider-service-42',
+        shipping_address: { cep: '01001-000' },
+    });
+    assert.equal(selectShippingQuote([{ id: 'provider-service-42', price: 31.4 }], trusted.shipping_quote_id).price, 31.4);
+    assert.throws(() => selectShippingQuote([{ id: 'provider-service-42', price: 31.4 }], 'invented-service'));
+    assert.equal(getPersistedShippingService({ shipping_quote_id: 'provider-service-42' }), 'provider-service-42');
+    assert.throws(() => getPersistedShippingService({}));
 });
 
 test('settings allowlist does not expose internal settings or client-controlled visibility', () => {

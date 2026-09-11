@@ -6,7 +6,7 @@ import { validateCoupon, adjustStock, logAudit } from '../services.js';
 import { orderLimiter, couponLimiter } from '../middleware/rateLimiters.js';
 import * as mp from '../services/mercadoPago.js';
 import * as me from '../services/melhorEnvio.js';
-import { buildShippingPackages } from '../lib/shipping.js';
+import { buildShippingPackages, getPersistedShippingService } from '../lib/shipping.js';
 
 const router = Router();
 
@@ -657,7 +657,7 @@ router.post('/orders/:id/shipping/label', auth, requireAdmin, async (req, res) =
                 state: shippingAddress.state || 'SP',
                 postal_code: (shippingAddress.cep || '').replace(/\D/g, ''),
             },
-            serviceId: req.body.service_id || order.shipping_quote_id,
+            serviceId: getPersistedShippingService(order),
             products: items.map(i => ({ name: i.product_name, qty: i.quantity, price: Number(i.unit_price) })),
             orderNumber: order.order_number,
             totalValue: Number(order.total),
