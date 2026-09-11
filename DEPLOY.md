@@ -83,6 +83,7 @@ TIPO DO REGISTRO: CNAME
 NOME:            api
 TARGET:          <copie o target exato mostrado no Railway>
 PROXY:           ON (orange cloud)
+TTL:             Auto
 ```
 
 > **Não invente o target.** Copie exatamente o que o Railway mostrar.
@@ -189,22 +190,19 @@ Then: Managed Challenge
 
 > Isso aplica challenge para bots sem bloquear usuários legítimos.
 
-### Exceções de Webhook (NÃO bloquear)
+### Webhooks (não aplicar challenge genérico)
 
-Crie uma **WAF Custom Rule** com skip para:
-
-```
-Nome: webhook-bypass
-When: (URI Path starts with "/api/webhooks/")
-Then: Skip (all remaining rules)
-```
-
-Rotas de webhook que não devem receber challenge:
+Rotas de webhook que não devem receber challenge genérico:
 - `/api/webhooks/mercado-pago`
 - `/api/webhooks/melhor-envio`
 - `/api/webhooks/whatsapp`
 
-> **Nota:** Estas rotas ainda não existem no código. Quando implementadas, devem validar assinatura/secret do provedor — não exigir login.
+Não crie uma regra **Allow** e não faça `Skip (all remaining rules)` para todo
+`/api/webhooks/*`: isso também deixaria de avaliar proteções úteis. Primeiro
+verifique os Security Events. Se uma regra gerenciada específica bloquear um
+webhook legítimo, crie a exceção mais estreita possível para a rota e a regra
+afetada, mantendo rate limiting e observabilidade. As rotas devem continuar
+validando assinatura/secret no backend e não devem exigir login.
 
 ### Rate Limiting no Cloudflare
 
@@ -351,7 +349,37 @@ if (isProduction) {
 
 ---
 
-## 13. CHECKLIST DE DEPLOY
+## 13. ISOLAMENTO DA ORIGEM RAILWAY
+
+Um CNAME com proxy Cloudflare não torna, por si só, uma origem Railway privada:
+um domínio público gerado pelo Railway pode continuar recebendo conexões diretas.
+Não considere `req.ip` no backend como IP real do visitante enquanto esse caminho
+direto existir.
+
+Estado a validar no dashboard do Railway:
+
+1. **Settings → Networking**: registrar se há domínio público provisório e
+   testar `GET /health` nele apenas depois de o serviço estar saudável.
+2. O frontend deve usar exclusivamente `https://api.dhelenas.com`; nunca o
+   domínio provisório Railway.
+3. O tráfego entre serviços Railway deve usar
+   `api.railway.internal:PORT`, nunca o domínio público.
+
+Para isolamento real da API pública, a opção a projetar e aprovar separadamente
+é: executar um conector Cloudflare Tunnel em um serviço Railway, encaminhá-lo
+para `api.railway.internal:PORT` e remover todos os domínios públicos do serviço
+API. O Tunnel mantém conexão de saída e o hostname `api.dhelenas.com` permanece
+na Cloudflare. Isto requer um token do Tunnel como secret no Railway, revisão de
+webhooks e teste de failover; não configure parcialmente em produção.
+
+Não há evidência neste repositório de uma ACL de origem Railway já configurada.
+Não invente allowlists de IP nem assuma que o proxy Cloudflare bloqueia o domínio
+Railway direto. Enquanto o isolamento não for confirmado, mantenha rate limits
+no Cloudflare e os limitadores do backend apenas como contenção adicional.
+
+---
+
+## 14. CHECKLIST DE DEPLOY
 
 ### Railway (backend)
 
@@ -386,9 +414,14 @@ if (isProduction) {
 
 - [ ] Bot Fight Mode: ON
 - [ ] WAF Rule: admin-protection (Managed Challenge)
-- [ ] WAF Rule: webhook-bypass (Skip)
+- [ ] Verificar Security Events dos webhooks; criar exceção mínima somente se necessário
 - [ ] Rate Limit: /api/auth/login (10/min)
 - [ ] Rate Limit: /admin/* (50/min)
+
+### Origem Railway
+
+- [ ] Confirmar se existe domínio Railway público acessível diretamente
+- [ ] Definir e testar o desenho de isolamento por Cloudflare Tunnel antes de remover domínios públicos
 
 ### Frontend
 
