@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Truck, AlertCircle, Loader2, Check, X } from "lucide-react";
+import { Truck, Loader2, Check, X } from "lucide-react";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminTextarea from "@/components/admin/AdminTextarea";

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Check, CreditCard, QrCode, Banknote, Loader2, Store } from "lucide-react";
+import { Check, CreditCard, QrCode, Banknote, Loader2 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { useCatalog } from "@/context/CatalogContext";
 import { useAuth } from "@/lib/AuthContext";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
 import { base44 } from "@/api/base44Client";
-import { COLOR_SWATCHES, formatBRL, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
+import { COLOR_SWATCHES, formatBRL } from "@/data/products";
 import AddressFields from "@/components/AddressFields";
 import { validateCPF, validateEmail, validatePhone, validateCEP, maskCPF, maskPhone } from "@/lib/forms";
 import { track } from "@/lib/analytics";
@@ -134,11 +134,7 @@ export default function Checkout() {
             items: cart.map((i) => ({ productId: i.productId, colorId: i.colorId, size: i.size, qty: i.qty })),
             payment_method: paymentMethod === "pix" ? "pix" : paymentMethod === "credito" ? "credito" : "debito",
             shipping_method: shipping.method,
-            shipping_cost: shipping.cost,
             shipping_quote_id: shipping.quoteId,
-            shipping_carrier: shipping.carrier,
-            shipping_service_name: shipping.serviceName,
-            shipping_delivery_time: shipping.deliveryTime,
             coupon_code: couponCode || "",
         });
         return res;

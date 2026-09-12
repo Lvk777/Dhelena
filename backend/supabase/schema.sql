@@ -11,11 +11,18 @@ CREATE TABLE IF NOT EXISTS profiles (
     email         TEXT NOT NULL,
     full_name     TEXT,
     phone         TEXT,
+    cpf           TEXT,
+    birth_date    DATE,
     role          TEXT NOT NULL DEFAULT 'customer' CHECK (role IN ('admin', 'customer')),
     password_hash TEXT, -- only used in local dev (not in Supabase Auth)
     created_at    TIMESTAMPTZ DEFAULT now(),
     updated_at    TIMESTAMPTZ DEFAULT now()
 );
+
+-- Existing Supabase projects may already have profiles from an earlier schema.
+ALTER TABLE profiles
+    ADD COLUMN IF NOT EXISTS cpf TEXT,
+    ADD COLUMN IF NOT EXISTS birth_date DATE;
 
 -- Auto-create profile on signup
 CREATE OR REPLACE FUNCTION handle_new_user()

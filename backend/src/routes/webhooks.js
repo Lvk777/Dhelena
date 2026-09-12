@@ -4,44 +4,63 @@
  * Security comes from signature/secret validation.
  */
 import { Router } from 'express';
-import { pool } from '../config/db.js';
+import crypto from 'crypto';
+import { pool, withTransaction } from '../config/db.js';
 import { validateWebhookSignature, getOrderStatus, getPaymentStatus, mapPaymentStatus } from '../services/mercadoPago.js';
 import { validateWebhook as validateMEWebhook, getTracking } from '../services/melhorEnvio.js';
 
 const router = Router();
 
+/** Verify the provider resource still represents this exact local order. */
+export function isVerifiedPaymentForOrder(order, { external_reference, total_amount, currency_id }) {
+    const equalAmount = Number.isFinite(Number(total_amount))
+        && Math.round(Number(total_amount) * 100) === Math.round(Number(order.total) * 100);
+    return external_reference === order.order_number && equalAmount && (!currency_id || currency_id === 'BRL');
+}
+
+async function markWebhookProcessed(provider, eventId) {
+    await pool.query(
+        'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
+        [provider, eventId]
+    );
+}
+
+async function releaseWebhookForRetry(provider, eventId) {
+    // The event is inserted before calling a provider API. If processing then
+    // fails, remove this unprocessed reservation so the provider retry can run.
+    await pool.query(
+        'DELETE FROM webhook_events WHERE provider = $1 AND event_id = $2 AND processed = false',
+        [provider, eventId]
+    ).catch(() => {});
+}
+
 // ─── Mercado Pago Webhook ──────────────────────────────────────
 // POST /api/webhooks/mercado-pago
 router.post('/webhooks/mercado-pago', async (req, res) => {
     const event = req.body?.type || req.body?.event;
-    const dataId = req.body?.data?.id;
+    const dataId = req.query?.['data.id'] || req.body?.data?.id;
 
-    // Always respond 200 quickly to MP (it retries on non-200)
-    // Validate signature
+    // Only authenticated deliveries receive a 2xx response.
     if (!validateWebhookSignature(req)) {
-        console.warn('[Webhook MP] Invalid signature — rejecting');
-        // Log invalid attempt
-        await pool.query(
-            `INSERT INTO webhook_events (provider, event_id, event_type, payload, processed)
-             VALUES ('mercado_pago', $1, $2, $3, false)
-             ON CONFLICT DO NOTHING`,
-            [dataId || 'unknown', event || 'unknown', JSON.stringify(req.body)]
-        ).catch(() => {});
-        return res.status(200).json({ status: 'invalid_signature' });
+        console.warn('[Webhook MP] Invalid signature — rejected');
+        return res.status(401).json({ error: 'Assinatura inválida' });
     }
 
-    // Log the webhook event (idempotent)
-    const eventId = dataId ? String(dataId) : crypto.randomUUID();
+    // body.id is the provider's unique notification ID; data.id is the
+    // resource and can recur for each status transition.
+    const eventId = req.body?.id ? String(req.body.id) : (req.headers['x-request-id'] || crypto.randomUUID());
     try {
-        await pool.query(
+        const inserted = await pool.query(
             `INSERT INTO webhook_events (provider, event_id, event_type, payload, processed)
-             VALUES ('mercado_pago', $1, $2, $3, false)
-             ON CONFLICT (provider, event_id) DO NOTHING`,
+              VALUES ('mercado_pago', $1, $2, $3, false)
+              ON CONFLICT (provider, event_id) DO NOTHING
+              RETURNING id`,
             [eventId, event || 'unknown', JSON.stringify(req.body)]
         );
-    } catch (e) {
-        // If already processed (unique constraint), respond OK
-        return res.status(200).json({ status: 'already_processed' });
+        if (inserted.rowCount === 0) return res.status(200).json({ status: 'already_processed' });
+    } catch (err) {
+        console.error('[Webhook MP] Could not reserve event:', err.message);
+        return res.status(503).json({ error: 'Serviço temporariamente indisponível' });
     }
 
     try {
@@ -88,24 +107,44 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
 
         if (!orderRef) {
             console.warn('[Webhook MP] Order not found for event:', event, 'data.id:', dataId);
+            await markWebhookProcessed('mercado_pago', eventId);
             return res.status(200).json({ status: 'order_not_found' });
         }
 
         // Get the latest status from MP
         let mpStatus = null;
         let mpPaymentId = null;
+        let mpTotal = null;
+        let mpReference = null;
+        let mpCurrency = null;
         if (orderRef.mercado_pago_order_id) {
             const mpData = await getOrderStatus(orderRef.mercado_pago_order_id);
             mpStatus = mpData.mp_status;
             mpPaymentId = mpData.mp_payment_id;
+            mpTotal = mpData.total_amount;
+            mpReference = mpData.external_reference;
+            mpCurrency = mpData.currency_id;
         } else if (orderRef.mercado_pago_payment_id) {
             const payData = await getPaymentStatus(orderRef.mercado_pago_payment_id);
             mpStatus = payData.mp_status;
             mpPaymentId = payData.mp_payment_id;
+            mpTotal = payData.transaction_amount;
+            mpReference = payData.external_reference;
+            mpCurrency = payData.currency_id;
         }
 
         if (!mpStatus) {
+            await markWebhookProcessed('mercado_pago', eventId);
             return res.status(200).json({ status: 'no_status' });
+        }
+        if (!isVerifiedPaymentForOrder(orderRef, {
+            external_reference: mpReference,
+            total_amount: mpTotal,
+            currency_id: mpCurrency,
+        })) {
+            console.warn('[Webhook MP] Rejected order with mismatched reference, amount, or currency');
+            await markWebhookProcessed('mercado_pago', eventId);
+            return res.status(200).json({ status: 'mismatched_payment' });
         }
 
         const internalStatus = mapPaymentStatus(mpStatus);
@@ -128,30 +167,29 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
         const values = Object.values(updates);
         values.push(orderRef.id);
 
-        await pool.query(
-            `UPDATE orders SET ${setParts.join(', ')}, updated_at = now() WHERE id = $${values.length}`,
-            values
-        );
-
-        // Record timeline event
-        await pool.query(
-            `INSERT INTO order_events (order_id, event, description, metadata)
-             VALUES ($1, $2, $3, $4)`,
-            [orderRef.id, `payment_${internalStatus}`, `Pagamento ${internalStatus} via webhook MP`, JSON.stringify({ mp_status: mpStatus })]
-        );
-
-        // Mark webhook as processed
-        await pool.query(
-            'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
-            ['mercado_pago', eventId]
-        );
+        await withTransaction(async (client) => {
+            await client.query(
+                `UPDATE orders SET ${setParts.join(', ')}, updated_at = now() WHERE id = $${values.length}`,
+                values
+            );
+            await client.query(
+                `INSERT INTO order_events (order_id, event, description, metadata)
+                 VALUES ($1, $2, $3, $4)`,
+                [orderRef.id, `payment_${internalStatus}`, `Pagamento ${internalStatus} via webhook MP`, JSON.stringify({ mp_status: mpStatus })]
+            );
+            await client.query(
+                'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
+                ['mercado_pago', eventId]
+            );
+        });
 
         console.log(`[Webhook MP] Order ${orderRef.order_number} → payment_status: ${internalStatus}`);
         res.status(200).json({ status: 'ok', payment_status: internalStatus });
 
     } catch (err) {
         console.error('[Webhook MP] Error:', err.message);
-        res.status(200).json({ status: 'error', message: err.message });
+        await releaseWebhookForRetry('mercado_pago', eventId);
+        res.status(503).json({ error: 'Serviço temporariamente indisponível' });
     }
 });
 
@@ -160,25 +198,30 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
 router.post('/webhooks/melhor-envio', async (req, res) => {
     // Validate webhook
     if (!validateMEWebhook(req)) {
-        console.warn('[Webhook ME] Invalid token — rejecting');
-        return res.status(200).json({ status: 'invalid_token' });
+        console.warn('[Webhook ME] Invalid signature — rejected');
+        return res.status(401).json({ error: 'Assinatura inválida' });
     }
 
     const event = req.body?.event || req.body?.type;
-    const shipmentId = req.body?.shipment_id || req.body?.data?.shipment_id;
-    const trackingCode = req.body?.tracking_code || req.body?.data?.tracking_code;
+    const shipmentId = req.body?.shipment_id || req.body?.data?.shipment_id || req.body?.data?.id;
+    const trackingCode = req.body?.tracking_code || req.body?.data?.tracking_code || req.body?.data?.tracking;
     const status = req.body?.status || req.body?.data?.status;
 
-    const eventId = shipmentId ? String(shipmentId) : crypto.randomUUID();
+    // Melhor Envio does not send a separate delivery ID. The authenticated raw
+    // payload remains identical on retries and changes for later statuses.
+    const eventId = crypto.createHash('sha256').update(req.rawBody || JSON.stringify(req.body)).digest('hex');
     try {
-        await pool.query(
+        const inserted = await pool.query(
             `INSERT INTO webhook_events (provider, event_id, event_type, payload, processed)
-             VALUES ('melhor_envio', $1, $2, $3, false)
-             ON CONFLICT (provider, event_id) DO NOTHING`,
+              VALUES ('melhor_envio', $1, $2, $3, false)
+              ON CONFLICT (provider, event_id) DO NOTHING
+              RETURNING id`,
             [eventId, event || 'unknown', JSON.stringify(req.body)]
         );
-    } catch (e) {
-        return res.status(200).json({ status: 'already_processed' });
+        if (inserted.rowCount === 0) return res.status(200).json({ status: 'already_processed' });
+    } catch (err) {
+        console.error('[Webhook ME] Could not reserve event:', err.message);
+        return res.status(503).json({ error: 'Serviço temporariamente indisponível' });
     }
 
     try {
@@ -195,6 +238,7 @@ router.post('/webhooks/melhor-envio', async (req, res) => {
 
         if (!orderRef) {
             console.warn('[Webhook ME] Order not found for shipment:', shipmentId);
+            await markWebhookProcessed('melhor_envio', eventId);
             return res.status(200).json({ status: 'order_not_found' });
         }
 
@@ -226,34 +270,36 @@ router.post('/webhooks/melhor-envio', async (req, res) => {
             updates.delivered_at = new Date();
         }
 
-        if (Object.keys(updates).length > 0) {
+        await withTransaction(async (client) => {
+            if (Object.keys(updates).length > 0) {
             const setParts = Object.keys(updates).map((k, i) => `${k} = $${i + 1}`);
             const values = Object.values(updates);
             values.push(orderRef.id);
-            await pool.query(
+            await client.query(
                 `UPDATE orders SET ${setParts.join(', ')}, updated_at = now() WHERE id = $${values.length}`,
                 values
             );
 
             // Record timeline event
-            await pool.query(
+            await client.query(
                 `INSERT INTO order_events (order_id, event, description, metadata)
                  VALUES ($1, $2, $3, $4)`,
                 [orderRef.id, `shipping_${status || 'update'}`, `Status de envio: ${status || 'atualizado'}`, JSON.stringify({ shipment_id: shipmentId, tracking_code: trackingCode })]
             );
-        }
-
-        await pool.query(
-            'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
-            ['melhor_envio', eventId]
-        );
+            }
+            await client.query(
+                'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
+                ['melhor_envio', eventId]
+            );
+        });
 
         console.log(`[Webhook ME] Order ${orderRef.order_number} → shipping_status: ${status}`);
         res.status(200).json({ status: 'ok', shipping_status: status });
 
     } catch (err) {
         console.error('[Webhook ME] Error:', err.message);
-        res.status(200).json({ status: 'error', message: err.message });
+        await releaseWebhookForRetry('melhor_envio', eventId);
+        res.status(503).json({ error: 'Serviço temporariamente indisponível' });
     }
 });
 

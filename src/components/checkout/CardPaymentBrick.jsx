@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Loader2, CreditCard, AlertCircle, Check } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { formatBRL, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
+import { formatBRL } from "@/data/products";
 
 // Loads Mercado Pago SDK v2 from CDN
 function loadMPSdk(publicKey) {

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Plus, Pencil, Trash2, Image, Loader2, Eye, Monitor, Smartphone, AlertCircle, Tag, MapPin, Link2, Calendar, Check, Wand2 } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Plus, Pencil, Trash2, Image, Eye, AlertCircle, Tag, MapPin, Link2, Calendar, Check, Wand2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import AdminWizard from "@/components/admin/AdminWizard";
 import AdminInput from "@/components/admin/AdminInput";
@@ -7,7 +7,6 @@ import AdminTextarea from "@/components/admin/AdminTextarea";
 import AdminImageUploader from "@/components/admin/AdminImageUploader";
 import AdminToggle from "@/components/admin/AdminToggle";
 import AdminSelect from "@/components/admin/AdminSelect";
-import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import ErrorBoundary from "@/components/admin/ErrorBoundary";
 import StorefrontPreview from "@/components/admin/StorefrontPreview";

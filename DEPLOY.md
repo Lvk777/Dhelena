@@ -3,9 +3,9 @@
 ## Arquitetura
 
 ```
-dhelenas.com.br        → Frontend (Vite build estático)
-www.dhelenas.com.br    → 301 → dhelenas.com.br
-api.dhelenas.com.br    → Backend (Railway)
+dhelenas.com           → Frontend (Vite build estático)
+www.dhelenas.com       → 301 → dhelenas.com
+api.dhelenas.com       → Backend (Railway)
 Banco/Auth/Storage      → Supabase (inalterado)
 DNS + SSL + WAF         → Cloudflare
 ```
@@ -21,7 +21,7 @@ DNS + SSL + WAF         → Cloudflare
 | `process.env.PORT` | ✅ `backend/src/index.js:137` |
 | Bind `0.0.0.0` | ✅ `backend/src/index.js:138` |
 | `NODE_ENV=production` | ✅ Detectado em `index.js:21` |
-| `trust proxy` | ✅ `app.set('trust proxy', true)` em produção |
+| `trust proxy` | ✅ `app.set('trust proxy', 1)` em produção |
 | Health check `/health` | ✅ Retorna `{ status, database }` |
 | `railway.json` | ✅ `backend/railway.json` (NIXPACKS, start: `node src/index.js`) |
 | CORS via `CORS_ORIGIN` | ✅ Suporta comma-separated |
@@ -36,7 +36,7 @@ Defina estas variáveis no dashboard do Railway (serviço do backend):
 ```
 NODE_ENV=production
 PORT=3001
-CORS_ORIGIN=https://dhelenas.com.br,https://www.dhelenas.com.br
+CORS_ORIGIN=https://dhelenas.com,https://www.dhelenas.com
 DATABASE_URL=<sua connection string do Supabase>
 SUPABASE_URL=<sua URL do Supabase>
 SUPABASE_SERVICE_ROLE_KEY=<sua service role key>
@@ -47,7 +47,9 @@ INTEGRATION_ENCRYPTION_KEY=<sua chave de criptografia>
 MERCADO_PAGO_ACCESS_TOKEN=<seu token>
 MERCADO_PAGO_PUBLIC_KEY=<sua chave pública>
 MERCADO_PAGO_WEBHOOK_SECRET=<seu webhook secret>
-MELHOR_ENVIO_TOKEN=<seu token>
+MELHOR_ENVIO_TOKEN=<seu token OAuth>
+MELHOR_ENVIO_MODE=production
+MELHOR_ENVIO_WEBHOOK_SECRET=<secret do aplicativo Melhor Envio>
 ```
 
 > **NÃO use** `CORS_ORIGIN=*` em produção.
@@ -62,14 +64,14 @@ MELHOR_ENVIO_TOKEN=<seu token>
 
 ---
 
-## 2. DOMÍNIO DO BACKEND (api.dhelenas.com.br)
+## 2. DOMÍNIO DO BACKEND (api.dhelenas.com)
 
 ### No Railway
 
 1. Vá em **Settings → Networking → Generate Domain**
 2. Railway gera um domínio provisório: `xxxx.up.railway.app`
 2. Vá em **Settings → Custom Domains**
-3. Adicione: `api.dhelenas.com.br`
+3. Adicione: `api.dhelenas.com`
 4. Railway mostra o **CNAME target** (ex: `xxxx.up.railway.app`)
 
 ### ⚠️ PARE AQUI — Registro DNS necessário
@@ -81,6 +83,7 @@ TIPO DO REGISTRO: CNAME
 NOME:            api
 TARGET:          <copie o target exato mostrado no Railway>
 PROXY:           ON (orange cloud)
+TTL:             Auto
 ```
 
 > **Não invente o target.** Copie exatamente o que o Railway mostrar.
@@ -97,15 +100,15 @@ PROXY:           ON (orange cloud)
 | CNAME | `@` (ou A) | `<frontend-host>` | ON (proxied) |
 | CNAME | `www` | `<frontend-host>` | ON (proxied) |
 
-> Para o frontend (`dhelenas.com.br`), o target depende de onde o frontend está hospedado (Vercel, Netlify, Railway, etc.). Defina conforme sua plataforma de frontend.
+> Para o frontend (`dhelenas.com`), o target depende de onde o frontend está hospedado (Vercel, Netlify, Railway, etc.). Defina conforme sua plataforma de frontend.
 
 ### WWW → apex (redirecionamento 301)
 
 No Cloudflare:
 1. **Rules → Redirect Rules → Create rule**
 2. Nome: `www-to-apex`
-3. When: `Hostname eq www.dhelenas.com.br`
-4. Then: `Static redirect` → `https://dhelenas.com.br${http.request.uri.path}`
+3. When: `Hostname eq www.dhelenas.com`
+4. Then: `Static redirect` → `https://dhelenas.com${http.request.uri.path}`
 5. Status code: `301`
 6. Preserve query string: ON
 
@@ -187,22 +190,19 @@ Then: Managed Challenge
 
 > Isso aplica challenge para bots sem bloquear usuários legítimos.
 
-### Exceções de Webhook (NÃO bloquear)
+### Webhooks (não aplicar challenge genérico)
 
-Crie uma **WAF Custom Rule** com skip para:
-
-```
-Nome: webhook-bypass
-When: (URI Path starts with "/api/webhooks/")
-Then: Skip (all remaining rules)
-```
-
-Rotas de webhook que não devem receber challenge:
+Rotas de webhook que não devem receber challenge genérico:
 - `/api/webhooks/mercado-pago`
 - `/api/webhooks/melhor-envio`
 - `/api/webhooks/whatsapp`
 
-> **Nota:** Estas rotas ainda não existem no código. Quando implementadas, devem validar assinatura/secret do provedor — não exigir login.
+Não crie uma regra **Allow** e não faça `Skip (all remaining rules)` para todo
+`/api/webhooks/*`: isso também deixaria de avaliar proteções úteis. Primeiro
+verifique os Security Events. Se uma regra gerenciada específica bloquear um
+webhook legítimo, crie a exceção mais estreita possível para a rota e a regra
+afetada, mantendo rate limiting e observabilidade. As rotas devem continuar
+validando assinatura/secret no backend e não devem exigir login.
 
 ### Rate Limiting no Cloudflare
 
@@ -212,7 +212,7 @@ Rotas de webhook que não devem receber challenge:
 | admin-protection | `/admin/*` | 50 req/min por IP |
 | api-general | `/api/*` | 200 req/min por IP |
 
-> O backend já tem rate limiting próprio (`globalLimiter`). Cloudflare é camada adicional.
+> O backend mantém um limite de contenção por proxy/origem. O limite por IP real do visitante deve ser configurado na borda Cloudflare; não trate o limite do backend como substituto enquanto a origem Railway puder ser acessada diretamente.
 
 ---
 
@@ -234,10 +234,10 @@ app.use(cors({
 No Railway, defina:
 
 ```
-CORS_ORIGIN=https://dhelenas.com.br,https://www.dhelenas.com.br
+CORS_ORIGIN=https://dhelenas.com,https://www.dhelenas.com
 ```
 
-> Em produção sem `CORS_ORIGIN`, CORS é desativado (seguro). **Nunca use `*` em produção.**
+> Em produção, a API recusa inicializar sem `CORS_ORIGIN` ou se o valor for `*`.
 
 ---
 
@@ -248,7 +248,7 @@ CORS_ORIGIN=https://dhelenas.com.br,https://www.dhelenas.com.br
 O frontend usa:
 
 ```js
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const API_BASE = import.meta.env.VITE_API_URL;
 ```
 
 ### Para produção
@@ -256,7 +256,7 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api';
 Na plataforma de deploy do frontend (Vercel, Netlify, Railway), defina:
 
 ```
-VITE_API_URL=https://api.dhelenas.com.br
+VITE_API_URL=https://api.dhelenas.com
 ```
 
 > **Não hardcode** a URL no código. Use sempre a env var.
@@ -315,7 +315,7 @@ GET /health
 ### URL de produção
 
 ```
-https://api.dhelenas.com.br/health
+https://api.dhelenas.com/health
 ```
 
 > O `railway.json` já configura este path para healthcheck automático do Railway.
@@ -329,26 +329,57 @@ https://api.dhelenas.com.br/health
 ```js
 // backend/src/index.js
 if (isProduction) {
-    app.set('trust proxy', true);
+    app.set('trust proxy', 1);
 }
 ```
 
-### Por que `true`
+### Por que `1`
 
-- Cloudflare sanitiza `X-Forwarded-For` (sobrescreve com `CF-Connecting-IP`)
-- Railway adiciona um hop de proxy
-- `true` confia em todos os hops — seguro nesta arquitetura porque Cloudflare é a borda
+- Railway adiciona o único hop de proxy em que o backend confia.
+- O backend limita a cadeia de `X-Forwarded-For`, mas não consegue autenticar a origem Cloudflare por configuração Express isolada.
+- Bloqueie acesso direto ao domínio Railway antes de usar `req.ip` como identidade; até isso, um cliente pode influenciar o cabeçalho encaminhado pelo proxy.
+- Aplique limites e logs por IP real na borda Cloudflare.
 
 ### Resultado
 
-- `req.ip` → IP real do cliente (do Cloudflare)
+- Via Cloudflare, `req.ip` → normalmente o IP do proxy Cloudflare; via domínio Railway público, não é identidade confiável do visitante
 - `req.protocol` → `https`
 - `req.secure` → `true`
-- Rate limiter e audit logs usam IP correto
+- Rate limiter e audit logs no backend são contenção/telemetria de origem; use regras Cloudflare para rate limit e observabilidade por IP real
 
 ---
 
-## 13. CHECKLIST DE DEPLOY
+## 13. ISOLAMENTO DA ORIGEM RAILWAY
+
+Um CNAME com proxy Cloudflare não torna, por si só, uma origem Railway privada:
+um domínio público gerado pelo Railway pode continuar recebendo conexões diretas.
+Não considere `req.ip` no backend como IP real do visitante enquanto esse caminho
+direto existir.
+
+Estado a validar no dashboard do Railway:
+
+1. **Settings → Networking**: registrar se há domínio público provisório e
+   testar `GET /health` nele apenas depois de o serviço estar saudável.
+2. O frontend deve usar exclusivamente `https://api.dhelenas.com`; nunca o
+   domínio provisório Railway.
+3. O tráfego entre serviços Railway deve usar
+   `api.railway.internal:PORT`, nunca o domínio público.
+
+Para isolamento real da API pública, a opção a projetar e aprovar separadamente
+é: executar um conector Cloudflare Tunnel em um serviço Railway, encaminhá-lo
+para `api.railway.internal:PORT` e remover todos os domínios públicos do serviço
+API. O Tunnel mantém conexão de saída e o hostname `api.dhelenas.com` permanece
+na Cloudflare. Isto requer um token do Tunnel como secret no Railway, revisão de
+webhooks e teste de failover; não configure parcialmente em produção.
+
+Não há evidência neste repositório de uma ACL de origem Railway já configurada.
+Não invente allowlists de IP nem assuma que o proxy Cloudflare bloqueia o domínio
+Railway direto. Enquanto o isolamento não for confirmado, mantenha rate limits
+no Cloudflare e os limitadores do backend apenas como contenção adicional.
+
+---
+
+## 14. CHECKLIST DE DEPLOY
 
 ### Railway (backend)
 
@@ -356,12 +387,12 @@ if (isProduction) {
 - [ ] Definir todas as env vars (seção 1)
 - [ ] Verificar deploy e health check
 - [ ] Gerar domínio provisório
-- [ ] Adicionar domínio customizado `api.dhelenas.com.br`
+- [ ] Adicionar domínio customizado `api.dhelenas.com`
 - [ ] Copiar CNAME target
 
 ### Cloudflare (DNS)
 
-- [ ] Adicionar domínio `dhelenas.com.br` ao Cloudflare
+- [ ] Adicionar domínio `dhelenas.com` ao Cloudflare
 - [ ] Criar CNAME `api` → target do Railway (proxied)
 - [ ] Criar registro para `@` (frontend) (proxied)
 - [ ] Criar CNAME `www` → frontend (proxied)
@@ -383,22 +414,27 @@ if (isProduction) {
 
 - [ ] Bot Fight Mode: ON
 - [ ] WAF Rule: admin-protection (Managed Challenge)
-- [ ] WAF Rule: webhook-bypass (Skip)
+- [ ] Verificar Security Events dos webhooks; criar exceção mínima somente se necessário
 - [ ] Rate Limit: /api/auth/login (10/min)
 - [ ] Rate Limit: /admin/* (50/min)
 
+### Origem Railway
+
+- [ ] Confirmar se existe domínio Railway público acessível diretamente
+- [ ] Definir e testar o desenho de isolamento por Cloudflare Tunnel antes de remover domínios públicos
+
 ### Frontend
 
-- [ ] Definir `VITE_API_URL=https://api.dhelenas.com.br`
+- [ ] Definir `VITE_API_URL=https://api.dhelenas.com`
 - [ ] `npm run build` → `dist/`
 - [ ] Deploy no hosting escolhido
-- [ ] Configurar domínio `dhelenas.com.br`
+- [ ] Configurar domínio `dhelenas.com`
 
 ### Validação
 
-- [ ] `https://api.dhelenas.com.br/health` → `{ status: ok }`
-- [ ] `https://dhelenas.com.br` → Home
-- [ ] `https://www.dhelenas.com.br` → 301 → `https://dhelenas.com.br`
+- [ ] `https://api.dhelenas.com/health` → `{ status: ok }`
+- [ ] `https://dhelenas.com` → Home
+- [ ] `https://www.dhelenas.com` → 301 → `https://dhelenas.com`
 - [ ] Login funciona
 - [ ] Admin funciona
 - [ ] Produtos, coleções, carrinho, checkout

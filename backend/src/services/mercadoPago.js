@@ -32,7 +32,7 @@ async function mpFetch(path, options = {}) {
             ...(options.headers || {}),
         },
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
         const msg = data.message || data.error || `Mercado Pago API error (${res.status})`;
         throw Object.assign(new Error(msg), { status: res.status, mpError: data });
@@ -187,6 +187,7 @@ export async function getOrderStatus(mpOrderId) {
         mp_status_detail: payment.status_detail,
         mp_payment_id: payment.id,
         total_amount: data.total_amount,
+        currency_id: data.currency_id || data.currency || payment.currency_id || payment.currency,
         external_reference: data.external_reference,
     };
 }
@@ -199,6 +200,7 @@ export async function getPaymentStatus(mpPaymentId) {
         mp_payment_id: data.id,
         external_reference: data.external_reference,
         transaction_amount: data.transaction_amount,
+        currency_id: data.currency_id || data.currency,
     };
 }
 
@@ -227,19 +229,28 @@ export function validateWebhookSignature(req) {
 
     // Validate timestamp (reject if older than 5 minutes)
     const now = Math.floor(Date.now() / 1000);
-    if (Math.abs(now - parseInt(ts)) > 300) return false;
+    const timestamp = Number(ts);
+    // Mercado Pago examples use both Unix seconds and milliseconds.
+    const timestampSeconds = timestamp > 1e11 ? Math.floor(timestamp / 1000) : timestamp;
+    if (!Number.isFinite(timestampSeconds) || Math.abs(now - timestampSeconds) > 300) return false;
 
-    // The manifest to hash depends on the notification type
-    // For Orders API webhooks, the body contains data.id
-    const dataId = req.body?.data?.id || '';
-    const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
+    // Mercado Pago omits manifest pairs that are absent from the request.
+    // Query data.id takes precedence over the body value.
+    const dataId = req.query?.['data.id'] || req.body?.data?.id || '';
+    const manifest = [
+        dataId && `id:${dataId};`,
+        requestId && `request-id:${requestId};`,
+        `ts:${ts};`,
+    ].filter(Boolean).join('');
 
     // Use Node's crypto to validate
     const hmac = crypto.createHmac('sha256', secret);
     hmac.update(manifest);
     const computed = hmac.digest('hex');
 
-    return computed === v1;
+    const expected = Buffer.from(computed, 'utf8');
+    const received = Buffer.from(v1, 'utf8');
+    return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }
 
 // ─── Map MP status to internal payment status ─────────────────

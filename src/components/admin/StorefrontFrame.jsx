@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Search, Heart, ShoppingBag, Menu, Monitor, Smartphone, ArrowRight, Truck, Star, ChevronDown, Minus, Plus, Ruler, Check, X } from "lucide-react";
+import { Search, Heart, ShoppingBag, Menu, Monitor, Smartphone } from "lucide-react";
 
 /**
  * StorefrontFrame — shared storefront chrome (announcement bar + header + footer)

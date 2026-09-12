@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 /**
  * Melhor Envio Service — Freight calculation, label generation, tracking
  * Uses MELHOR_ENVIO_TOKEN (server-side only)
@@ -221,15 +223,15 @@ export async function getTrackingByCode(trackingCode) {
     };
 }
 
-// ─── Validate webhook (Melhor Envio uses token in header) ─────
+// ─── Validate webhook (official Melhor Envio HMAC-SHA256) ─────
 export function validateWebhook(req) {
-    const token = process.env.MELHOR_ENVIO_TOKEN;
-    if (!token) return false;
+    const secret = process.env.MELHOR_ENVIO_WEBHOOK_SECRET;
+    const signature = req.headers['x-me-signature'];
+    if (!secret || typeof signature !== 'string' || !Buffer.isBuffer(req.rawBody)) return false;
 
-    // Melhor Envio sends the webhook token in the header
-    const headerToken = req.headers['x-hub-signature'] || req.headers['authorization']?.replace('Bearer ', '') || req.body?.webhook_token;
-
-    if (!headerToken) return false;
-
-    return headerToken === token;
+    // The official X-ME-Signature representation is base64.
+    const expected = crypto.createHmac('sha256', secret).update(req.rawBody).digest('base64');
+    const expectedBuffer = Buffer.from(expected, 'utf8');
+    const receivedBuffer = Buffer.from(signature, 'utf8');
+    return expectedBuffer.length === receivedBuffer.length && crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
 }

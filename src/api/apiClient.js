@@ -5,7 +5,10 @@
 
 import { supabase } from './supabaseClient.js';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? null : '/api');
+if (!API_BASE) {
+    throw new Error('VITE_API_URL é obrigatória em produção; a API não pode usar o fallback /api do SPA.');
+}
 const TOKEN_KEY = 'dhelena_access_token';
 const USER_KEY = 'dhelena_auth_user';
 
@@ -14,6 +17,11 @@ function getToken() { return localStorage.getItem(TOKEN_KEY); }
 function setToken(token) { token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY); }
 function getStoredUser() { try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch { return null; } }
 function setStoredUser(user) { user ? localStorage.setItem(USER_KEY, JSON.stringify(user)) : localStorage.removeItem(USER_KEY); }
+
+/** @param {string} message @param {number} status @param {unknown} [data] */
+function createApiError(message, status, data) {
+    return Object.assign(new Error(message), { status, response: data === undefined ? undefined : { data } });
+}
 
 // ─── Sync Supabase session → localStorage token ────────────────────
 // Only sync when supabase has a session; don't clear JWT token on sign-out events
@@ -37,17 +45,12 @@ async function apiFetch(path, options = {}) {
     if (res.status === 401) {
         setToken(null);
         setStoredUser(null);
-        const err = new Error('Não autenticado');
-        err.status = 401;
-        throw err;
+        throw createApiError('Não autenticado', 401);
     }
 
     if (!res.ok) {
         const error = await res.json().catch(() => ({ error: res.statusText }));
-        const err = new Error(error.error || error.message || 'Request failed');
-        err.status = res.status;
-        err.response = { data: error };
-        throw err;
+        throw createApiError(error.error || error.message || 'Request failed', res.status, error);
     }
 
     return res.json();
@@ -124,16 +127,16 @@ const auth = {
         // If no supabase session (or supabase not configured), check JWT token
         const token = getToken();
         if (!token) {
-            const err = new Error('Not authenticated');
-            err.status = 401;
-            throw err;
+            throw createApiError('Not authenticated', 401);
         }
         try {
             const user = await apiFetch('/auth/me');
             setStoredUser(user);
             return user;
         } catch (err) {
-            if (err.status === 401) {
+            /** @type {{ status?: number }} */
+            const apiError = /** @type {any} */ (err);
+            if (apiError.status === 401) {
                 setToken(null);
                 setStoredUser(null);
             }
@@ -192,8 +195,23 @@ const auth = {
         setStoredUser(data.user);
         return data.user;
     },
-    async verifyOtp() { throw new Error('OTP não implementado'); },
-    async resendOtp() { return {}; },
+    async verifyOtp({ email, otpCode }) {
+        if (!supabase) throw new Error('Verificação por código exige Supabase Auth.');
+        const { data, error } = await supabase.auth.verifyOtp({
+            email,
+            token: otpCode,
+            type: 'signup',
+        });
+        if (error || !data.session) throw error || new Error('Código inválido ou expirado.');
+        setToken(data.session.access_token);
+        return data.session;
+    },
+    async resendOtp(email) {
+        if (!supabase) throw new Error('Reenvio de código exige Supabase Auth.');
+        const { error } = await supabase.auth.resend({ type: 'signup', email });
+        if (error) throw error;
+        return {};
+    },
     async updateMe(data) {
         const user = await apiFetch('/auth/me', { method: 'PATCH', body: JSON.stringify(data) });
         setStoredUser(user);

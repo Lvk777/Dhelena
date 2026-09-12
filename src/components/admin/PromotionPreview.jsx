@@ -1,5 +1,5 @@
 import React from "react";
-import { Tag, Truck, ShoppingCart, Layers, Home, ArrowRight } from "lucide-react";
+import { Tag, Truck, ShoppingCart, Layers, Home } from "lucide-react";
 import StorefrontFrame, { DeviceToggle } from "@/components/admin/StorefrontFrame";
 
 /**

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Pencil, Trash2, Ticket, Loader2, Check, Tag, Percent, Settings, Calendar } from "lucide-react";
+import { Plus, Pencil, Trash2, Ticket, Check, Tag, Percent, Settings, Calendar } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL } from "@/data/products";
 import AdminWizard from "@/components/admin/AdminWizard";

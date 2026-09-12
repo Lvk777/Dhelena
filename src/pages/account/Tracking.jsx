@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Truck, ExternalLink, Package } from "lucide-react";
+import { Truck, ExternalLink } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL, ORDER_STATUS } from "@/data/products";
 

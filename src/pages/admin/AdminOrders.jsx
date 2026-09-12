@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Search, SlidersHorizontal, X, Copy, ChevronDown, ChevronLeft, ChevronRight, Eye, User, Package, Calendar, CreditCard, Truck, Check, AlertCircle, ShoppingCart } from "lucide-react";
+import { Search, SlidersHorizontal, X, Copy, ChevronDown, ChevronLeft, ChevronRight, Eye, User, Check, ShoppingCart } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL, ORDER_STATUS, PAYMENT_LABELS, SHIPPING_LABELS } from "@/data/products";
 

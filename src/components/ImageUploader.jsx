@@ -1,10 +1,9 @@
 import React, { useState, useRef, useCallback } from "react";
-import { Upload, X, GripVertical, Star, Image as ImageIcon, AlertCircle } from "lucide-react";
+import { Upload, X, GripVertical, Star, Image as ImageIcon } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import CropperModal from "@/components/admin/CropperModal";
 import {
-    validateImageFile, getDimensions, formatFileSize,
-    cropAndResize, computeCropArea, blobToFile,
+    validateImageFile,
     IMAGE_PRESETS, computeOutputSize, PRESET_FOLDERS,
 } from "@/lib/imageProcessor";
 
