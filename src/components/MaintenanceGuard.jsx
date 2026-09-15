@@ -10,8 +10,15 @@ export default function MaintenanceGuard({ children }) {
     const { user } = useAuth();
     const location = useLocation();
 
-    // Wait for settings to load
-    if (loading) return children;
+    // Do not render guarded routes until maintenance status is known. Otherwise a
+    // nested auth guard can redirect before maintenance gets a chance to run.
+    if (loading) {
+        return (
+            <div className="fixed inset-0 flex items-center justify-center" role="status" aria-label="Carregando loja">
+                <div className="w-8 h-8 border-4 border-[hsl(var(--bone))] border-t-[hsl(var(--gold))] rounded-full animate-spin" />
+            </div>
+        );
+    }
 
     const isMaintenance = settings.maintenance?.maintenance_mode === true;
     const isAdmin = user?.role === "admin";

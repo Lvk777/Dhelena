@@ -179,10 +179,13 @@ test('settings allowlist does not expose internal settings or client-controlled 
     assert.equal(PUBLIC_SETTING_KEYS.has('payments'), false);
 });
 
-test('maintenance preserves login, admin, API and webhook routes while redirecting visitors', () => {
-    assert.equal(getMaintenanceRedirect({ maintenanceEnabled: true, isAdmin: false, pathname: '/colecao' }), '/em-breve');
+test('maintenance redirects store routes before auth while preserving exempt routes', () => {
+    for (const pathname of ['/', '/produtos', '/carrinho', '/checkout']) {
+        assert.equal(getMaintenanceRedirect({ maintenanceEnabled: true, isAdmin: false, pathname }), '/em-breve');
+    }
     assert.equal(getMaintenanceRedirect({ maintenanceEnabled: true, isAdmin: true, pathname: '/colecao' }), null);
     for (const pathname of ['/login', '/admin', '/api/orders', '/webhooks/melhor-envio', '/em-breve']) {
         assert.equal(getMaintenanceRedirect({ maintenanceEnabled: true, isAdmin: false, pathname }), null);
     }
+    assert.equal(getMaintenanceRedirect({ maintenanceEnabled: false, isAdmin: false, pathname: '/checkout' }), null);
 });
