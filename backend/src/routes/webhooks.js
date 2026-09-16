@@ -8,14 +8,15 @@ import crypto from 'crypto';
 import { pool, withTransaction } from '../config/db.js';
 import { validateWebhookSignature, getOrderStatus, getPaymentStatus, mapPaymentStatus } from '../services/mercadoPago.js';
 import { validateWebhook as validateMEWebhook, getTracking } from '../services/melhorEnvio.js';
+import { getVerifiedPaymentForOrder, hasPaymentStateChanged, isVerifiedPaymentForOrder } from '../lib/paymentVerification.js';
 
 const router = Router();
 
-/** Verify the provider resource still represents this exact local order. */
-export function isVerifiedPaymentForOrder(order, { external_reference, total_amount, currency_id }) {
-    const equalAmount = Number.isFinite(Number(total_amount))
-        && Math.round(Number(total_amount) * 100) === Math.round(Number(order.total) * 100);
-    return external_reference === order.order_number && equalAmount && (!currency_id || currency_id === 'BRL');
+export { isVerifiedPaymentForOrder };
+
+export function createWebhookEventId(req, preferNotificationId = false) {
+    if (preferNotificationId && req.body?.id) return String(req.body.id);
+    return crypto.createHash('sha256').update(req.rawBody || JSON.stringify(req.body)).digest('hex');
 }
 
 async function markWebhookProcessed(provider, eventId) {
@@ -48,7 +49,7 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
 
     // body.id is the provider's unique notification ID; data.id is the
     // resource and can recur for each status transition.
-    const eventId = req.body?.id ? String(req.body.id) : (req.headers['x-request-id'] || crypto.randomUUID());
+    const eventId = createWebhookEventId(req, true);
     try {
         const inserted = await pool.query(
             `INSERT INTO webhook_events (provider, event_id, event_type, payload, processed)
@@ -66,12 +67,13 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
     try {
         // Find the order by external_reference or MP order ID
         let orderRef = null;
+        let resolvedOrderResource = null;
 
         // For Orders API webhooks, the body contains data.id which is the MP order ID
         if (dataId) {
             // Try to find by MP order ID
             const { rows } = await pool.query(
-                'SELECT * FROM orders WHERE mercado_pago_order_id = $1 OR mercado_pago_external_reference = $1',
+                'SELECT * FROM orders WHERE mercado_pago_order_id = $1 OR mercado_pago_payment_id = $1',
                 [String(dataId)]
             );
             if (rows.length > 0) {
@@ -80,6 +82,7 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
                 // Try to query MP for the order to get external_reference
                 try {
                     const mpData = await getOrderStatus(String(dataId));
+                    resolvedOrderResource = mpData;
                     if (mpData.external_reference) {
                         const { rows: refRows } = await pool.query(
                             'SELECT * FROM orders WHERE order_number = $1',
@@ -91,6 +94,7 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
                     // Maybe it's a payment ID, not an order ID
                     try {
                         const payData = await getPaymentStatus(parseInt(dataId));
+                        resolvedOrderResource = payData;
                         if (payData.external_reference) {
                             const { rows: refRows } = await pool.query(
                                 'SELECT * FROM orders WHERE order_number = $1',
@@ -111,47 +115,25 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
             return res.status(200).json({ status: 'order_not_found' });
         }
 
-        // Get the latest status from MP
-        let mpStatus = null;
-        let mpPaymentId = null;
-        let mpTotal = null;
-        let mpReference = null;
-        let mpCurrency = null;
-        if (orderRef.mercado_pago_order_id) {
-            const mpData = await getOrderStatus(orderRef.mercado_pago_order_id);
-            mpStatus = mpData.mp_status;
-            mpPaymentId = mpData.mp_payment_id;
-            mpTotal = mpData.total_amount;
-            mpReference = mpData.external_reference;
-            mpCurrency = mpData.currency_id;
-        } else if (orderRef.mercado_pago_payment_id) {
-            const payData = await getPaymentStatus(orderRef.mercado_pago_payment_id);
-            mpStatus = payData.mp_status;
-            mpPaymentId = payData.mp_payment_id;
-            mpTotal = payData.transaction_amount;
-            mpReference = payData.external_reference;
-            mpCurrency = payData.currency_id;
-        }
-
-        if (!mpStatus) {
-            await markWebhookProcessed('mercado_pago', eventId);
-            return res.status(200).json({ status: 'no_status' });
-        }
-        if (!isVerifiedPaymentForOrder(orderRef, {
-            external_reference: mpReference,
-            total_amount: mpTotal,
-            currency_id: mpCurrency,
-        })) {
-            console.warn('[Webhook MP] Rejected order with mismatched reference, amount, or currency');
+        let verifiedPayment;
+        try {
+            verifiedPayment = await getVerifiedPaymentForOrder(orderRef, { getOrderStatus, getPaymentStatus }, resolvedOrderResource);
+        } catch (error) {
+            if (error.code !== 'PAYMENT_MISMATCH') throw error;
+            console.warn('[Webhook MP] Rejected order with mismatched reference, amount, currency, or status');
             await markWebhookProcessed('mercado_pago', eventId);
             return res.status(200).json({ status: 'mismatched_payment' });
         }
 
+        const mpStatus = verifiedPayment.mp_status;
+        const mpPaymentId = verifiedPayment.mp_payment_id;
         const internalStatus = mapPaymentStatus(mpStatus);
+        const stateChanged = hasPaymentStateChanged(orderRef, verifiedPayment, internalStatus);
 
         // Update order idempotently
         const updates = {
             mercado_pago_status: mpStatus,
+            mercado_pago_status_detail: verifiedPayment.mp_status_detail,
             payment_status: internalStatus,
             payment_updated_at: new Date(),
         };
@@ -172,11 +154,13 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
                 `UPDATE orders SET ${setParts.join(', ')}, updated_at = now() WHERE id = $${values.length}`,
                 values
             );
-            await client.query(
-                `INSERT INTO order_events (order_id, event, description, metadata)
-                 VALUES ($1, $2, $3, $4)`,
-                [orderRef.id, `payment_${internalStatus}`, `Pagamento ${internalStatus} via webhook MP`, JSON.stringify({ mp_status: mpStatus })]
-            );
+            if (stateChanged) {
+                await client.query(
+                    `INSERT INTO order_events (order_id, event, description, metadata)
+                     VALUES ($1, $2, $3, $4)`,
+                    [orderRef.id, `payment_${internalStatus}`, `Pagamento ${internalStatus} via webhook MP`, JSON.stringify({ mp_status: mpStatus })]
+                );
+            }
             await client.query(
                 'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
                 ['mercado_pago', eventId]
@@ -209,7 +193,7 @@ router.post('/webhooks/melhor-envio', async (req, res) => {
 
     // Melhor Envio does not send a separate delivery ID. The authenticated raw
     // payload remains identical on retries and changes for later statuses.
-    const eventId = crypto.createHash('sha256').update(req.rawBody || JSON.stringify(req.body)).digest('hex');
+    const eventId = createWebhookEventId(req);
     try {
         const inserted = await pool.query(
             `INSERT INTO webhook_events (provider, event_id, event_type, payload, processed)

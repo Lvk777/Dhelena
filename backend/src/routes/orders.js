@@ -6,7 +6,8 @@ import { validateCoupon, adjustStock, logAudit } from '../services.js';
 import { orderLimiter, couponLimiter } from '../middleware/rateLimiters.js';
 import * as mp from '../services/mercadoPago.js';
 import * as me from '../services/melhorEnvio.js';
-import { buildShippingPackages, getPersistedShippingService } from '../lib/shipping.js';
+import { assertLabelEligible, buildShippingPackages, getPersistedShippingService } from '../lib/shipping.js';
+import { getVerifiedPaymentForOrder, hasPaymentStateChanged } from '../lib/paymentVerification.js';
 
 const router = Router();
 const COUPON_MUTABLE_FIELDS = new Set([
@@ -29,7 +30,7 @@ router.use('/orders', auth, (req, res, next) => {
 router.post('/orders', auth, orderLimiter, async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'É necessário estar autenticado para criar um pedido' });
     try {
-        const idempotencyKey = req.headers['idempotency-key'] || null;
+        const idempotencyKey = req.headers['x-idempotency-key'] || req.headers['idempotency-key'];
         const order = await placeOrder(req.user.id, req.body, idempotencyKey);
         res.status(201).json(order);
     } catch (err) {
@@ -450,42 +451,29 @@ router.get('/orders/:id/payment/status', auth, async (req, res) => {
 
         const order = rows[0];
 
-        // If we have MP order ID, query MP for latest status
-        if (order.mercado_pago_order_id) {
-            try {
-                const mpData = await mp.getOrderStatus(order.mercado_pago_order_id);
-                const internalStatus = mp.mapPaymentStatus(mpData.mp_status);
+        const mpData = await getVerifiedPaymentForOrder(order, mp);
+        const internalStatus = mp.mapPaymentStatus(mpData.mp_status);
 
-                // Update if status changed
-                if (mpData.mp_status !== order.mercado_pago_status) {
-                    await pool.query(
-                        `UPDATE orders SET
-                            mercado_pago_status = $1,
-                            payment_status = $2,
-                            payment_updated_at = now(),
-                            paid_at = CASE WHEN $2 = 'approved' AND paid_at IS NULL THEN now() ELSE paid_at END,
-                            status = CASE WHEN $2 = 'approved' AND status = 'recebido' THEN 'pagamento_aprovado' ELSE status END,
-                            updated_at = now()
-                         WHERE id = $3`,
-                        [mpData.mp_status, internalStatus, order.id]
-                    );
-                }
-
-                return res.json({
-                    payment_status: internalStatus,
-                    mp_status: mpData.mp_status,
-                    mp_status_detail: order.mercado_pago_status_detail,
-                    payment_method: order.payment_method,
-                });
-            } catch (e) {
-                // Fall back to stored status
-            }
+        if (hasPaymentStateChanged(order, mpData, internalStatus)) {
+            await pool.query(
+                `UPDATE orders SET
+                    mercado_pago_status = $1,
+                    mercado_pago_status_detail = $2,
+                    mercado_pago_payment_id = COALESCE($3, mercado_pago_payment_id),
+                    payment_status = $4,
+                    payment_updated_at = now(),
+                    paid_at = CASE WHEN $4 = 'approved' AND paid_at IS NULL THEN now() ELSE paid_at END,
+                    status = CASE WHEN $4 = 'approved' AND status = 'recebido' THEN 'pagamento_aprovado' ELSE status END,
+                    updated_at = now()
+                 WHERE id = $5`,
+                [mpData.mp_status, mpData.mp_status_detail, mpData.mp_payment_id, internalStatus, order.id]
+            );
         }
 
         res.json({
-            payment_status: order.payment_status,
-            mp_status: order.mercado_pago_status,
-            mp_status_detail: order.mercado_pago_status_detail,
+            payment_status: internalStatus,
+            mp_status: mpData.mp_status,
+            mp_status_detail: mpData.mp_status_detail,
             payment_method: order.payment_method,
         });
     } catch (err) {
@@ -573,6 +561,7 @@ router.post('/shipping/quote', async (req, res) => {
                 height: product.package_height,
                 width: product.package_width,
                 length: product.package_length,
+                unit_price: Number(product.sale_price || product.price),
             };
         });
         const packages = buildShippingPackages(catalogItems);
@@ -603,19 +592,18 @@ router.get('/shipping/test', auth, requireAdmin, async (req, res) => {
 
 // POST /api/orders/:id/shipping/label — generate shipping label (admin)
 router.post('/orders/:id/shipping/label', auth, requireAdmin, async (req, res) => {
+    let client;
     try {
-        const { rows } = await pool.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+        client = await pool.connect();
+        await client.query('SELECT pg_advisory_lock(hashtext($1))', [`shipping-label:${req.params.id}`]);
+
+        const { rows } = await client.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
         if (rows.length === 0) return res.status(404).json({ error: 'Pedido não encontrado' });
 
-        const order = rows[0];
+        let order = assertLabelEligible(rows[0]);
 
-        // Verify payment is approved
-        if (order.payment_status !== 'approved') {
-            return res.status(400).json({ error: 'Pagamento não confirmado. Gere a etiqueta apenas após o pagamento ser aprovado.' });
-        }
-
-        // Idempotency: if already has shipment ID, return existing
-        if (order.melhor_envio_shipment_id) {
+        // A completed label is returned without purchasing or generating again.
+        if (order.melhor_envio_shipment_id && order.shipping_status === 'generated') {
             return res.json({
                 shipment_id: order.melhor_envio_shipment_id,
                 tracking_code: order.tracking_code,
@@ -624,83 +612,108 @@ router.post('/orders/:id/shipping/label', auth, requireAdmin, async (req, res) =
         }
 
         // Get origin address from settings
-        const { rows: addrRows } = await pool.query("SELECT value FROM settings WHERE key = 'address'");
+        const { rows: addrRows } = await client.query("SELECT value FROM settings WHERE key = 'address'");
         const address = addrRows[0]?.value || {};
-        const { rows: genRows } = await pool.query("SELECT value FROM settings WHERE key = 'general'");
+        const { rows: genRows } = await client.query("SELECT value FROM settings WHERE key = 'general'");
         const general = genRows[0]?.value || {};
-
-        // Get order items
-        const { rows: items } = await pool.query('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
 
         const shippingAddress = order.shipping_address || {};
         const snapshot = order.snapshot || {};
         const customer = snapshot.customer || {};
+        const products = (snapshot.items || []).map(item => ({
+            name: item.product_name,
+            qty: item.quantity,
+            price: Number(item.unit_price),
+        }));
 
-        const labels = await me.generateLabel({
-            from: {
-                name: general.store_name || 'D\'Helenas',
-                phone: general.phone || '',
-                email: general.email || '',
-                document: general.cnpj || general.cpf || '',
-                address: address.street || '',
-                number: address.number || '',
-                district: address.district || '',
-                city: address.city || '',
-                state: address.state || 'SP',
-                postal_code: (address.cep || '').replace(/\D/g, ''),
-            },
-            to: {
-                name: customer.name || '',
-                phone: customer.phone || '',
-                email: customer.email || '',
-                document: (customer.cpf || '').replace(/\D/g, ''),
-                address: shippingAddress.street || '',
-                number: shippingAddress.number || '',
-                district: shippingAddress.district || '',
-                city: shippingAddress.city || '',
-                state: shippingAddress.state || 'SP',
-                postal_code: (shippingAddress.cep || '').replace(/\D/g, ''),
-            },
-            serviceId: getPersistedShippingService(order),
-            products: items.map(i => ({ name: i.product_name, qty: i.quantity, price: Number(i.unit_price) })),
-            orderNumber: order.order_number,
-            totalValue: Number(order.total),
-        });
+        let shipmentId = order.melhor_envio_shipment_id;
+        if (!shipmentId) {
+            const shipment = await me.addShipmentToCart({
+                from: {
+                    name: general.store_name || 'D\'Helenas',
+                    phone: general.phone || '',
+                    email: general.email || '',
+                    document: general.cnpj || general.cpf || '',
+                    state_register: general.state_register || '',
+                    address: address.street || '',
+                    number: address.number || '',
+                    district: address.district || '',
+                    city: address.city || '',
+                    state: address.state || 'SP',
+                    postal_code: (address.cep || '').replace(/\D/g, ''),
+                },
+                to: {
+                    name: customer.name || '',
+                    phone: customer.phone || '',
+                    email: customer.email || '',
+                    document: (customer.cpf || '').replace(/\D/g, ''),
+                    address: shippingAddress.street || '',
+                    number: shippingAddress.number || '',
+                    district: shippingAddress.district || '',
+                    city: shippingAddress.city || '',
+                    state: shippingAddress.state || 'SP',
+                    postal_code: (shippingAddress.cep || '').replace(/\D/g, ''),
+                },
+                serviceId: getPersistedShippingService(order),
+                products,
+                volumes: snapshot.shipping_packages,
+                orderNumber: order.order_number,
+                totalValue: Number(order.subtotal) - Number(order.discount),
+            });
+            shipmentId = shipment.shipment_id;
+            await client.query(
+                `UPDATE orders SET melhor_envio_shipment_id = $1, shipping_status = 'cart_created', updated_at = now() WHERE id = $2`,
+                [shipmentId, order.id]
+            );
+            order = { ...order, melhor_envio_shipment_id: shipmentId, shipping_status: 'cart_created' };
+        }
 
-        if (labels.length === 0) throw new Error('Nenhuma etiqueta gerada');
+        if (order.shipping_status === 'cart_created') {
+            await me.checkoutShipments([shipmentId]);
+            await client.query("UPDATE orders SET shipping_status = 'purchased', updated_at = now() WHERE id = $1", [order.id]);
+            order = { ...order, shipping_status: 'purchased' };
+        }
 
-        const label = labels[0];
+        if (order.shipping_status === 'purchased') {
+            await me.generateShipments([shipmentId]);
+            await client.query("UPDATE orders SET shipping_status = 'generated', updated_at = now() WHERE id = $1", [order.id]);
+            order = { ...order, shipping_status: 'generated' };
+        }
 
-        // Save shipping info to order
-        await pool.query(
-            `UPDATE orders SET
-                melhor_envio_shipment_id = $1,
-                tracking_code = $2,
-                shipping_status = 'generated',
-                posted_at = CASE WHEN $2 IS NOT NULL THEN now() ELSE posted_at END,
-                updated_at = now()
-             WHERE id = $3`,
-            [label.shipment_id, label.tracking_code, order.id]
-        );
+        if (order.shipping_status !== 'generated') {
+            throw Object.assign(new Error('Estado da etiqueta não permite continuar'), { status: 409 });
+        }
+
+        const printed = await me.printShipments([shipmentId]);
+        const tracking = await me.getTracking(shipmentId).catch(() => ({}));
+        if (tracking.tracking_code) {
+            await client.query('UPDATE orders SET tracking_code = $1, updated_at = now() WHERE id = $2', [tracking.tracking_code, order.id]);
+        }
 
         // Timeline event
-        await pool.query(
+        await client.query(
             `INSERT INTO order_events (order_id, event, description, metadata)
-             VALUES ($1, 'label_generated', 'Etiqueta gerada via Melhor Envio', $2)`,
-            [order.id, JSON.stringify({ shipment_id: label.shipment_id, tracking_code: label.tracking_code })]
+             SELECT $1, 'label_generated', 'Etiqueta gerada via Melhor Envio', $2
+             WHERE NOT EXISTS (SELECT 1 FROM order_events WHERE order_id = $1 AND event = 'label_generated')`,
+            [order.id, JSON.stringify({ shipment_id: shipmentId, tracking_code: tracking.tracking_code || null })]
         );
 
         // Audit log
-        await logAudit(req.user.id, 'shipping.label_generated', 'order', order.id, { shipment_id: label.shipment_id }, req.ip);
+        await logAudit(req.user.id, 'shipping.label_generated', 'order', order.id, { shipment_id: shipmentId }, req.ip);
 
         res.json({
-            shipment_id: label.shipment_id,
-            tracking_code: label.tracking_code,
-            print_url: label.print_url,
+            shipment_id: shipmentId,
+            tracking_code: tracking.tracking_code || null,
+            print_url: printed.print_url,
         });
     } catch (err) {
         console.error('[Shipping Label] Error:', err.message);
         res.status(err.status || 500).json({ error: err.message });
+    } finally {
+        if (client) {
+            await client.query('SELECT pg_advisory_unlock(hashtext($1))', [`shipping-label:${req.params.id}`]).catch(() => {});
+            client.release();
+        }
     }
 });
 

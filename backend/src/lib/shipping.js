@@ -7,11 +7,13 @@ export function buildShippingPackages(items) {
     return items.map((item) => {
         const quantity = Number.parseInt(item.quantity ?? item.qty, 10);
         const dimensions = [item.weight, item.height, item.width, item.length].map(Number);
+        const insuranceValue = Number(item.unit_price ?? item.insurance_value);
         if (!Number.isInteger(quantity) || quantity <= 0) throw invalid('Quantidade de item inválida');
         if (dimensions.some((value) => !Number.isFinite(value) || value <= 0)) {
             throw invalid(`Produto sem peso ou dimensões de envio: ${item.product_name || item.id || 'desconhecido'}`);
         }
-        return { weight: dimensions[0], height: dimensions[1], width: dimensions[2], length: dimensions[3], qty: quantity };
+        if (!Number.isFinite(insuranceValue) || insuranceValue < 0) throw invalid('Valor segurado do produto inválido');
+        return { id: String(item.product_id || item.id), weight: dimensions[0], height: dimensions[1], width: dimensions[2], length: dimensions[3], insurance_value: insuranceValue, qty: quantity };
     });
 }
 
@@ -42,4 +44,14 @@ export function getPersistedShippingService(order) {
         throw Object.assign(new Error('Pedido sem serviço de frete confirmado'), { status: 409 });
     }
     return String(order.shipping_quote_id);
+}
+
+export function assertLabelEligible(order) {
+    if (order?.payment_status !== 'approved') {
+        throw Object.assign(new Error('Pagamento não confirmado. Gere a etiqueta apenas após o pagamento ser aprovado.'), { status: 400 });
+    }
+    if (order.shipping_method !== 'melhor_envio') {
+        throw Object.assign(new Error('Pedido não utiliza o Melhor Envio'), { status: 409 });
+    }
+    return order;
 }

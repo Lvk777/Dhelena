@@ -2,9 +2,13 @@ import { pool, withTransaction } from './config/db.js';
 import { validateCoupon, logAudit, sendOrderNotifications } from './services.js';
 import * as melhorEnvio from './services/melhorEnvio.js';
 import { buildShippingPackages, getCheckoutShippingInput, selectShippingQuote } from './lib/shipping.js';
+import { assertMatchingIdempotencyRequest, createOrderRequestFingerprint, normalizeIdempotencyKey } from './lib/idempotency.js';
+import { calculateServerOrderTotal, resolveCatalogLine } from './lib/orderPricing.js';
 
 // ─── placeOrder: atomic order creation ──────────────────────────────
 export async function placeOrder(userId, body, idempotencyKey) {
+    const normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
+    const idempotencyFingerprint = createOrderRequestFingerprint(body);
     const { items, coupon_code, payment_method, customer } = body;
     const { shipping_address, shipping_method, shipping_quote_id } = getCheckoutShippingInput(body);
 
@@ -13,11 +17,14 @@ export async function placeOrder(userId, body, idempotencyKey) {
     }
 
     return withTransaction(async (client) => {
-        // Idempotency check
-        if (idempotencyKey) {
-            const { rows: existing } = await client.query('SELECT * FROM orders WHERE idempotency_key = $1 AND user_id = $2', [idempotencyKey, userId]);
-            if (existing.length > 0) return existing[0];
-        }
+        // Serialize retries for this user/key before checking or applying stock
+        // changes. The unique index is the final database-level safeguard.
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`checkout:${userId}:${normalizedIdempotencyKey}`]);
+        const { rows: existing } = await client.query(
+            'SELECT * FROM orders WHERE idempotency_key = $1 AND user_id = $2',
+            [normalizedIdempotencyKey, userId]
+        );
+        if (existing.length > 0) return assertMatchingIdempotencyRequest(existing[0], idempotencyFingerprint);
 
         let subtotal = 0;
         const orderItems = [];
@@ -25,28 +32,15 @@ export async function placeOrder(userId, body, idempotencyKey) {
         // Process each item: lock product, verify stock, calculate price
         for (const item of items) {
             const { productId, colorId, size, qty } = item;
-            const quantity = parseInt(qty);
-            if (!quantity || quantity <= 0) throw Object.assign(new Error('Quantidade inválida'), { status: 400 });
-
             // Lock product row
             const { rows: prodRows } = await client.query('SELECT * FROM products WHERE id = $1 FOR UPDATE', [productId]);
             if (prodRows.length === 0) throw Object.assign(new Error(`Produto não encontrado: ${productId}`), { status: 404 });
 
             const product = prodRows[0];
 
-            // Find color and check stock
+            // Resolve price and stock exclusively from the locked catalog row.
             const colors = product.colors || [];
-            const color = colors.find(c => c.id === colorId);
-            if (!color) throw Object.assign(new Error(`Cor não encontrada: ${colorId}`), { status: 404 });
-
-            const currentStock = color.stock?.[size] ?? 0;
-            if (currentStock < quantity) {
-                throw Object.assign(new Error(`Estoque insuficiente para ${product.name} (${color.name}, ${size}). Disponível: ${currentStock}`), { status: 409 });
-            }
-
-            // Use sale_price if available, otherwise regular price
-            const unitPrice = product.sale_price ? Number(product.sale_price) : Number(product.price);
-            const itemSubtotal = unitPrice * quantity;
+            const { color, currentStock, quantity, unitPrice, itemSubtotal } = resolveCatalogLine(product, { colorId, size, qty });
             subtotal += itemSubtotal;
 
             // Update stock in colors JSONB
@@ -159,6 +153,7 @@ export async function placeOrder(userId, body, idempotencyKey) {
         let shippingCarrier = null;
         let shippingServiceName = null;
         let shippingDeliveryTime = null;
+        let shippingPackages = [];
         const { rows: shipSettings } = await client.query("SELECT value FROM settings WHERE key = 'shipping'");
         const shipConfig = shipSettings[0]?.value || {};
         const freeThreshold = shipConfig.free_shipping_threshold || 499;
@@ -197,10 +192,11 @@ export async function placeOrder(userId, body, idempotencyKey) {
             shippingCarrier = quote.company || null;
             shippingServiceName = quote.service || quote.name || null;
             shippingDeliveryTime = Number.isInteger(Number(quote.delivery_time)) ? Number(quote.delivery_time) : null;
+            shippingPackages = Array.isArray(quote.packages) ? quote.packages : [];
             shippingCost = freeEnabled && subtotal - discount >= freeThreshold ? 0 : Number(quote.price);
         }
 
-        const total = subtotal - discount + shippingCost;
+        const total = calculateServerOrderTotal(subtotal, discount, shippingCost);
 
         // Generate order number
         const year = new Date().getFullYear();
@@ -222,9 +218,11 @@ export async function placeOrder(userId, body, idempotencyKey) {
             shipping_carrier: shippingCarrier,
             shipping_service_name: shippingServiceName,
             shipping_delivery_time: shippingDeliveryTime,
+            shipping_packages: shippingPackages,
             payment_method,
             shipping_address,
             customer: customer || {},
+            idempotency_fingerprint: idempotencyFingerprint,
             created_at: new Date().toISOString(),
         };
 
@@ -233,7 +231,7 @@ export async function placeOrder(userId, body, idempotencyKey) {
             `INSERT INTO orders (order_number, user_id, status, payment_status, payment_method, shipping_method, shipping_cost, discount, coupon_code, subtotal, total, snapshot, shipping_address, idempotency_key, shipping_quote_id, shipping_carrier, shipping_service_name, shipping_delivery_time)
              VALUES ($1, $2, 'recebido', 'pending', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
              RETURNING *`,
-            [orderNum, userId, payment_method || null, shipping_method || null, shippingCost, discount, coupon_code || null, subtotal, total, JSON.stringify(snapshot), JSON.stringify(shipping_address), idempotencyKey,
+            [orderNum, userId, payment_method || null, shipping_method || null, shippingCost, discount, coupon_code || null, subtotal, total, JSON.stringify(snapshot), JSON.stringify(shipping_address), normalizedIdempotencyKey,
               shippingQuoteId, shippingCarrier, shippingServiceName, shippingDeliveryTime]
         );
         const order = orderRows[0];

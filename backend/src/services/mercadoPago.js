@@ -23,13 +23,16 @@ function isTestEnvironment() {
 async function mpFetch(path, options = {}) {
     const token = getAccessToken();
     const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
+    const { idempotencyKey, ...fetchOptions } = options;
+    const method = (fetchOptions.method || 'GET').toUpperCase();
+    const idempotencyHeaders = method === 'GET' ? {} : { 'X-Idempotency-Key': idempotencyKey || crypto.randomUUID() };
     const res = await fetch(url, {
-        ...options,
+        ...fetchOptions,
         headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
-            'X-Idempotency-Key': options.idempotencyKey || crypto.randomUUID(),
-            ...(options.headers || {}),
+            ...idempotencyHeaders,
+            ...(fetchOptions.headers || {}),
         },
     });
     const data = await res.json().catch(() => ({}));

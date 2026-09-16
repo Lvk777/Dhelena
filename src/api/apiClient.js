@@ -4,6 +4,7 @@
  */
 
 import { supabase } from './supabaseClient.js';
+import { buildPlaceOrderRequest } from './orderRequest.js';
 
 const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? null : '/api');
 if (!API_BASE) {
@@ -261,7 +262,7 @@ const functions = {
     async invoke(name, args) {
         switch (name) {
             case 'placeOrder':
-                return apiFetch('/orders', { method: 'POST', body: JSON.stringify(args) });
+                return apiFetch('/orders', buildPlaceOrderRequest(args));
             case 'cancelOrder':
                 return apiFetch(`/orders/${args.orderId || args.id}`, { method: 'DELETE' });
             case 'validateCoupon':

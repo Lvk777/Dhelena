@@ -126,6 +126,7 @@ export default function Checkout() {
     // Create order via backend (validates stock, price, coupon, shipping)
     const createOrder = async () => {
         const res = await base44.functions.invoke("placeOrder", {
+            idempotencyKey,
             customer: { name: form.nome, email: form.email, phone: form.telefone, cpf: form.cpf },
             shipping_address: {
                 cep: form.cep, street: form.street, number: form.number, complement: form.complement,
