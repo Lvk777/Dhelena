@@ -1,47 +1,62 @@
+import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router-dom";
 import AdminLayout from "@/pages/admin/AdminLayout";
-import Dashboard from "@/pages/admin/Dashboard";
-import AdminOrders from "@/pages/admin/AdminOrders";
-import AdminOrderDetail from "@/pages/admin/AdminOrderDetail";
-import AdminProducts from "@/pages/admin/Products";
-import ProductForm from "@/pages/admin/ProductForm";
-import Categories from "@/pages/admin/Categories";
-import AdminCollections from "@/pages/admin/Collections";
-import Inventory from "@/pages/admin/Inventory";
-import Customers from "@/pages/admin/Customers";
-import Coupons from "@/pages/admin/Coupons";
-import Banners from "@/pages/admin/Banners";
-import Reports from "@/pages/admin/Reports";
-import Settings from "@/pages/admin/Settings";
-import AuditLog from "@/pages/admin/AuditLog";
-import SizeGuides from "@/pages/admin/SizeGuides";
-import Integrations from "@/pages/admin/Integrations";
-import Promotions from "@/pages/admin/Promotions";
-import Analytics from "@/pages/admin/Analytics";
+
+const Dashboard = lazy(() => import("@/pages/admin/Dashboard"));
+const AdminOrders = lazy(() => import("@/pages/admin/AdminOrders"));
+const AdminOrderDetail = lazy(() => import("@/pages/admin/AdminOrderDetail"));
+const AdminProducts = lazy(() => import("@/pages/admin/Products"));
+const ProductForm = lazy(() => import("@/pages/admin/ProductForm"));
+const Categories = lazy(() => import("@/pages/admin/Categories"));
+const AdminCollections = lazy(() => import("@/pages/admin/Collections"));
+const Inventory = lazy(() => import("@/pages/admin/Inventory"));
+const Customers = lazy(() => import("@/pages/admin/Customers"));
+const Coupons = lazy(() => import("@/pages/admin/Coupons"));
+const Banners = lazy(() => import("@/pages/admin/Banners"));
+const Reports = lazy(() => import("@/pages/admin/Reports"));
+const Settings = lazy(() => import("@/pages/admin/Settings"));
+const AuditLog = lazy(() => import("@/pages/admin/AuditLog"));
+const SizeGuides = lazy(() => import("@/pages/admin/SizeGuides"));
+const Integrations = lazy(() => import("@/pages/admin/Integrations"));
+const Promotions = lazy(() => import("@/pages/admin/Promotions"));
+const Analytics = lazy(() => import("@/pages/admin/Analytics"));
+
+function AdminPageLoader() {
+    return (
+        <div className="space-y-5" aria-label="Carregando página administrativa" role="status">
+            <div className="h-8 w-48 rounded bg-muted animate-pulse" />
+            <div className="h-64 rounded-xl border border-border bg-background animate-pulse" />
+        </div>
+    );
+}
+
+function page(Component) {
+    return <Suspense fallback={<AdminPageLoader />}><Component /></Suspense>;
+}
 
 export default function AdminRoutes() {
     return (
         <Routes>
             <Route element={<AdminLayout />}>
-                <Route index element={<Dashboard />} />
-                <Route path="pedidos" element={<AdminOrders />} />
-                <Route path="pedidos/:id" element={<AdminOrderDetail />} />
-                <Route path="produtos" element={<AdminProducts />} />
-                <Route path="produtos/novo" element={<ProductForm />} />
-                <Route path="produtos/:id" element={<ProductForm />} />
-                <Route path="categorias" element={<Categories />} />
-                <Route path="colecoes" element={<AdminCollections />} />
-                <Route path="estoque" element={<Inventory />} />
-                <Route path="clientes" element={<Customers />} />
-                <Route path="cupons" element={<Coupons />} />
-                <Route path="banners" element={<Banners />} />
-                <Route path="relatorios" element={<Reports />} />
-                <Route path="auditoria" element={<AuditLog />} />
-                <Route path="configuracoes" element={<Settings />} />
-                <Route path="guias-medidas" element={<SizeGuides />} />
-                <Route path="integracoes" element={<Integrations />} />
-                <Route path="promocoes" element={<Promotions />} />
-                <Route path="analytics" element={<Analytics />} />
+                <Route index element={page(Dashboard)} />
+                <Route path="pedidos" element={page(AdminOrders)} />
+                <Route path="pedidos/:id" element={page(AdminOrderDetail)} />
+                <Route path="produtos" element={page(AdminProducts)} />
+                <Route path="produtos/novo" element={page(ProductForm)} />
+                <Route path="produtos/:id" element={page(ProductForm)} />
+                <Route path="categorias" element={page(Categories)} />
+                <Route path="colecoes" element={page(AdminCollections)} />
+                <Route path="estoque" element={page(Inventory)} />
+                <Route path="clientes" element={page(Customers)} />
+                <Route path="cupons" element={page(Coupons)} />
+                <Route path="banners" element={page(Banners)} />
+                <Route path="relatorios" element={page(Reports)} />
+                <Route path="auditoria" element={page(AuditLog)} />
+                <Route path="configuracoes" element={page(Settings)} />
+                <Route path="guias-medidas" element={page(SizeGuides)} />
+                <Route path="integracoes" element={page(Integrations)} />
+                <Route path="promocoes" element={page(Promotions)} />
+                <Route path="analytics" element={page(Analytics)} />
             </Route>
         </Routes>
     );
