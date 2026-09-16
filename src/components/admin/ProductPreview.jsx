@@ -17,7 +17,7 @@ function formatBRL(v) {
     return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export default function ProductPreview({ form, device: deviceProp }) {
+export default function ProductPreview({ form, device: deviceProp = undefined }) {
     const [internalDevice, setInternalDevice] = useState("desktop");
     const device = deviceProp || internalDevice;
     const isMobile = device === "mobile";

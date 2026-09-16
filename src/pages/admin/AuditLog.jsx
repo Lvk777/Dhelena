@@ -240,7 +240,7 @@ export default function AuditLog() {
     );
 }
 
-function Detail({ label, value, mono }) {
+function Detail({ label, value, mono = false }) {
     return (
         <div>
             <label className="block text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-1">{label}</label>

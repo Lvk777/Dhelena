@@ -4,7 +4,7 @@ import { base44 } from "@/api/base44Client";
 import CropperModal from "@/components/admin/CropperModal";
 import {
     validateImageFile,
-    IMAGE_PRESETS, computeOutputSize, PRESET_FOLDERS,
+    IMAGE_PRESETS, PRESET_FOLDERS,
 } from "@/lib/imageProcessor";
 
 const RECOMMENDATIONS = [
@@ -93,7 +93,6 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
         onChange(next);
     };
 
-    const outputSize = computeOutputSize(PRODUCT_PRESET.aspect, PRODUCT_PRESET.maxWidth, PRODUCT_PRESET.maxHeight);
 
     return (
         <div>
@@ -199,7 +198,6 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
                 <CropperModal
                     imageFile={pendingFiles[cropIndex]}
                     preset={PRODUCT_PRESET}
-                    outputSize={outputSize}
                     title={`Ajustar foto ${cropIndex + 1} de ${pendingFiles.length}`}
                     onConfirm={handleCropConfirm}
                     onCancel={handleCropCancel}

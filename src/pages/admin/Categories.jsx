@@ -90,7 +90,7 @@ function CategoryForm({ item, onClose, onSaved }) {
     });
     const [slugEdited, setSlugEdited] = useState(!!item.slug);
     const [saving, setSaving] = useState(false);
-    const [errors, setErrors] = useState({});
+    const [errors, setErrors] = useState(/** @type {Record<string, any>} */ ({}));
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
     const onNameChange = (v) => {

@@ -4,7 +4,7 @@ import { useCepLookup } from "@/hooks/useCepLookup";
 
 const UF = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 
-export default function AddressFields({ form, set, errors = {} }) {
+export default function AddressFields({ form, set, errors = /** @type {Record<string, string>} */ ({}) }) {
     const { cepStatus, lookup } = useCepLookup();
     const numberRef = useRef(null);
 

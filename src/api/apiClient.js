@@ -357,15 +357,15 @@ const app = {
 };
 
 // ─── Entity registry ───────────────────────────────────────────────
-const entities = new Proxy({}, {
+const entities = /** @type {Record<string, ReturnType<typeof makeEntity>>} */ (new Proxy({}, {
     get(_, name) {
         return makeEntity(name);
     },
-});
+}));
 
 // ─── Custom analytics endpoints ───────────────────────────────────
 const custom = {
-    analyticsOverview: ({ period, start, end }) => apiFetch(`/analytics/overview?period=${period || '7d'}${start ? `&start=${start}` : ''}${end ? `&end=${end}` : ''}`),
+    analyticsOverview: ({ period, start = '', end = '' }) => apiFetch(`/analytics/overview?period=${period || '7d'}${start ? `&start=${start}` : ''}${end ? `&end=${end}` : ''}`),
     analyticsSources: ({ period }) => apiFetch(`/analytics/sources?period=${period || '7d'}`),
     analyticsDevices: ({ period }) => apiFetch(`/analytics/devices?period=${period || '7d'}`),
     analyticsPages: ({ period }) => apiFetch(`/analytics/pages?period=${period || '7d'}`),

@@ -139,8 +139,8 @@ export default function AdminOrders() {
 
         // Sort
         switch (sort) {
-            case "recent": result.sort((a, b) => new Date(b.created_date) - new Date(a.created_date)); break;
-            case "old": result.sort((a, b) => new Date(a.created_date) - new Date(b.created_date)); break;
+            case "recent": result.sort((a, b) => new Date(b.created_date).getTime() - new Date(a.created_date).getTime()); break;
+            case "old": result.sort((a, b) => new Date(a.created_date).getTime() - new Date(b.created_date).getTime()); break;
             case "highValue": result.sort((a, b) => b.total - a.total); break;
             case "lowValue": result.sort((a, b) => a.total - b.total); break;
             case "customerAz": result.sort((a, b) => (a.customer_name || "").localeCompare(b.customer_name || "")); break;

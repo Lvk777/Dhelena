@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function AdminTextarea({ label, value, onChange, rows = 3, placeholder, description, error, required, full }) {
+export default function AdminTextarea({ label = "", value, onChange, rows = 3, placeholder = "", description = "", error = "", required = false, full = false }) {
     return (
         <div className={full ? "sm:col-span-2" : ""}>
             {label && (

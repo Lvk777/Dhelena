@@ -34,7 +34,7 @@ export default function Checkout() {
     const [done, setDone] = useState(false);
     const [order, setOrder] = useState(null);
     const [placing, setPlacing] = useState(false);
-    const [errors, setErrors] = useState({});
+    const [errors, setErrors] = useState(/** @type {Record<string, any>} */ ({}));
     const [orderError, setOrderError] = useState("");
     const [paymentScreen, setPaymentScreen] = useState(null); // null | 'pix' | 'card'
 
@@ -390,7 +390,7 @@ function FormGrid({ children }) {
     return <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">{children}</div>;
 }
 
-function Field({ label, value, onChange, full, error }) {
+function Field({ label, value, onChange, full = false, error = "" }) {
     return (
         <div className={full ? "sm:col-span-2" : ""}>
             <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>

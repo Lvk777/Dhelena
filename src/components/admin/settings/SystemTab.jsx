@@ -71,7 +71,7 @@ export default function SystemTab({ data, onChange }) {
     );
 }
 
-function SecurityRow({ icon: Icon, label, status, note }) {
+function SecurityRow({ icon: Icon, label, status, note = "" }) {
     const isActive = status === 'active';
     return (
         <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
@@ -91,7 +91,7 @@ function SecurityRow({ icon: Icon, label, status, note }) {
     );
 }
 
-function InfoRow({ icon: Icon, label, value, status }) {
+function InfoRow({ icon: Icon, label, value, status = "" }) {
     return (
         <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
             <Icon className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
