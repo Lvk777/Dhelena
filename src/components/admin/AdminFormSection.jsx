@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function AdminFormSection({ title, description, children, icon: Icon }) {
+export default function AdminFormSection({ title = "", description = "", children, icon: Icon = null }) {
     return (
         <div className="border border-border rounded-xl p-5 bg-background/50">
             {title && (

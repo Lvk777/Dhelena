@@ -12,7 +12,7 @@ import { track } from "@/lib/analytics";
 export default function Register() {
     const [form, setForm] = useState({ name: "", email: "", phone: "", cpf: "", birthDate: "", password: "", confirm: "" });
     const [error, setError] = useState("");
-    const [errors, setErrors] = useState({});
+    const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
     const [loading, setLoading] = useState(false);
     const [showOtp, setShowOtp] = useState(false);
     const [otpCode, setOtpCode] = useState("");
@@ -23,7 +23,7 @@ export default function Register() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
-        const e2 = {};
+        const e2 = /** @type {Record<string, string>} */ ({});
         if (!form.name.trim()) e2.name = "Informe seu nome completo";
         if (!validateEmail(form.email)) e2.email = "Informe um e-mail válido";
         if (!validatePhone(form.phone)) e2.phone = "Informe seu telefone";
@@ -34,9 +34,20 @@ export default function Register() {
         if (Object.keys(e2).length > 0) return;
         setLoading(true);
         try {
-            await client.auth.register({ email: form.email, password: form.password, full_name: form.name });
+            const registration = await client.auth.register({ email: form.email, password: form.password, full_name: form.name });
             track('sign_up');
-            setShowOtp(true);
+            if (registration?.pending_verification) {
+                setShowOtp(true);
+            } else {
+                try {
+                    await client.auth.updateMe({
+                        phone: form.phone,
+                        cpf: form.cpf,
+                        birth_date: form.birthDate,
+                    });
+                } catch (profileError) { console.error("Profile save error:", profileError); }
+                window.location.href = returnTo;
+            }
         } catch (err) {
             setError(err.message || "Falha no cadastro");
         } finally {
@@ -140,7 +151,7 @@ export default function Register() {
                     <Field icon={Phone} label="Telefone" value={form.phone} onChange={(v) => set("phone", maskPhone(v))} required error={errors.phone} />
                     <Field icon={User} label="CPF" value={form.cpf} onChange={(v) => set("cpf", maskCPF(v))} required error={errors.cpf} />
                 </div>
-                <Field icon={Calendar} label="Data de nascimento (opcional)" type="date" value={form.birthDate} onChange={(v) => set("birthDate", v)} />
+                <Field icon={Calendar} label="Data de nascimento (opcional)" type="date" max={new Date().toISOString().slice(0, 10)} value={form.birthDate} onChange={(v) => set("birthDate", v)} />
                 <Field icon={Lock} label="Senha" type="password" value={form.password} onChange={(v) => set("password", v)} required error={errors.password} />
                 <Field icon={Lock} label="Confirmar senha" type="password" value={form.confirm} onChange={(v) => set("confirm", v)} required error={errors.confirm} />
                 <button type="submit" disabled={loading} className="btn-gold w-full">
@@ -151,7 +162,7 @@ export default function Register() {
     );
 }
 
-function Field({ icon: Icon, label, value, onChange, type = "text", required, error }) {
+function Field({ icon: Icon, label, value, onChange, type = "text", required = false, error = "", max = undefined }) {
     return (
         <div>
             <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
@@ -162,6 +173,7 @@ function Field({ icon: Icon, label, value, onChange, type = "text", required, er
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     required={required}
+                    max={max}
                     className={`w-full border bg-background pl-10 pr-4 py-3.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${error ? "border-[hsl(var(--rose))]" : "border-border"}`}
                 />
             </div>

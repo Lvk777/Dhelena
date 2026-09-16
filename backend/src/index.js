@@ -21,13 +21,24 @@ import webhookRoutes from './routes/webhooks.js';
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
 
+if (isProduction) {
+    const required = ['DATABASE_URL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'CORS_ORIGIN'];
+    const missing = required.filter((name) => !process.env[name]);
+    if (missing.length > 0 || process.env.CORS_ORIGIN === '*') {
+        console.error('[API] FATAL: production configuration is incomplete or unsafe.');
+        process.exit(1);
+    }
+}
+
 // ─── Trust proxy (Railway + Cloudflare) ───────────────────────────
 // In production, requests pass through Cloudflare → Railway proxy → Express.
-// Enable trust proxy so req.ip, req.protocol, and req.secure reflect the
-// real client, not the proxy. Cloudflare sanitizes X-Forwarded-For, so
-// trusting all hops is safe in this architecture.
+// Trust only the immediately connected proxy. This makes protocol detection
+// work without trusting an arbitrary X-Forwarded-For chain. It does not prove
+// that the upstream request came from Cloudflare: direct Railway traffic must
+// be blocked at infrastructure level before req.ip is a trusted identity.
 if (isProduction) {
-    app.set('trust proxy', true);
+    // Cloudflare must remain the public edge and enforce visitor-IP limits.
+    app.set('trust proxy', 1);
 }
 
 // ─── Security headers (Helmet) ────────────────────────────────────
@@ -43,16 +54,18 @@ app.use(helmet.referrerPolicy({ policy: 'strict-origin-when-cross-origin' }));
 
 // ─── CORS ─────────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN || (isProduction ? '' : '*');
-if (isProduction && !corsOrigin) {
-    console.warn('[CORS] ⚠️ CORS_ORIGIN not set in production — CORS will be disabled');
-}
 app.use(cors({
     origin: corsOrigin === '*' ? true : (corsOrigin ? corsOrigin.split(',').map(s => s.trim()) : false),
     credentials: true,
 }));
 
 // ─── Body size limits ─────────────────────────────────────────────
-app.use(express.json({ limit: '100kb' })); // JSON payloads limited to 100kb
+app.use(express.json({
+    limit: '100kb',
+    // Melhor Envio signs the exact request payload. Keep it only in memory
+    // for signature verification; it is never logged or returned.
+    verify: (req, res, buffer) => { req.rawBody = Buffer.from(buffer); },
+})); // JSON payloads limited to 100kb
 app.use(express.urlencoded({ limit: '100kb', extended: true }));
 
 // ─── Global rate limiter ──────────────────────────────────────────
@@ -146,7 +159,22 @@ app.use(async (req, res, next) => {
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[D'Helenas API] Running on port ${PORT}`);
     ensureInitialized();
 });
+
+let shuttingDown = false;
+async function shutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[API] ${signal} received; closing HTTP server`);
+    server.close(async () => {
+        try { await pool.end(); } catch { /* pool may not have connected yet */ }
+        process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 10_000).unref();
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

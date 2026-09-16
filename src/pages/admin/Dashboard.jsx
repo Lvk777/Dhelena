@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { DollarSign, ShoppingCart, Package, Users, AlertTriangle, TrendingUp } from "lucide-react";
+import { DollarSign, ShoppingCart, Package, Users, AlertTriangle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { base44 } from "@/api/base44Client";
-import { formatBRL, totalStock } from "@/data/products";
+import { formatBRL, toCurrencyAmount, totalStock } from "@/data/products";
 
 export default function Dashboard() {
     const [orders, setOrders] = useState([]);
@@ -18,7 +18,7 @@ export default function Dashboard() {
             .finally(() => setLoading(false));
     }, []);
 
-    const revenue = orders.reduce((s, o) => s + (o.total || 0), 0);
+    const revenue = orders.reduce((sum, order) => sum + toCurrencyAmount(order.total), 0);
     const published = products.filter((p) => p.status === "published");
     const lowStock = products.filter((p) => p.status === "published" && totalStock(p) > 0 && totalStock(p) <= 6);
     const outStock = products.filter((p) => p.status === "published" && totalStock(p) === 0);
@@ -32,7 +32,7 @@ export default function Dashboard() {
         const dayOrders = orders.filter((o) => (o.created_date || "").slice(0, 10) === key);
         return {
             day: d.toLocaleDateString("pt-BR", { weekday: "short" }).slice(0, 3),
-            vendas: dayOrders.reduce((s, o) => s + (o.total || 0), 0),
+            vendas: dayOrders.reduce((sum, order) => sum + toCurrencyAmount(order.total), 0),
         };
     });
 
@@ -59,7 +59,7 @@ export default function Dashboard() {
                     <ResponsiveContainer width="100%" height={240}>
                         <BarChart data={chartData}>
                             <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#999" }} axisLine={false} tickLine={false} />
-                            <YAxis tick={{ fontSize: 11, fill: "#999" }} axisLine={false} tickLine={false} tickFormatter={(v) => `R$${v}`} />
+                            <YAxis tick={{ fontSize: 11, fill: "#999" }} axisLine={false} tickLine={false} tickFormatter={formatBRL} />
                             <Tooltip formatter={(v) => formatBRL(v)} contentStyle={{ fontSize: 12, border: "1px solid #eee" }} />
                             <Bar dataKey="vendas" fill="hsl(44 69% 54%)" radius={[4, 4, 0, 0]} />
                         </BarChart>

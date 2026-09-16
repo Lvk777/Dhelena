@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Search, Heart, ShoppingBag, Menu, ArrowRight, Monitor, Smartphone, Star, Truck } from "lucide-react";
+import { Search, Heart, ShoppingBag, Menu, ArrowRight, Monitor, Smartphone, Truck } from "lucide-react";
 
 /**
  * StorefrontPreview — simulates the real storefront using the same CSS classes

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
     Database, CreditCard, Truck, Mail, MessageCircle, Cloud,
-    CheckCircle2, XCircle, Save, X, Lock, Power, Loader2, AlertTriangle, Zap
+    CheckCircle2, XCircle, Save, Lock, Power, Loader2, AlertTriangle, Zap
 } from "lucide-react";
 import AdminModal from "@/components/admin/AdminModal";
 import AdminInput from "@/components/admin/AdminInput";

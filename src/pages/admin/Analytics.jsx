@@ -393,7 +393,7 @@ export default function Analytics() {
     );
 }
 
-function KPICard({ icon: Icon, label, value, change }) {
+function KPICard({ icon: Icon, label, value, change = undefined }) {
     const isPositive = change && parseFloat(change) >= 0;
     return (
         <div className="bg-background border border-border rounded-lg p-4">

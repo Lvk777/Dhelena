@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { QrCode, Copy, Check, Loader2, Clock, AlertCircle } from "lucide-react";
+import { Copy, Check, Loader2, Clock, AlertCircle } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
 
-export default function PixPaymentScreen({ order, onApproved, onExpired }) {
+export default function PixPaymentScreen({ order, onApproved }) {
     const [pixData, setPixData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");

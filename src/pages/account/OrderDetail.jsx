@@ -188,7 +188,7 @@ function Row({ label, value }) {
     return <div className="flex justify-between"><span className="text-muted-foreground">{label}</span><span>{value}</span></div>;
 }
 
-function InfoBlock({ title, children, full }) {
+function InfoBlock({ title, children, full = false }) {
     return (
         <div className={full ? "sm:col-span-2" : ""}>
             <h3 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-2">{title}</h3>

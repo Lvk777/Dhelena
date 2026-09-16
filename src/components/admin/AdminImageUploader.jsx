@@ -1,15 +1,13 @@
 import React, { useState, useRef, useId, useCallback, useEffect } from "react";
 import {
-    Upload, X, Check, AlertCircle, RefreshCw, Trash2, Crop as CropIcon,
-    Image as ImageIcon, Loader2,
+    Upload, Check, AlertCircle, RefreshCw, Trash2,
 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import CropperModal from "@/components/admin/CropperModal";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import {
     validateImageFile, getDimensions, formatFileSize, formatAspectRatio,
-    cropAndResize, computeCropArea, blobToFile, generateMobileVersion,
-    IMAGE_PRESETS, computeOutputSize, BANNER_POSITION_PRESETS, PRESET_FOLDERS,
+    IMAGE_PRESETS, PRESET_FOLDERS,
 } from "@/lib/imageProcessor";
 
 /**
@@ -32,7 +30,7 @@ const STATES = { IDLE: "idle", VALIDATING: "validating", CROPPING: "cropping", U
 
 export default function AdminImageUploader({
     label, value, onChange, preset = "banner_horizontal_desktop",
-    description, error, required = false, showAspectLabel = true,
+    description = "", error = "", required = false, showAspectLabel = true, full = false,
 }) {
     const uid = useId();
     const inputRef = useRef(null);
@@ -47,7 +45,6 @@ export default function AdminImageUploader({
     const [dragOver, setDragOver] = useState(false);
 
     const presetData = IMAGE_PRESETS[preset] || IMAGE_PRESETS.banner_horizontal_desktop;
-    const outputSize = computeOutputSize(presetData.aspect, presetData.maxWidth, presetData.maxHeight);
 
     // Clean up object URLs on unmount or value change
     useEffect(() => {
@@ -165,7 +162,7 @@ export default function AdminImageUploader({
     const aspectStr = formatAspectRatio(presetData.aspect);
 
     return (
-        <div>
+        <div className={full ? "sm:col-span-2" : ""}>
             {/* Label */}
             {label && (
                 <div className="flex items-center justify-between mb-1.5">
@@ -290,7 +287,6 @@ export default function AdminImageUploader({
                 <CropperModal
                     imageFile={pendingFile}
                     preset={presetData}
-                    outputSize={outputSize}
                     title={`Ajustar Imagem — ${presetData.label || label || "Imagem"}`}
                     onConfirm={handleCropConfirm}
                     onCancel={handleCropCancel}
