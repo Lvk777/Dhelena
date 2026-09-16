@@ -56,6 +56,7 @@ Configure em **Variables** → **New Variable**:
 | `MERCADO_PAGO_WEBHOOK_SECRET` | Secret do webhook MP |
 | `MELHOR_ENVIO_TOKEN` | Token do Melhor Envio |
 | `MELHOR_ENVIO_MODE` | `production` ou `sandbox` |
+| `MELHOR_ENVIO_USER_AGENT` | Nome da aplicação e e-mail técnico exigidos pela API |
 | `MELHOR_ENVIO_WEBHOOK_SECRET` | Secret do aplicativo para HMAC do webhook |
 | `RESEND_API_KEY` | API key do Resend |
 | `EMAIL_FROM` | Email remetente (ex: `contato@dhelenas.com`) |

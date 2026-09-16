@@ -49,6 +49,7 @@ MERCADO_PAGO_PUBLIC_KEY=<sua chave pública>
 MERCADO_PAGO_WEBHOOK_SECRET=<seu webhook secret>
 MELHOR_ENVIO_TOKEN=<seu token OAuth>
 MELHOR_ENVIO_MODE=production
+MELHOR_ENVIO_USER_AGENT="D'Helenas (email técnico válido)"
 MELHOR_ENVIO_WEBHOOK_SECRET=<secret do aplicativo Melhor Envio>
 ```
 
