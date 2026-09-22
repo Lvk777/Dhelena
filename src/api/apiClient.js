@@ -291,6 +291,26 @@ const functions = {
                 return apiFetch('/payments/methods');
             case 'getOrderEvents':
                 return apiFetch(`/orders/${args.orderId}/events`);
+            case 'getAfterSales':
+                return apiFetch(`/orders/${args.orderId}/after-sales`);
+            case 'createReturn':
+                return apiFetch(`/orders/${args.orderId}/returns`, { method: 'POST', body: JSON.stringify(args) });
+            case 'advanceReturn':
+                return apiFetch(`/orders/${args.orderId}/returns/${args.returnId}`, {
+                    method: 'PATCH', body: JSON.stringify({ status: args.status, restockable: args.restockable }),
+                });
+            case 'requestRefund':
+                return apiFetch(`/orders/${args.orderId}/refunds`, {
+                    method: 'POST', headers: { 'X-Idempotency-Key': args.idempotencyKey },
+                    body: JSON.stringify({ kind: args.kind, reason: args.reason,
+                        items: args.items, return_id: args.returnId || null }),
+                });
+            case 'reconcileRefund':
+                return apiFetch(`/orders/${args.orderId}/refunds/${args.refundId}/reconcile`, { method: 'POST' });
+            case 'cancelAfterRefund':
+                return apiFetch(`/orders/${args.orderId}/cancel-after-refund`, { method: 'POST' });
+            case 'cancelPendingPayment':
+                return apiFetch(`/orders/${args.orderId}/cancel-pending-payment`, { method: 'POST' });
             case 'generateShippingLabel':
                 return apiFetch(`/orders/${args.orderId}/shipping/label`, { method: 'POST', body: JSON.stringify(args) });
             case 'getTrackingInfo':

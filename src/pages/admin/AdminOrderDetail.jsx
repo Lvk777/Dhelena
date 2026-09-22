@@ -4,8 +4,16 @@ import { ArrowLeft, Truck, Loader2, Copy, FileText, Printer, MapPin, QrCode, Cre
 import { base44 } from "@/api/base44Client";
 import { formatBRL, ORDER_STATUS, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
 import OrderTimeline from "@/components/checkout/OrderTimeline";
+import AdminAfterSales from "@/components/admin/AdminAfterSales";
 
-const STATUS_OPTIONS = Object.entries(ORDER_STATUS).map(([key, v]) => ({ value: key, label: v.label }));
+const STATUS_OPTIONS = Object.entries(ORDER_STATUS)
+    .filter(([key]) => ['em_separacao', 'enviado', 'em_transporte', 'saiu_entrega', 'entregue'].includes(key))
+    .map(([key, v]) => ({ value: key, label: v.label }));
+const NEXT_STATUS = {
+    pagamento_aprovado: ['em_separacao'], em_separacao: ['enviado'],
+    enviado: ['em_transporte', 'entregue'], em_transporte: ['saiu_entrega', 'entregue'],
+    saiu_entrega: ['entregue'],
+};
 
 export default function AdminOrderDetail() {
     const { id } = useParams();
@@ -94,8 +102,10 @@ export default function AdminOrderDetail() {
                     <p className="text-sm text-muted-foreground mt-1">{new Date(order.created_date).toLocaleString("pt-BR")}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <select value={order.status} onChange={(e) => changeStatus(e.target.value)} disabled={saving} className="border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" >
-                        {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    <select value={order.status} onChange={(e) => changeStatus(e.target.value)} disabled={saving || !isPaid || order.status === 'cancelado'} className="border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" >
+                        {!STATUS_OPTIONS.some(s => s.value === order.status) && <option value={order.status}>{ORDER_STATUS[order.status]?.label || order.status}</option>}
+                        {STATUS_OPTIONS.filter(s => s.value === order.status || NEXT_STATUS[order.status]?.includes(s.value))
+                            .map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                     </select>
                 </div>
             </div>
@@ -140,6 +150,8 @@ export default function AdminOrderDetail() {
                             <InfoRow label="Data pagamento" value={order.paid_at ? new Date(order.paid_at).toLocaleString("pt-BR") : "—"} />
                         </div>
                     </div>
+
+                    <AdminAfterSales order={order} onChanged={load} />
 
                     {/* Delivery / Shipping */}
                     <div className="bg-background p-5">
