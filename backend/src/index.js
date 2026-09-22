@@ -17,6 +17,7 @@ import contactRoutes from './routes/contact.js';
 import securityRoutes from './routes/security.js';
 import sitemapRoutes from './routes/sitemap.js';
 import webhookRoutes from './routes/webhooks.js';
+import melhorEnvioOAuthRoutes from './routes/melhorEnvioOAuth.js';
 
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -86,6 +87,7 @@ app.use('/api', lookRoutes);
 app.use('/api', securityRoutes);
 app.use('/api', sitemapRoutes);
 app.use('/api', webhookRoutes);
+app.use('/api', melhorEnvioOAuthRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────
 app.get('/health', async (req, res) => {

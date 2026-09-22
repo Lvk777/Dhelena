@@ -273,7 +273,7 @@ function buildSafeConfig(row) {
 // Admin: list all integration configs (masked, never real secrets)
 router.get('/integrations/config', auth, requireAdmin, async (req, res, next) => {
     try {
-        const { rows } = await pool.query('SELECT * FROM integration_configs ORDER BY service_name');
+        const { rows } = await pool.query("SELECT * FROM integration_configs WHERE service_key NOT LIKE 'melhor_envio_oauth_state_%' AND service_key NOT LIKE 'melhor_envio_oauth_code_%' AND service_key <> 'melhor_envio_sandbox_oauth' ORDER BY service_name");
         res.json(rows.map(buildSafeConfig));
     } catch (e) { next(e); }
 });
