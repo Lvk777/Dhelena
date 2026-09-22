@@ -236,6 +236,20 @@ router.get('/payments/test', auth, requireAdmin, async (req, res) => {
     }
 });
 
+router.get('/payments/test-orders/:orderNumber', auth, requireAdmin, async (req, res) => {
+    try {
+        const { rows } = await pool.query(
+            'SELECT order_number, created_at FROM orders WHERE order_number = $1',
+            [req.params.orderNumber]
+        );
+        if (rows.length === 0) return res.status(404).json({ error: 'Pedido não encontrado' });
+        const orders = await mp.findTestOrdersByReference(rows[0].order_number, rows[0].created_at);
+        res.json({ orders });
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
+    }
+});
+
 // POST /api/orders/:id/payment/pix — create Pix payment
 router.post('/orders/:id/payment/pix', auth, async (req, res) => {
     try {
@@ -254,6 +268,7 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
         const order = rows[0];
 
         // Idempotency: if already has MP order, return existing
+        if (order.status === 'cancelado') return res.status(409).json({ error: 'Pedido cancelado' });
         if (order.mercado_pago_order_id && order.pix_qr_code) {
             return res.json({
                 order_id: order.id,

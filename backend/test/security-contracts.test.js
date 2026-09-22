@@ -5,6 +5,7 @@ import { normalizeBirthDate } from '../src/lib/validation.js';
 import {
     createCardPayment,
     createPixPayment,
+    findTestOrdersByReference,
     mapPaymentStatus,
     validateWebhookSignature,
 } from '../src/services/mercadoPago.js';
@@ -45,7 +46,7 @@ test('Mercado Pago service mock preserves amount, external reference and idempot
     const payloads = [
         { id: 'mp-approved', external_reference: 'DH-1', transactions: { payments: [{ id: 'p-approved', status: 'approved', installments: 3 }] } },
         { id: 'mp-rejected', external_reference: 'DH-2', transactions: { payments: [{ id: 'p-rejected', status: 'rejected', installments: 1 }] } },
-        { id: 'mp-pending', external_reference: 'DH-3', transactions: { payments: [{ id: 'p-pending', status: 'pending', point_of_interaction: { transaction_data: { qr_code: 'mock-qr' } } }] } },
+        { id: 'mp-pending', external_reference: 'DH-3', transactions: { payments: [{ id: 'p-pending', status: 'pending', payment_method: { qr_code: 'mock-qr' } }] } },
     ];
     global.fetch = async (url, options) => {
         calls.push({ url, options, body: JSON.parse(options.body) });
@@ -63,6 +64,7 @@ test('Mercado Pago service mock preserves amount, external reference and idempot
         assert.deepEqual(calls.map(c => c.options.headers['X-Idempotency-Key']), ['card-DH-1', 'card-DH-2', 'pix-DH-3']);
         assert.deepEqual(calls.map(c => c.body.external_reference), ['DH-1', 'DH-2', 'DH-3']);
         assert.deepEqual(calls.map(c => c.body.total_amount), ['120.50', '80.00', '40.00']);
+        assert.equal(calls[2].body.processing_mode, 'automatic');
         assert.equal(mapPaymentStatus('approved'), 'approved');
         assert.equal(mapPaymentStatus('rejected'), 'rejected');
         assert.equal(mapPaymentStatus('pending'), 'pending');
@@ -70,6 +72,35 @@ test('Mercado Pago service mock preserves amount, external reference and idempot
         global.fetch = originalFetch;
         if (originalToken === undefined) delete process.env.MERCADO_PAGO_ACCESS_TOKEN;
         else process.env.MERCADO_PAGO_ACCESS_TOKEN = originalToken;
+    }
+});
+
+test('Mercado Pago TEST order search returns diagnostic codes without payer data', async () => {
+    const originalFetch = global.fetch;
+    const originalToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+    const originalMode = process.env.MERCADO_PAGO_MODE;
+    process.env.MERCADO_PAGO_ACCESS_TOKEN = 'TEST-safe-local-only';
+    process.env.MERCADO_PAGO_MODE = 'test';
+    global.fetch = async (url) => {
+        assert.equal(new URL(url).searchParams.get('external_reference'), 'DH-TEST');
+        return { ok: true, json: async () => ({ data: [
+            { id: 'ORD-TEST', external_reference: 'DH-TEST', status: 'failed', status_detail: 'processing_error', payer: { email: 'private@example.com' }, errors: [{ code: 'failed', cause: 'rejected_by_bank' }] },
+            { id: 'ORD-OTHER', external_reference: 'DH-OTHER', status: 'processed' },
+        ] }) };
+    };
+    try {
+        const results = await findTestOrdersByReference('DH-TEST', new Date().toISOString());
+        assert.equal(results.length, 1);
+        assert.deepEqual(results[0].errors, [{ code: 'failed', cause: 'rejected_by_bank' }]);
+        assert.equal(JSON.stringify(results).includes('private@example.com'), false);
+        process.env.MERCADO_PAGO_MODE = 'production';
+        await assert.rejects(findTestOrdersByReference('DH-TEST', new Date().toISOString()), { status: 409 });
+    } finally {
+        global.fetch = originalFetch;
+        if (originalToken === undefined) delete process.env.MERCADO_PAGO_ACCESS_TOKEN;
+        else process.env.MERCADO_PAGO_ACCESS_TOKEN = originalToken;
+        if (originalMode === undefined) delete process.env.MERCADO_PAGO_MODE;
+        else process.env.MERCADO_PAGO_MODE = originalMode;
     }
 });
 

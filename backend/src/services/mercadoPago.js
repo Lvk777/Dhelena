@@ -106,6 +106,7 @@ export async function getAvailablePaymentTypes() {
 export async function createPixPayment({ orderId, orderNumber, total, payer, idempotencyKey }) {
     const body = {
         type: 'online',
+        processing_mode: 'automatic',
         external_reference: orderNumber,
         total_amount: String(Number(total).toFixed(2)),
         transactions: {
@@ -134,7 +135,7 @@ export async function createPixPayment({ orderId, orderNumber, total, payer, ide
 
     // Extract Pix data from response
     const payment = data.transactions?.payments?.[0] || {};
-    const pixData = payment.point_of_interaction?.transaction_data || {};
+    const pixData = payment.payment_method || payment.point_of_interaction?.transaction_data || {};
 
     return {
         mp_order_id: data.id,
@@ -191,6 +192,48 @@ export async function createCardPayment({ orderId, orderNumber, total, payer, ca
         external_reference: data.external_reference,
         installments: payment.installments || installments,
     };
+}
+
+// Admin-only TEST diagnosis: read provider orders by their store reference.
+// The response excludes payer data and credentials.
+export async function findTestOrdersByReference(externalReference, createdAt) {
+    if (getMercadoPagoMode() !== 'test') {
+        throw Object.assign(new Error('Diagnóstico disponível somente no modo TEST'), { status: 409 });
+    }
+    const created = new Date(createdAt).getTime();
+    if (!Number.isFinite(created)) {
+        throw Object.assign(new Error('Data do pedido inválida'), { status: 400 });
+    }
+    const params = new URLSearchParams({
+        begin_date: new Date(created - 24 * 60 * 60 * 1000).toISOString(),
+        end_date: new Date().toISOString(),
+        external_reference: externalReference,
+        type: 'online',
+        page: '1',
+        page_size: '10',
+    });
+    const result = await mpFetch(`/v1/orders?${params}`);
+    const safeCode = (value) => typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,80}$/.test(value) ? value : null;
+    return (Array.isArray(result.data) ? result.data : [])
+        .filter((order) => order.external_reference === externalReference)
+        .map((order) => ({
+            id: order.id,
+            status: safeCode(order.status),
+            status_detail: safeCode(order.status_detail),
+            processing_mode: safeCode(order.processing_mode),
+            transactions: (order.transactions?.payments || []).map((payment) => ({
+                status: safeCode(payment.status),
+                status_detail: safeCode(payment.status_detail),
+                errors: (Array.isArray(payment.errors) ? payment.errors : []).map((error) => ({
+                    code: safeCode(error.code),
+                    cause: safeCode(error.cause),
+                })),
+            })),
+            errors: (Array.isArray(order.errors) ? order.errors : []).map((error) => ({
+                code: safeCode(error.code),
+                cause: safeCode(error.cause),
+            })),
+        }));
 }
 
 // ─── Get payment/order status from MP ─────────────────────────
