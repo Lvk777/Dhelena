@@ -6,6 +6,7 @@ import {
 import AdminModal from "@/components/admin/AdminModal";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminSelect from "@/components/admin/AdminSelect";
+import { client } from "@/api/apiClient";
 
 const INTEGRATION_DEFS = [
     {
@@ -30,6 +31,7 @@ const INTEGRATION_DEFS = [
     },
     {
         key: "mercado_pago",
+        statusKey: "mercadoPago",
         name: "Mercado Pago",
         icon: CreditCard,
         description: "Gateway de pagamentos — Pix, cartão de crédito e boleto.",
@@ -41,6 +43,7 @@ const INTEGRATION_DEFS = [
     },
     {
         key: "melhor_envio",
+        statusKey: "melhorEnvio",
         name: "Melhor Envio",
         icon: Truck,
         description: "Cotação e compra de fretes com transportadoras.",
@@ -85,13 +88,10 @@ export default function Integrations() {
     const [testResult, setTestResult] = useState(null);
     const [showConfirmSave, setShowConfirmSave] = useState(false);
 
-    const token = localStorage.getItem("dhelena_access_token");
-    const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
-
     useEffect(() => {
         Promise.all([
-            fetch("/api/integrations/config", { headers }).then(r => r.json()),
-            fetch("/api/integrations/status", { headers }).then(r => r.json()),
+            client.custom.integrationConfigs(),
+            client.custom.integrationStatus(),
         ]).then(([cfgs, envs]) => {
             const cfgMap = {};
             (cfgs || []).forEach(c => { cfgMap[c.service_key] = c; });
@@ -130,17 +130,12 @@ export default function Integrations() {
         setShowConfirmSave(false);
         setSaving(true);
         try {
-            const res = await fetch(`/api/integrations/config/${editingDef.key}`, {
-                method: "PUT",
-                headers,
-                body: JSON.stringify({
-                    service_name: editingDef.name,
-                    description: editingDef.description,
-                    config_data: editForm,
-                    is_active: configs[editingDef.key]?.is_active ?? false,
-                }),
+            const saved = await client.custom.updateIntegrationConfig(editingDef.key, {
+                service_name: editingDef.name,
+                description: editingDef.description,
+                config_data: editForm,
+                is_active: configs[editingDef.key]?.is_active ?? false,
             });
-            const saved = await res.json();
             setConfigs(prev => ({ ...prev, [editingDef.key]: saved }));
             setEditingDef(null);
         } catch { /* */ }
@@ -152,12 +147,7 @@ export default function Integrations() {
         setTestResult(null);
         try {
             // Save first if there are unsaved changes, then test
-            const res = await fetch(`/api/integrations/test/${editingDef.key}`, {
-                method: "POST",
-                headers,
-                body: JSON.stringify({ config_data: editForm }),
-            });
-            const result = await res.json();
+            const result = await client.custom.testIntegration(editingDef.key, editForm);
             if (result.success) {
                 setTesting("success");
                 setTestResult("Conectado");
@@ -172,10 +162,7 @@ export default function Integrations() {
     };
 
     const toggleActive = async (def) => {
-        const res = await fetch(`/api/integrations/config/${def.key}/toggle`, {
-            method: "PATCH", headers,
-        });
-        const updated = await res.json();
+        const updated = await client.custom.toggleIntegration(def.key);
         setConfigs(prev => ({ ...prev, [def.key]: updated }));
     };
 
@@ -206,7 +193,7 @@ export default function Integrations() {
             <div className="grid sm:grid-cols-2 gap-4">
                 {INTEGRATION_DEFS.map(def => {
                     const cfg = configs[def.key];
-                    const env = getEnvStatus(def.key);
+                    const env = getEnvStatus(def.statusKey || def.key);
                     const envConfigured = env && env.status !== "Não configurado";
                     const dbActive = cfg?.is_active ?? false;
                     const dbSensitiveConfigured = def.fields.some(f => getFieldStatus(def, f.key)?.configured);

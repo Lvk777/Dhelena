@@ -366,6 +366,17 @@ const entities = /** @type {Record<string, ReturnType<typeof makeEntity>>} */ (n
 
 // ─── Custom analytics endpoints ───────────────────────────────────
 const custom = {
+    integrationConfigs: () => apiFetch('/integrations/config'),
+    integrationStatus: () => apiFetch('/integrations/status'),
+    updateIntegrationConfig: (serviceKey, data) => apiFetch(`/integrations/config/${serviceKey}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    }),
+    testIntegration: (serviceKey, configData) => apiFetch(`/integrations/test/${serviceKey}`, {
+        method: 'POST',
+        body: JSON.stringify({ config_data: configData }),
+    }),
+    toggleIntegration: (serviceKey) => apiFetch(`/integrations/config/${serviceKey}/toggle`, { method: 'PATCH' }),
     analyticsOverview: ({ period, start = '', end = '' }) => apiFetch(`/analytics/overview?period=${period || '7d'}${start ? `&start=${start}` : ''}${end ? `&end=${end}` : ''}`),
     analyticsSources: ({ period }) => apiFetch(`/analytics/sources?period=${period || '7d'}`),
     analyticsDevices: ({ period }) => apiFetch(`/analytics/devices?period=${period || '7d'}`),
