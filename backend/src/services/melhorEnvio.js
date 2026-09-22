@@ -1,46 +1,40 @@
 import crypto from 'crypto';
+import { melhorEnvioMode, melhorEnvioTokens, MELHOR_ENVIO_USER_AGENT_FALLBACK } from './melhorEnvioToken.js';
 
 /**
  * Melhor Envio Service — Freight calculation, label generation, tracking
- * Uses MELHOR_ENVIO_TOKEN (server-side only)
+ * Uses persisted Sandbox OAuth, with an environment-bound fixed-token fallback.
  * Sandbox: https://sandbox.melhorenvio.com.br/api/v2
  * Production: https://melhorenvio.com.br/api/v2
  */
 
 function getBaseUrl() {
-    const mode = process.env.MELHOR_ENVIO_MODE || 'sandbox';
+    const mode = melhorEnvioMode();
     return mode === 'production'
         ? 'https://melhorenvio.com.br/api/v2'
         : 'https://sandbox.melhorenvio.com.br/api/v2';
 }
 
-function getToken() {
-    const token = process.env.MELHOR_ENVIO_TOKEN;
-    if (!token) throw Object.assign(new Error('MELHOR_ENVIO_TOKEN não configurado'), { status: 500 });
-    return token;
-}
-
 function isSandbox() {
-    return (process.env.MELHOR_ENVIO_MODE || 'sandbox') !== 'production';
+    return melhorEnvioMode() === 'sandbox';
 }
 
 async function meFetch(path, options = {}) {
-    const token = getToken();
-    const url = path.startsWith('http') ? path : `${getBaseUrl()}${path}`;
+    const { token } = await melhorEnvioTokens.getToken();
+    const url = `${getBaseUrl()}${path}`;
     const res = await fetch(url, {
         ...options,
         headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',
             'Content-Type': 'application/json',
-            'User-Agent': process.env.MELHOR_ENVIO_USER_AGENT || "D'Helenas (atendimento@dhelenas.com.br)",
+            'User-Agent': process.env.MELHOR_ENVIO_USER_AGENT || MELHOR_ENVIO_USER_AGENT_FALLBACK,
             ...(options.headers || {}),
         },
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-        const msg = data.message || data.error || `Melhor Envio API error (${res.status})`;
-        throw Object.assign(new Error(msg), { status: res.status, meError: data });
+        throw Object.assign(new Error(`Melhor Envio API error (${res.status})`), { status: res.status });
     }
     return data;
 }
@@ -48,9 +42,6 @@ async function meFetch(path, options = {}) {
 // ─── Test connection ──────────────────────────────────────────
 export async function testConnection() {
     try {
-        const token = process.env.MELHOR_ENVIO_TOKEN;
-        if (!token) return { connected: false, error: 'Token não configurado' };
-
         const data = await meFetch('/me');
         return {
             connected: true,
@@ -59,7 +50,7 @@ export async function testConnection() {
             email: data.email || '—',
         };
     } catch (err) {
-        return { connected: false, error: err.message };
+        return { connected: false, error: err.status === 503 ? err.message : 'Falha na conexão com Melhor Envio.' };
     }
 }
 

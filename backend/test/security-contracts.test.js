@@ -151,8 +151,12 @@ test('Melhor Envio sandbox mock returns provider services and tracking without r
     const originalFetch = global.fetch;
     const originalToken = process.env.MELHOR_ENVIO_TOKEN;
     const originalMode = process.env.MELHOR_ENVIO_MODE;
+    const originalTokenMode = process.env.MELHOR_ENVIO_TOKEN_MODE;
+    const originalQuery = pool.query;
     process.env.MELHOR_ENVIO_TOKEN = 'sandbox-local-fixture';
     process.env.MELHOR_ENVIO_MODE = 'sandbox';
+    process.env.MELHOR_ENVIO_TOKEN_MODE = 'sandbox';
+    pool.query = async () => ({ rows: [] });
     const calls = [];
     global.fetch = async (url, options = {}) => {
         calls.push({ url, options });
@@ -172,6 +176,9 @@ test('Melhor Envio sandbox mock returns provider services and tracking without r
         assert.throws(() => selectShippingQuote(options, 'service-inventado'));
     } finally {
         global.fetch = originalFetch;
+        pool.query = originalQuery;
+        if (originalTokenMode === undefined) delete process.env.MELHOR_ENVIO_TOKEN_MODE;
+        else process.env.MELHOR_ENVIO_TOKEN_MODE = originalTokenMode;
         if (originalToken === undefined) delete process.env.MELHOR_ENVIO_TOKEN;
         else process.env.MELHOR_ENVIO_TOKEN = originalToken;
         if (originalMode === undefined) delete process.env.MELHOR_ENVIO_MODE;
@@ -183,8 +190,12 @@ test('Melhor Envio label mock follows cart, checkout, generate, print and tracki
     const originalFetch = global.fetch;
     const originalToken = process.env.MELHOR_ENVIO_TOKEN;
     const originalMode = process.env.MELHOR_ENVIO_MODE;
+    const originalTokenMode = process.env.MELHOR_ENVIO_TOKEN_MODE;
+    const originalQuery = pool.query;
     process.env.MELHOR_ENVIO_TOKEN = 'sandbox-label-fixture';
     process.env.MELHOR_ENVIO_MODE = 'sandbox';
+    process.env.MELHOR_ENVIO_TOKEN_MODE = 'sandbox';
+    pool.query = async () => ({ rows: [] });
     const calls = [];
     global.fetch = async (url, options = {}) => {
         calls.push({ url, options, body: options.body ? JSON.parse(options.body) : null });
@@ -220,6 +231,9 @@ test('Melhor Envio label mock follows cart, checkout, generate, print and tracki
         assert.equal(label.print_url, 'https://sandbox.invalid/label');
     } finally {
         global.fetch = originalFetch;
+        pool.query = originalQuery;
+        if (originalTokenMode === undefined) delete process.env.MELHOR_ENVIO_TOKEN_MODE;
+        else process.env.MELHOR_ENVIO_TOKEN_MODE = originalTokenMode;
         if (originalToken === undefined) delete process.env.MELHOR_ENVIO_TOKEN;
         else process.env.MELHOR_ENVIO_TOKEN = originalToken;
         if (originalMode === undefined) delete process.env.MELHOR_ENVIO_MODE;
