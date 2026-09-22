@@ -2,6 +2,12 @@ function invalid(message) {
     return Object.assign(new Error(message), { status: 400 });
 }
 
+/** Melhor Envio expects a Brazilian DDD + number, without the optional +55. */
+export function normalizeBrazilianPhone(value) {
+    const digits = String(value || '').replace(/\D/g, '');
+    return digits.startsWith('55') && [12, 13].includes(digits.length) ? digits.slice(2) : digits;
+}
+
 /** Build provider packages only from catalog records already read by the server. */
 export function buildShippingPackages(items) {
     return items.map((item) => {

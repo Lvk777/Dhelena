@@ -418,6 +418,12 @@ test('settings allowlist does not expose internal settings or client-controlled 
     assert.equal(PUBLIC_SETTING_KEYS.has('shipping_sender'), false);
 });
 
+test('sender phone normalizes optional Brazilian country code for shipping', async () => {
+    const { normalizeBrazilianPhone } = await import('../src/lib/shipping.js');
+    assert.equal(normalizeBrazilianPhone('5511927189069'), '11927189069');
+    assert.equal(normalizeBrazilianPhone('(11) 92718-9069'), '11927189069');
+});
+
 test('maintenance redirects store routes before auth while preserving exempt routes', () => {
     for (const pathname of ['/', '/produtos', '/carrinho', '/checkout']) {
         assert.equal(getMaintenanceRedirect({ maintenanceEnabled: true, isAdmin: false, pathname }), '/em-breve');

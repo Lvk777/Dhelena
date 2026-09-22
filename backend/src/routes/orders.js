@@ -6,7 +6,7 @@ import { validateCoupon, adjustStock, logAudit } from '../services.js';
 import { orderLimiter, couponLimiter } from '../middleware/rateLimiters.js';
 import * as mp from '../services/mercadoPago.js';
 import * as me from '../services/melhorEnvio.js';
-import { assertLabelEligible, buildShippingPackages, getPersistedShippingService } from '../lib/shipping.js';
+import { assertLabelEligible, buildShippingPackages, getPersistedShippingService, normalizeBrazilianPhone } from '../lib/shipping.js';
 import { getVerifiedPaymentForOrder, hasPaymentStateChanged } from '../lib/paymentVerification.js';
 
 const router = Router();
@@ -645,7 +645,7 @@ router.post('/orders/:id/shipping/label', auth, requireAdmin, async (req, res) =
         if (!shipmentId) {
             const originPostalCode = (address.cep || '').replace(/\D/g, '');
             const senderDocument = (sender.document || '').replace(/\D/g, '');
-            const senderPhone = (sender.phone || '').replace(/\D/g, '');
+            const senderPhone = normalizeBrazilianPhone(sender.phone);
             if (!sender.name || !sender.email || ![10, 11].includes(senderPhone.length)
                 || ![11, 14].includes(senderDocument.length) || originPostalCode.length !== 8
                 || !address.street || !address.number || !address.district || !address.city
