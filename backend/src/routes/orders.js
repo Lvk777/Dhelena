@@ -629,8 +629,8 @@ router.post('/orders/:id/shipping/label', auth, requireAdmin, async (req, res) =
         // Get origin address from settings
         const { rows: addrRows } = await client.query("SELECT value FROM settings WHERE key = 'address'");
         const address = addrRows[0]?.value || {};
-        const { rows: genRows } = await client.query("SELECT value FROM settings WHERE key = 'general'");
-        const general = genRows[0]?.value || {};
+        const { rows: senderRows } = await client.query("SELECT value FROM settings WHERE key = 'shipping_sender' AND is_public = false");
+        const sender = senderRows[0]?.value || {};
 
         const shippingAddress = order.shipping_address || {};
         const snapshot = order.snapshot || {};
@@ -643,19 +643,29 @@ router.post('/orders/:id/shipping/label', auth, requireAdmin, async (req, res) =
 
         let shipmentId = order.melhor_envio_shipment_id;
         if (!shipmentId) {
+            const originPostalCode = (address.cep || '').replace(/\D/g, '');
+            const senderDocument = (sender.document || '').replace(/\D/g, '');
+            const senderPhone = (sender.phone || '').replace(/\D/g, '');
+            if (!sender.name || !sender.email || ![10, 11].includes(senderPhone.length)
+                || ![11, 14].includes(senderDocument.length) || originPostalCode.length !== 8
+                || !address.street || !address.number || !address.district || !address.city
+                || !/^[A-Z]{2}$/.test(address.state || '')) {
+                return res.status(422).json({ error: 'Dados reais do remetente incompletos ou inválidos' });
+            }
             const shipment = await me.addShipmentToCart({
                 from: {
-                    name: general.store_name || 'D\'Helenas',
-                    phone: general.phone || '',
-                    email: general.email || '',
-                    document: general.cnpj || general.cpf || '',
-                    state_register: general.state_register || '',
-                    address: address.street || '',
-                    number: address.number || '',
-                    district: address.district || '',
-                    city: address.city || '',
-                    state: address.state || 'SP',
-                    postal_code: (address.cep || '').replace(/\D/g, ''),
+                    name: sender.name,
+                    phone: senderPhone,
+                    email: sender.email,
+                    document: senderDocument,
+                    state_register: sender.state_register || '',
+                    address: address.street,
+                    number: address.number,
+                    complement: address.complement || '',
+                    district: address.district,
+                    city: address.city,
+                    state: address.state,
+                    postal_code: originPostalCode,
                 },
                 to: {
                     name: customer.name || '',

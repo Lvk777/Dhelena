@@ -283,7 +283,7 @@ router.delete('/banners/:id', auth, requireAdmin, async (req, res, next) => {
 // Keys not in this list (e.g. "notifications", "look_promotion") are internal and protected.
 export const ALLOWED_SETTING_KEYS = new Set([
     'general', 'store', 'address', 'shipping', 'payments',
-    'emails', 'social', 'seo', 'policies', 'maintenance',
+    'emails', 'social', 'seo', 'policies', 'maintenance', 'shipping_sender',
 ]);
 
 // Server-side public-keys list: is_public is determined HERE, never trusted from the client.

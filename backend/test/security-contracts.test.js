@@ -411,9 +411,11 @@ test('checkout discards browser-supplied shipping cost, dimensions and service m
 test('settings allowlist does not expose internal settings or client-controlled visibility', () => {
     assert.equal(ALLOWED_SETTING_KEYS.has('shipping'), true);
     assert.equal(ALLOWED_SETTING_KEYS.has('maintenance'), true);
+    assert.equal(ALLOWED_SETTING_KEYS.has('shipping_sender'), true);
     assert.equal(ALLOWED_SETTING_KEYS.has('notifications'), false);
     assert.equal(PUBLIC_SETTING_KEYS.has('shipping'), true);
     assert.equal(PUBLIC_SETTING_KEYS.has('payments'), false);
+    assert.equal(PUBLIC_SETTING_KEYS.has('shipping_sender'), false);
 });
 
 test('maintenance redirects store routes before auth while preserving exempt routes', () => {
