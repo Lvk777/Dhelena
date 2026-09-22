@@ -219,7 +219,7 @@ router.get('/payments/methods', auth, async (req, res) => {
             },
             methods,
             public_key: process.env.MERCADO_PAGO_PUBLIC_KEY || null,
-            environment: process.env.MERCADO_PAGO_ACCESS_TOKEN?.startsWith('TEST-') ? 'Teste' : 'Produção',
+            environment: mp.getMercadoPagoEnvironment(),
         });
     } catch (err) {
         res.status(err.status || 500).json({ error: err.message });

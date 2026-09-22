@@ -14,10 +14,22 @@ function getAccessToken() {
     return token;
 }
 
-function isTestEnvironment() {
-    const token = process.env.MERCADO_PAGO_ACCESS_TOKEN || '';
-    // Test tokens start with TEST-
-    return token.startsWith('TEST-');
+export function getMercadoPagoMode() {
+    const mode = process.env.MERCADO_PAGO_MODE;
+    return mode === 'test' || mode === 'production' ? mode : 'INDETERMINADO';
+}
+
+export function getMercadoPagoReadiness() {
+    return {
+        mode: getMercadoPagoMode(),
+        configured: !!process.env.MERCADO_PAGO_ACCESS_TOKEN && getMercadoPagoMode() !== 'INDETERMINADO',
+        public_key_configured: !!process.env.MERCADO_PAGO_PUBLIC_KEY,
+        webhook_configured: !!process.env.MERCADO_PAGO_WEBHOOK_SECRET,
+    };
+}
+
+export function getMercadoPagoEnvironment() {
+    return { test: 'Teste', production: 'Produção' }[getMercadoPagoMode()] || 'INDETERMINADO';
 }
 
 async function mpFetch(path, options = {}) {
@@ -52,7 +64,7 @@ export async function testConnection() {
         const data = await mpFetch('/users/me');
         return {
             connected: true,
-            environment: isTestEnvironment() ? 'Teste' : 'Produção',
+            environment: getMercadoPagoEnvironment(),
             user_id: data.id,
             country: data.country_id,
         };
