@@ -279,6 +279,9 @@ export async function cancelOrder(orderId, userId, isAdmin = false) {
 
         const order = orderRows[0];
         if (order.status === 'cancelado') return order; // Idempotent — already cancelled
+        if (order.payment_status === 'approved' || order.mercado_pago_order_id || order.mercado_pago_payment_id) {
+            throw Object.assign(new Error('Pedido com pagamento no provedor exige conciliação antes do cancelamento'), { status: 409 });
+        }
 
         // Get order items
         const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id = $1', [orderId]);
@@ -307,7 +310,13 @@ export async function cancelOrder(orderId, userId, isAdmin = false) {
 
         // Update order status
         const { rows: updated } = await client.query(
-            "UPDATE orders SET status = 'cancelado', payment_status = 'refunded', updated_at = now() WHERE id = $1 RETURNING *",
+            "UPDATE orders SET status = 'cancelado', updated_at = now() WHERE id = $1 RETURNING *",
+            [orderId]
+        );
+
+        await client.query(
+            `INSERT INTO order_events (order_id, event, description)
+             VALUES ($1, 'order_cancelled', 'Pedido cancelado; estoque devolvido')`,
             [orderId]
         );
 
