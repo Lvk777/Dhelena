@@ -1,6 +1,8 @@
 import { pool, withTransaction } from './config/db.js';
 import { validateCoupon, logAudit, sendOrderNotifications } from './services.js';
 import * as melhorEnvio from './services/melhorEnvio.js';
+import { restoreStock } from './afterSalesService.js';
+import { canCancelWithoutRefund } from './lib/afterSalesPolicy.js';
 import { buildShippingPackages, getCheckoutShippingInput, selectShippingQuote } from './lib/shipping.js';
 import { assertMatchingIdempotencyRequest, createOrderRequestFingerprint, normalizeIdempotencyKey } from './lib/idempotency.js';
 import { calculateServerOrderTotal, resolveCatalogLine } from './lib/orderPricing.js';
@@ -279,34 +281,14 @@ export async function cancelOrder(orderId, userId, isAdmin = false) {
 
         const order = orderRows[0];
         if (order.status === 'cancelado') return order; // Idempotent — already cancelled
-        if (order.payment_status === 'approved' || order.mercado_pago_order_id || order.mercado_pago_payment_id) {
+        if (!canCancelWithoutRefund(order)) {
             throw Object.assign(new Error('Pedido com pagamento no provedor exige conciliação antes do cancelamento'), { status: 409 });
         }
 
         // Get order items
         const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id = $1', [orderId]);
 
-        // Restore stock for each item
-        for (const item of items) {
-            const { rows: prodRows } = await client.query('SELECT colors FROM products WHERE id = $1 FOR UPDATE', [item.product_id]);
-            if (prodRows.length === 0) continue;
-
-            const colors = prodRows[0].colors || [];
-            const color = colors.find(c => c.id === item.color_id);
-            if (!color) continue;
-
-            const currentStock = color.stock?.[item.size] ?? 0;
-            if (!color.stock) color.stock = {};
-            color.stock[item.size] = currentStock + item.quantity;
-
-            await client.query('UPDATE products SET colors = $1, sold_count = GREATEST(0, sold_count - $2), updated_date = now() WHERE id = $3', [JSON.stringify(colors), item.quantity, item.product_id]);
-
-            await client.query(
-                `INSERT INTO stock_movements (product_id, order_id, type, quantity, color_id, size, previous_stock, new_stock)
-                 VALUES ($1, $2, 'cancel', $3, $4, $5, $6, $7)`,
-                [item.product_id, orderId, item.quantity, item.color_id, item.size, currentStock, currentStock + item.quantity]
-            );
-        }
+        for (const item of items) await restoreStock(client, order, item, item.quantity, 'cancellation', null, isAdmin ? userId : null);
 
         // Update order status
         const { rows: updated } = await client.query(

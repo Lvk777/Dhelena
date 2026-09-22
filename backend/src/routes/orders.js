@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { pool } from '../config/db.js';
+import { pool, withTransaction } from '../config/db.js';
 import { auth, requireAdmin } from '../middleware.js';
 import { placeOrder, cancelOrder } from '../orderService.js';
 import { validateCoupon, adjustStock, logAudit } from '../services.js';
@@ -8,6 +8,8 @@ import * as mp from '../services/mercadoPago.js';
 import * as me from '../services/melhorEnvio.js';
 import { assertLabelEligible, buildShippingPackages, getPersistedShippingService, normalizeBrazilianPhone } from '../lib/shipping.js';
 import { getVerifiedPaymentForOrder, hasPaymentStateChanged } from '../lib/paymentVerification.js';
+import { assertFulfillmentTransition, shouldApplyProviderPayment } from '../lib/afterSalesPolicy.js';
+import { refundInFlight } from '../lib/refundState.js';
 
 const router = Router();
 const COUPON_MUTABLE_FIELDS = new Set([
@@ -90,19 +92,29 @@ router.delete('/orders/:id', auth, async (req, res) => {
 router.patch('/orders/:id/status', auth, requireAdmin, async (req, res, next) => {
     try {
         const { status, payment_status, tracking_code } = req.body;
-        const { rows } = await pool.query(
-            `UPDATE orders SET status = COALESCE($1, status), payment_status = COALESCE($2, payment_status),
-             tracking_code = COALESCE($3, tracking_code), updated_at = now() WHERE id = $4 RETURNING *`,
-            [status, payment_status, tracking_code, req.params.id]
-        );
-        if (rows.length === 0) return res.status(404).json({ error: 'Pedido não encontrado' });
-        await logAudit(req.user.id, 'order.update_status', 'order', req.params.id, { status, payment_status }, req.ip);
-
-        if (payment_status === 'approved') {
-            const { sendOrderNotifications } = await import('../services.js');
-            sendOrderNotifications(req.params.id, 'payment_approved').catch(() => {});
+        if (payment_status !== undefined || (status !== undefined
+            && !['em_separacao', 'enviado', 'em_transporte', 'saiu_entrega', 'entregue'].includes(status))) {
+            return res.status(400).json({ error: 'Pagamento e cancelamento exigem os fluxos próprios' });
         }
-        res.json(rows[0]);
+        if (tracking_code !== undefined && (typeof tracking_code !== 'string' || tracking_code.length > 100)) {
+            return res.status(400).json({ error: 'Rastreio inválido' });
+        }
+        const updated = await withTransaction(async client => {
+            const { rows } = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [req.params.id]);
+            if (!rows.length) return null;
+            if (rows[0].status === 'cancelado' || rows[0].payment_status !== 'approved') {
+                throw Object.assign(new Error('Pedido não elegível à expedição'), { status: 409 });
+            }
+            assertFulfillmentTransition(rows[0], status);
+            const result = await client.query(
+                `UPDATE orders SET status = COALESCE($1, status), tracking_code = COALESCE($2, tracking_code),
+                 updated_at = now() WHERE id = $3 RETURNING *`,
+                [status, tracking_code, req.params.id]);
+            return result.rows[0];
+        });
+        if (!updated) return res.status(404).json({ error: 'Pedido não encontrado' });
+        await logAudit(req.user.id, 'order.update_status', 'order', req.params.id, { status }, req.ip);
+        res.json(updated);
     } catch (err) { next(err); }
 });
 
@@ -278,6 +290,15 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
                 payment_status: order.payment_status,
             });
         }
+        if (order.mercado_pago_order_id || order.payment_attempt_started_at || order.payment_status !== 'pending') {
+            return res.status(409).json({ error: 'Pagamento existente ou em conciliação; não criar outra cobrança' });
+        }
+        const { rows: reserved } = await pool.query(
+            `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'pix'
+             WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
+               AND mercado_pago_order_id IS NULL AND payment_attempt_started_at IS NULL RETURNING id`,
+            [order.id]);
+        if (!reserved.length) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
 
         // Get payer info from snapshot
         const snapshot = order.snapshot || {};
@@ -297,6 +318,9 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
             payer,
             idempotencyKey,
         });
+        if (!result.mp_order_id || result.external_reference !== order.order_number) {
+            return res.status(502).json({ error: 'Resposta do provedor exige conciliação manual' });
+        }
 
         // Save MP data to order
         await pool.query(
@@ -310,7 +334,8 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
                 pix_qr_code = $6,
                 pix_qr_code_base64 = $7,
                 pix_expiration_at = $8,
-                payment_status = 'pending',
+                payment_status = CASE WHEN payment_status = 'approved' THEN payment_status ELSE 'pending' END,
+                payment_attempt_started_at = NULL,
                 payment_updated_at = now(),
                 updated_at = now()
              WHERE id = $9`,
@@ -341,8 +366,8 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
             payment_status: 'pending',
         });
     } catch (err) {
-        console.error('[Payment Pix] Error:', err.message);
-        res.status(err.status || 500).json({ error: err.message });
+        console.error('[Payment Pix] Provider status:', err.status || 500);
+        res.status(err.status || 500).json({ error: 'Não foi possível confirmar o pagamento; solicite conciliação' });
     }
 });
 
@@ -369,7 +394,7 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
         const order = rows[0];
 
         // Idempotency: if already has MP order with card, return status
-        if (order.mercado_pago_order_id && order.payment_provider === 'mercado_pago' && order.payment_status !== 'pending') {
+        if (order.mercado_pago_order_id && order.payment_provider === 'mercado_pago') {
             return res.json({
                 order_id: order.id,
                 payment_status: order.payment_status,
@@ -377,6 +402,16 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
                 mp_status_detail: order.mercado_pago_status_detail,
             });
         }
+        if (order.status === 'cancelado' || order.mercado_pago_order_id
+            || order.payment_attempt_started_at || order.payment_status !== 'pending') {
+            return res.status(409).json({ error: 'Pagamento existente ou em conciliação; não criar outra cobrança' });
+        }
+        const { rows: reserved } = await pool.query(
+            `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'card'
+             WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
+               AND mercado_pago_order_id IS NULL AND payment_attempt_started_at IS NULL RETURNING id`,
+            [order.id]);
+        if (!reserved.length) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
 
         // Get payer info
         const snapshot = order.snapshot || {};
@@ -400,6 +435,9 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
             issuerId,
             idempotencyKey,
         });
+        if (!result.mp_order_id || result.external_reference !== order.order_number) {
+            return res.status(502).json({ error: 'Resposta do provedor exige conciliação manual' });
+        }
 
         const internalStatus = mp.mapPaymentStatus(result.mp_status);
 
@@ -413,7 +451,8 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
                 mercado_pago_status_detail = $4,
                 mercado_pago_external_reference = $5,
                 installments = $6,
-                payment_status = $7,
+                payment_status = CASE WHEN payment_status = 'approved' THEN payment_status ELSE $7 END,
+                payment_attempt_started_at = NULL,
                 payment_updated_at = now(),
                 paid_at = CASE WHEN $7 = 'approved' THEN now() ELSE paid_at END,
                 status = CASE WHEN $7 = 'approved' AND status = 'recebido' THEN 'pagamento_aprovado' ELSE status END,
@@ -445,8 +484,8 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
             installments: result.installments,
         });
     } catch (err) {
-        console.error('[Payment Card] Error:', err.message);
-        res.status(err.status || 500).json({ error: err.message });
+        console.error('[Payment Card] Provider status:', err.status || 500);
+        res.status(err.status || 500).json({ error: 'Não foi possível confirmar o pagamento; solicite conciliação' });
     }
 });
 
@@ -469,24 +508,32 @@ router.get('/orders/:id/payment/status', auth, async (req, res) => {
         const mpData = await getVerifiedPaymentForOrder(order, mp);
         const internalStatus = mp.mapPaymentStatus(mpData.mp_status);
 
-        if (hasPaymentStateChanged(order, mpData, internalStatus)) {
-            await pool.query(
-                `UPDATE orders SET
-                    mercado_pago_status = $1,
-                    mercado_pago_status_detail = $2,
-                    mercado_pago_payment_id = COALESCE($3, mercado_pago_payment_id),
-                    payment_status = $4,
-                    payment_updated_at = now(),
-                    paid_at = CASE WHEN $4 = 'approved' AND paid_at IS NULL THEN now() ELSE paid_at END,
-                    status = CASE WHEN $4 = 'approved' AND status = 'recebido' THEN 'pagamento_aprovado' ELSE status END,
-                    updated_at = now()
-                 WHERE id = $5`,
-                [mpData.mp_status, mpData.mp_status_detail, mpData.mp_payment_id, internalStatus, order.id]
-            );
-        }
+        const effectiveStatus = await withTransaction(async client => {
+            const { rows: locked } = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [order.id]);
+            const current = locked[0];
+            if (!shouldApplyProviderPayment(current, internalStatus, await refundInFlight(client, current.id))) {
+                return current.payment_status;
+            }
+            if (hasPaymentStateChanged(current, mpData, internalStatus)) {
+                await client.query(
+                    `UPDATE orders SET
+                        mercado_pago_status = $1,
+                        mercado_pago_status_detail = $2,
+                        mercado_pago_payment_id = COALESCE($3, mercado_pago_payment_id),
+                        payment_status = $4,
+                        payment_updated_at = now(),
+                        paid_at = CASE WHEN $4 = 'approved' AND paid_at IS NULL THEN now() ELSE paid_at END,
+                        status = CASE WHEN $4 = 'approved' AND status = 'recebido' THEN 'pagamento_aprovado' ELSE status END,
+                        updated_at = now()
+                     WHERE id = $5`,
+                    [mpData.mp_status, mpData.mp_status_detail, mpData.mp_payment_id, internalStatus, order.id]
+                );
+            }
+            return internalStatus;
+        });
 
         res.json({
-            payment_status: internalStatus,
+            payment_status: effectiveStatus,
             mp_status: mpData.mp_status,
             mp_status_detail: mpData.mp_status_detail,
             payment_method: order.payment_method,

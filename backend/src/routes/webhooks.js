@@ -9,6 +9,8 @@ import { pool, withTransaction } from '../config/db.js';
 import { validateWebhookSignature, getOrderStatus, getPaymentStatus, mapPaymentStatus } from '../services/mercadoPago.js';
 import { validateWebhook as validateMEWebhook, getTracking } from '../services/melhorEnvio.js';
 import { getVerifiedPaymentForOrder, hasPaymentStateChanged, isVerifiedPaymentForOrder } from '../lib/paymentVerification.js';
+import { shouldApplyProviderPayment } from '../lib/afterSalesPolicy.js';
+import { refundInFlight } from '../lib/refundState.js';
 
 const router = Router();
 
@@ -128,28 +130,38 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
         const mpStatus = verifiedPayment.mp_status;
         const mpPaymentId = verifiedPayment.mp_payment_id;
         const internalStatus = mapPaymentStatus(mpStatus);
-        const stateChanged = hasPaymentStateChanged(orderRef, verifiedPayment, internalStatus);
-
-        // Update order idempotently
-        const updates = {
-            mercado_pago_status: mpStatus,
-            mercado_pago_status_detail: verifiedPayment.mp_status_detail,
-            payment_status: internalStatus,
-            payment_updated_at: new Date(),
-        };
-
-        if (mpPaymentId) updates.mercado_pago_payment_id = mpPaymentId;
-
-        if (internalStatus === 'approved' && orderRef.payment_status !== 'approved') {
-            updates.paid_at = new Date();
-            updates.status = orderRef.status === 'recebido' ? 'pagamento_aprovado' : orderRef.status;
-        }
-
-        const setParts = Object.keys(updates).map((k, i) => `${k} = $${i + 1}`);
-        const values = Object.values(updates);
-        values.push(orderRef.id);
-
-        await withTransaction(async (client) => {
+        const outcome = await withTransaction(async (client) => {
+            const { rows: locked } = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [orderRef.id]);
+            const current = locked[0];
+            if (!shouldApplyProviderPayment(current, internalStatus, await refundInFlight(client, current.id))) {
+                if ((current.status === 'cancelado' && internalStatus === 'approved')
+                    || (['refunded', 'partially_refunded'].includes(internalStatus)
+                        && current.payment_status !== internalStatus)) {
+                    await client.query(
+                        `INSERT INTO order_events (order_id, event, description, metadata)
+                         VALUES ($1, 'payment_anomaly', 'Divergência financeira no provedor; conciliação manual obrigatória', $2)`,
+                        [current.id, JSON.stringify({ mp_status: mpStatus, mp_payment_id: mpPaymentId })]);
+                }
+                await client.query(
+                    'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
+                    ['mercado_pago', eventId]);
+                return 'ignored';
+            }
+            const stateChanged = hasPaymentStateChanged(current, verifiedPayment, internalStatus);
+            const updates = {
+                mercado_pago_status: mpStatus,
+                mercado_pago_status_detail: verifiedPayment.mp_status_detail,
+                payment_status: internalStatus,
+                payment_updated_at: new Date(),
+            };
+            if (mpPaymentId) updates.mercado_pago_payment_id = mpPaymentId;
+            if (internalStatus === 'approved' && current.payment_status !== 'approved') {
+                updates.paid_at = new Date();
+                updates.status = current.status === 'recebido' ? 'pagamento_aprovado' : current.status;
+            }
+            const setParts = Object.keys(updates).map((k, i) => `${k} = $${i + 1}`);
+            const values = Object.values(updates);
+            values.push(current.id);
             await client.query(
                 `UPDATE orders SET ${setParts.join(', ')}, updated_at = now() WHERE id = $${values.length}`,
                 values
@@ -158,17 +170,18 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
                 await client.query(
                     `INSERT INTO order_events (order_id, event, description, metadata)
                      VALUES ($1, $2, $3, $4)`,
-                    [orderRef.id, `payment_${internalStatus}`, `Pagamento ${internalStatus} via webhook MP`, JSON.stringify({ mp_status: mpStatus })]
+                    [current.id, `payment_${internalStatus}`, `Pagamento ${internalStatus} via webhook MP`, JSON.stringify({ mp_status: mpStatus })]
                 );
             }
             await client.query(
                 'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
                 ['mercado_pago', eventId]
             );
+            return 'applied';
         });
 
-        console.log(`[Webhook MP] Order ${orderRef.order_number} → payment_status: ${internalStatus}`);
-        res.status(200).json({ status: 'ok', payment_status: internalStatus });
+        console.log(`[Webhook MP] Order ${orderRef.order_number} → ${outcome}`);
+        res.status(200).json({ status: outcome, payment_status: internalStatus });
 
     } catch (err) {
         console.error('[Webhook MP] Error:', err.message);

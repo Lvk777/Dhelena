@@ -311,12 +311,64 @@ export function validateWebhookSignature(req) {
     return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }
 
+// After-sales uses Orders API only. Return a limited shape without payer or credentials.
+export async function getRefundableOrder(mpOrderId) {
+    const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}`);
+    const payments = data.transactions?.payments || [];
+    return {
+        id: data.id,
+        external_reference: data.external_reference,
+        total_amount: data.total_amount,
+        currency: data.currency_id || data.currency || payments[0]?.currency_id,
+        status: data.status,
+        status_detail: data.status_detail,
+        payment: payments.length === 1 ? { id: payments[0].id, status: payments[0].status } : null,
+        refunds: (data.transactions?.refunds || []).map(refund => ({
+            id: refund.id,
+            transaction_id: refund.transaction_id,
+            amount: refund.amount,
+            status: refund.status,
+        })),
+    };
+}
+
+export async function refundOrder({ mpOrderId, mpPaymentId, amount, full, idempotencyKey }) {
+    if (!idempotencyKey || !/^[a-zA-Z0-9_-]{1,128}$/.test(idempotencyKey)) {
+        throw Object.assign(new Error('Chave de idempotência inválida'), { status: 400 });
+    }
+    const body = full ? undefined : JSON.stringify({
+        transactions: [{ id: mpPaymentId, amount: (amount / 100).toFixed(2) }],
+    });
+    const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}/refund`, {
+        method: 'POST', idempotencyKey, ...(body ? { body } : {}),
+    });
+    return {
+        id: data.id,
+        status: data.status,
+        status_detail: data.status_detail,
+        refunds: (data.transactions?.refunds || []).map(refund => ({
+            id: refund.id,
+            transaction_id: refund.transaction_id,
+            amount: refund.amount,
+            status: refund.status,
+        })),
+    };
+}
+
+export async function cancelPendingOrder(mpOrderId, idempotencyKey) {
+    const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}/cancel`, {
+        method: 'POST', idempotencyKey,
+    });
+    return { id: data.id, status: data.status, external_reference: data.external_reference };
+}
+
 // ─── Map MP status to internal payment status ─────────────────
 export function mapPaymentStatus(mpStatus) {
     const map = {
         'pending': 'pending',
         'in_process': 'pending',
         'approved': 'approved',
+        'partially_refunded': 'partially_refunded',
         'rejected': 'rejected',
         'cancelled': 'rejected',
         'refunded': 'refunded',
