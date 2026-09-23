@@ -3,32 +3,27 @@ import { Navigate, useLocation } from "react-router-dom";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
 import { useAuth } from "@/lib/AuthContext";
 import ComingSoon from "@/pages/ComingSoon";
-
-// Routes that are NEVER blocked by maintenance mode
-const EXEMPT_PREFIXES = ["/admin", "/login", "/cadastro", "/esqueci", "/reset-password", "/api", "/health", "/webhooks"];
+import { getMaintenanceRedirect } from "@/lib/maintenance";
 
 export default function MaintenanceGuard({ children }) {
     const { settings, loading } = usePublicSettings();
     const { user } = useAuth();
     const location = useLocation();
 
-    // Wait for settings to load
-    if (loading) return children;
+    // Do not render guarded routes until maintenance status is known. Otherwise a
+    // nested auth guard can redirect before maintenance gets a chance to run.
+    if (loading) {
+        return (
+            <div className="fixed inset-0 flex items-center justify-center" role="status" aria-label="Carregando loja">
+                <div className="w-8 h-8 border-4 border-[hsl(var(--bone))] border-t-[hsl(var(--gold))] rounded-full animate-spin" />
+            </div>
+        );
+    }
 
     const isMaintenance = settings.maintenance?.maintenance_mode === true;
     const isAdmin = user?.role === "admin";
 
-    // If maintenance is off, or user is admin, allow everything
-    if (!isMaintenance || isAdmin) return children;
-
-    // Check if current path is exempt
-    const isExempt = EXEMPT_PREFIXES.some((prefix) => location.pathname.startsWith(prefix));
-
-    if (isExempt) return children;
-
-    // If already on /em-breve, show it
-    if (location.pathname === "/em-breve") return <ComingSoon />;
-
-    // Redirect all other public routes to /em-breve
-    return <Navigate to="/em-breve" replace />;
+    const redirect = getMaintenanceRedirect({ maintenanceEnabled: isMaintenance, isAdmin, pathname: location.pathname });
+    if (!redirect) return location.pathname === "/em-breve" ? <ComingSoon /> : children;
+    return <Navigate to={redirect} replace />;
 }

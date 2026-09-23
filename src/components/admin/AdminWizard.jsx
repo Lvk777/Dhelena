@@ -27,15 +27,15 @@ import { ChevronLeft, ChevronRight, Check, X, AlertTriangle } from "lucide-react
  */
 export default function AdminWizard({
     title,
-    subtitle,
+    subtitle = "",
     icon: Icon,
     steps = [],
     validateStep,
     onSave,
     onClose,
     saveLabel = "Salvar",
-    draftLabel,
-    onSaveDraft,
+    draftLabel = null,
+    onSaveDraft = undefined,
     saving = false,
     children,
 }) {

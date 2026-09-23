@@ -1,7 +1,6 @@
 import React from "react";
 import { Share2, Instagram, Facebook, Music2, MessageCircle } from "lucide-react";
 import AdminFormSection from "@/components/admin/AdminFormSection";
-import AdminInput from "@/components/admin/AdminInput";
 
 export default function SocialTab({ data, onChange }) {
     const set = (k, v) => onChange({ ...data, [k]: v });

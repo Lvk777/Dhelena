@@ -154,7 +154,7 @@ export default function Cart() {
     );
 }
 
-function Row({ label, value, accent }) {
+function Row({ label, value, accent = false }) {
     return (
         <div className="flex justify-between">
             <span className="text-muted-foreground">{label}</span>

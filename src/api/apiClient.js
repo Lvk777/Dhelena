@@ -4,8 +4,12 @@
  */
 
 import { supabase } from './supabaseClient.js';
+import { buildPlaceOrderRequest } from './orderRequest.js';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? null : '/api');
+if (!API_BASE) {
+    throw new Error('VITE_API_URL é obrigatória em produção; a API não pode usar o fallback /api do SPA.');
+}
 const TOKEN_KEY = 'dhelena_access_token';
 const USER_KEY = 'dhelena_auth_user';
 
@@ -14,6 +18,11 @@ function getToken() { return localStorage.getItem(TOKEN_KEY); }
 function setToken(token) { token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY); }
 function getStoredUser() { try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch { return null; } }
 function setStoredUser(user) { user ? localStorage.setItem(USER_KEY, JSON.stringify(user)) : localStorage.removeItem(USER_KEY); }
+
+/** @param {string} message @param {number} status @param {unknown} [data] */
+function createApiError(message, status, data) {
+    return Object.assign(new Error(message), { status, response: data === undefined ? undefined : { data } });
+}
 
 // ─── Sync Supabase session → localStorage token ────────────────────
 // Only sync when supabase has a session; don't clear JWT token on sign-out events
@@ -37,17 +46,12 @@ async function apiFetch(path, options = {}) {
     if (res.status === 401) {
         setToken(null);
         setStoredUser(null);
-        const err = new Error('Não autenticado');
-        err.status = 401;
-        throw err;
+        throw createApiError('Não autenticado', 401);
     }
 
     if (!res.ok) {
         const error = await res.json().catch(() => ({ error: res.statusText }));
-        const err = new Error(error.error || error.message || 'Request failed');
-        err.status = res.status;
-        err.response = { data: error };
-        throw err;
+        throw createApiError(error.error || error.message || 'Request failed', res.status, error);
     }
 
     return res.json();
@@ -124,16 +128,16 @@ const auth = {
         // If no supabase session (or supabase not configured), check JWT token
         const token = getToken();
         if (!token) {
-            const err = new Error('Not authenticated');
-            err.status = 401;
-            throw err;
+            throw createApiError('Not authenticated', 401);
         }
         try {
             const user = await apiFetch('/auth/me');
             setStoredUser(user);
             return user;
         } catch (err) {
-            if (err.status === 401) {
+            /** @type {{ status?: number }} */
+            const apiError = /** @type {any} */ (err);
+            if (apiError.status === 401) {
                 setToken(null);
                 setStoredUser(null);
             }
@@ -192,8 +196,23 @@ const auth = {
         setStoredUser(data.user);
         return data.user;
     },
-    async verifyOtp() { throw new Error('OTP não implementado'); },
-    async resendOtp() { return {}; },
+    async verifyOtp({ email, otpCode }) {
+        if (!supabase) throw new Error('Verificação por código exige Supabase Auth.');
+        const { data, error } = await supabase.auth.verifyOtp({
+            email,
+            token: otpCode,
+            type: 'signup',
+        });
+        if (error || !data.session) throw error || new Error('Código inválido ou expirado.');
+        setToken(data.session.access_token);
+        return data.session;
+    },
+    async resendOtp(email) {
+        if (!supabase) throw new Error('Reenvio de código exige Supabase Auth.');
+        const { error } = await supabase.auth.resend({ type: 'signup', email });
+        if (error) throw error;
+        return {};
+    },
     async updateMe(data) {
         const user = await apiFetch('/auth/me', { method: 'PATCH', body: JSON.stringify(data) });
         setStoredUser(user);
@@ -243,7 +262,7 @@ const functions = {
     async invoke(name, args) {
         switch (name) {
             case 'placeOrder':
-                return apiFetch('/orders', { method: 'POST', body: JSON.stringify(args) });
+                return apiFetch('/orders', buildPlaceOrderRequest(args));
             case 'cancelOrder':
                 return apiFetch(`/orders/${args.orderId || args.id}`, { method: 'DELETE' });
             case 'validateCoupon':
@@ -272,6 +291,26 @@ const functions = {
                 return apiFetch('/payments/methods');
             case 'getOrderEvents':
                 return apiFetch(`/orders/${args.orderId}/events`);
+            case 'getAfterSales':
+                return apiFetch(`/orders/${args.orderId}/after-sales`);
+            case 'createReturn':
+                return apiFetch(`/orders/${args.orderId}/returns`, { method: 'POST', body: JSON.stringify(args) });
+            case 'advanceReturn':
+                return apiFetch(`/orders/${args.orderId}/returns/${args.returnId}`, {
+                    method: 'PATCH', body: JSON.stringify({ status: args.status, restockable: args.restockable }),
+                });
+            case 'requestRefund':
+                return apiFetch(`/orders/${args.orderId}/refunds`, {
+                    method: 'POST', headers: { 'X-Idempotency-Key': args.idempotencyKey },
+                    body: JSON.stringify({ kind: args.kind, reason: args.reason,
+                        items: args.items, return_id: args.returnId || null }),
+                });
+            case 'reconcileRefund':
+                return apiFetch(`/orders/${args.orderId}/refunds/${args.refundId}/reconcile`, { method: 'POST' });
+            case 'cancelAfterRefund':
+                return apiFetch(`/orders/${args.orderId}/cancel-after-refund`, { method: 'POST' });
+            case 'cancelPendingPayment':
+                return apiFetch(`/orders/${args.orderId}/cancel-pending-payment`, { method: 'POST' });
             case 'generateShippingLabel':
                 return apiFetch(`/orders/${args.orderId}/shipping/label`, { method: 'POST', body: JSON.stringify(args) });
             case 'getTrackingInfo':
@@ -339,15 +378,26 @@ const app = {
 };
 
 // ─── Entity registry ───────────────────────────────────────────────
-const entities = new Proxy({}, {
+const entities = /** @type {Record<string, ReturnType<typeof makeEntity>>} */ (new Proxy({}, {
     get(_, name) {
         return makeEntity(name);
     },
-});
+}));
 
 // ─── Custom analytics endpoints ───────────────────────────────────
 const custom = {
-    analyticsOverview: ({ period, start, end }) => apiFetch(`/analytics/overview?period=${period || '7d'}${start ? `&start=${start}` : ''}${end ? `&end=${end}` : ''}`),
+    integrationConfigs: () => apiFetch('/integrations/config'),
+    integrationStatus: () => apiFetch('/integrations/status'),
+    updateIntegrationConfig: (serviceKey, data) => apiFetch(`/integrations/config/${serviceKey}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    }),
+    testIntegration: (serviceKey, configData) => apiFetch(`/integrations/test/${serviceKey}`, {
+        method: 'POST',
+        body: JSON.stringify({ config_data: configData }),
+    }),
+    toggleIntegration: (serviceKey) => apiFetch(`/integrations/config/${serviceKey}/toggle`, { method: 'PATCH' }),
+    analyticsOverview: ({ period, start = '', end = '' }) => apiFetch(`/analytics/overview?period=${period || '7d'}${start ? `&start=${start}` : ''}${end ? `&end=${end}` : ''}`),
     analyticsSources: ({ period }) => apiFetch(`/analytics/sources?period=${period || '7d'}`),
     analyticsDevices: ({ period }) => apiFetch(`/analytics/devices?period=${period || '7d'}`),
     analyticsPages: ({ period }) => apiFetch(`/analytics/pages?period=${period || '7d'}`),

@@ -14,25 +14,40 @@ function getAccessToken() {
     return token;
 }
 
-function isTestEnvironment() {
-    const token = process.env.MERCADO_PAGO_ACCESS_TOKEN || '';
-    // Test tokens start with TEST-
-    return token.startsWith('TEST-');
+export function getMercadoPagoMode() {
+    const mode = process.env.MERCADO_PAGO_MODE;
+    return mode === 'test' || mode === 'production' ? mode : 'INDETERMINADO';
+}
+
+export function getMercadoPagoReadiness() {
+    return {
+        mode: getMercadoPagoMode(),
+        configured: !!process.env.MERCADO_PAGO_ACCESS_TOKEN && getMercadoPagoMode() !== 'INDETERMINADO',
+        public_key_configured: !!process.env.MERCADO_PAGO_PUBLIC_KEY,
+        webhook_configured: !!process.env.MERCADO_PAGO_WEBHOOK_SECRET,
+    };
+}
+
+export function getMercadoPagoEnvironment() {
+    return { test: 'Teste', production: 'Produção' }[getMercadoPagoMode()] || 'INDETERMINADO';
 }
 
 async function mpFetch(path, options = {}) {
     const token = getAccessToken();
     const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
+    const { idempotencyKey, ...fetchOptions } = options;
+    const method = (fetchOptions.method || 'GET').toUpperCase();
+    const idempotencyHeaders = method === 'GET' ? {} : { 'X-Idempotency-Key': idempotencyKey || crypto.randomUUID() };
     const res = await fetch(url, {
-        ...options,
+        ...fetchOptions,
         headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
-            'X-Idempotency-Key': options.idempotencyKey || crypto.randomUUID(),
-            ...(options.headers || {}),
+            ...idempotencyHeaders,
+            ...(fetchOptions.headers || {}),
         },
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
         const msg = data.message || data.error || `Mercado Pago API error (${res.status})`;
         throw Object.assign(new Error(msg), { status: res.status, mpError: data });
@@ -49,7 +64,7 @@ export async function testConnection() {
         const data = await mpFetch('/users/me');
         return {
             connected: true,
-            environment: isTestEnvironment() ? 'Teste' : 'Produção',
+            environment: getMercadoPagoEnvironment(),
             user_id: data.id,
             country: data.country_id,
         };
@@ -91,6 +106,7 @@ export async function getAvailablePaymentTypes() {
 export async function createPixPayment({ orderId, orderNumber, total, payer, idempotencyKey }) {
     const body = {
         type: 'online',
+        processing_mode: 'automatic',
         external_reference: orderNumber,
         total_amount: String(Number(total).toFixed(2)),
         transactions: {
@@ -119,7 +135,7 @@ export async function createPixPayment({ orderId, orderNumber, total, payer, ide
 
     // Extract Pix data from response
     const payment = data.transactions?.payments?.[0] || {};
-    const pixData = payment.point_of_interaction?.transaction_data || {};
+    const pixData = payment.payment_method || payment.point_of_interaction?.transaction_data || {};
 
     return {
         mp_order_id: data.id,
@@ -178,6 +194,48 @@ export async function createCardPayment({ orderId, orderNumber, total, payer, ca
     };
 }
 
+// Admin-only TEST diagnosis: read provider orders by their store reference.
+// The response excludes payer data and credentials.
+export async function findTestOrdersByReference(externalReference, createdAt) {
+    if (getMercadoPagoMode() !== 'test') {
+        throw Object.assign(new Error('Diagnóstico disponível somente no modo TEST'), { status: 409 });
+    }
+    const created = new Date(createdAt).getTime();
+    if (!Number.isFinite(created)) {
+        throw Object.assign(new Error('Data do pedido inválida'), { status: 400 });
+    }
+    const params = new URLSearchParams({
+        begin_date: new Date(created - 24 * 60 * 60 * 1000).toISOString(),
+        end_date: new Date().toISOString(),
+        external_reference: externalReference,
+        type: 'online',
+        page: '1',
+        page_size: '10',
+    });
+    const result = await mpFetch(`/v1/orders?${params}`);
+    const safeCode = (value) => typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,80}$/.test(value) ? value : null;
+    return (Array.isArray(result.data) ? result.data : [])
+        .filter((order) => order.external_reference === externalReference)
+        .map((order) => ({
+            id: order.id,
+            status: safeCode(order.status),
+            status_detail: safeCode(order.status_detail),
+            processing_mode: safeCode(order.processing_mode),
+            transactions: (order.transactions?.payments || []).map((payment) => ({
+                status: safeCode(payment.status),
+                status_detail: safeCode(payment.status_detail),
+                errors: (Array.isArray(payment.errors) ? payment.errors : []).map((error) => ({
+                    code: safeCode(error.code),
+                    cause: safeCode(error.cause),
+                })),
+            })),
+            errors: (Array.isArray(order.errors) ? order.errors : []).map((error) => ({
+                code: safeCode(error.code),
+                cause: safeCode(error.cause),
+            })),
+        }));
+}
+
 // ─── Get payment/order status from MP ─────────────────────────
 export async function getOrderStatus(mpOrderId) {
     const data = await mpFetch(`/v1/orders/${mpOrderId}`);
@@ -187,6 +245,7 @@ export async function getOrderStatus(mpOrderId) {
         mp_status_detail: payment.status_detail,
         mp_payment_id: payment.id,
         total_amount: data.total_amount,
+        currency_id: data.currency_id || data.currency || payment.currency_id || payment.currency,
         external_reference: data.external_reference,
     };
 }
@@ -199,6 +258,7 @@ export async function getPaymentStatus(mpPaymentId) {
         mp_payment_id: data.id,
         external_reference: data.external_reference,
         transaction_amount: data.transaction_amount,
+        currency_id: data.currency_id || data.currency,
     };
 }
 
@@ -227,19 +287,79 @@ export function validateWebhookSignature(req) {
 
     // Validate timestamp (reject if older than 5 minutes)
     const now = Math.floor(Date.now() / 1000);
-    if (Math.abs(now - parseInt(ts)) > 300) return false;
+    const timestamp = Number(ts);
+    // Mercado Pago examples use both Unix seconds and milliseconds.
+    const timestampSeconds = timestamp > 1e11 ? Math.floor(timestamp / 1000) : timestamp;
+    if (!Number.isFinite(timestampSeconds) || Math.abs(now - timestampSeconds) > 300) return false;
 
-    // The manifest to hash depends on the notification type
-    // For Orders API webhooks, the body contains data.id
-    const dataId = req.body?.data?.id || '';
-    const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
+    // Mercado Pago omits manifest pairs that are absent from the request.
+    // Query data.id takes precedence over the body value.
+    const dataId = req.query?.['data.id'] || req.body?.data?.id || '';
+    const manifest = [
+        dataId && `id:${dataId};`,
+        requestId && `request-id:${requestId};`,
+        `ts:${ts};`,
+    ].filter(Boolean).join('');
 
     // Use Node's crypto to validate
     const hmac = crypto.createHmac('sha256', secret);
     hmac.update(manifest);
     const computed = hmac.digest('hex');
 
-    return computed === v1;
+    const expected = Buffer.from(computed, 'utf8');
+    const received = Buffer.from(v1, 'utf8');
+    return expected.length === received.length && crypto.timingSafeEqual(expected, received);
+}
+
+// After-sales uses Orders API only. Return a limited shape without payer or credentials.
+export async function getRefundableOrder(mpOrderId) {
+    const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}`);
+    const payments = data.transactions?.payments || [];
+    return {
+        id: data.id,
+        external_reference: data.external_reference,
+        total_amount: data.total_amount,
+        currency: data.currency_id || data.currency || payments[0]?.currency_id,
+        status: data.status,
+        status_detail: data.status_detail,
+        payment: payments.length === 1 ? { id: payments[0].id, status: payments[0].status } : null,
+        refunds: (data.transactions?.refunds || []).map(refund => ({
+            id: refund.id,
+            transaction_id: refund.transaction_id,
+            amount: refund.amount,
+            status: refund.status,
+        })),
+    };
+}
+
+export async function refundOrder({ mpOrderId, mpPaymentId, amount, full, idempotencyKey }) {
+    if (!idempotencyKey || !/^[a-zA-Z0-9_-]{1,128}$/.test(idempotencyKey)) {
+        throw Object.assign(new Error('Chave de idempotência inválida'), { status: 400 });
+    }
+    const body = full ? undefined : JSON.stringify({
+        transactions: [{ id: mpPaymentId, amount: (amount / 100).toFixed(2) }],
+    });
+    const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}/refund`, {
+        method: 'POST', idempotencyKey, ...(body ? { body } : {}),
+    });
+    return {
+        id: data.id,
+        status: data.status,
+        status_detail: data.status_detail,
+        refunds: (data.transactions?.refunds || []).map(refund => ({
+            id: refund.id,
+            transaction_id: refund.transaction_id,
+            amount: refund.amount,
+            status: refund.status,
+        })),
+    };
+}
+
+export async function cancelPendingOrder(mpOrderId, idempotencyKey) {
+    const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}/cancel`, {
+        method: 'POST', idempotencyKey,
+    });
+    return { id: data.id, status: data.status, external_reference: data.external_reference };
 }
 
 // ─── Map MP status to internal payment status ─────────────────
@@ -248,6 +368,7 @@ export function mapPaymentStatus(mpStatus) {
         'pending': 'pending',
         'in_process': 'pending',
         'approved': 'approved',
+        'partially_refunded': 'partially_refunded',
         'rejected': 'rejected',
         'cancelled': 'rejected',
         'refunded': 'refunded',

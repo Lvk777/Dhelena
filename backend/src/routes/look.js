@@ -3,6 +3,8 @@ import { pool } from '../config/db.js';
 import { auth, requireAdmin } from '../middleware.js';
 import { logAudit } from '../services.js';
 import { encrypt, decrypt, maskSecret, isSensitive } from '../lib/crypto.js';
+import { getMercadoPagoReadiness, getMercadoPagoEnvironment } from '../services/mercadoPago.js';
+import { melhorEnvioTokens } from '../services/melhorEnvioToken.js';
 
 const router = Router();
 
@@ -273,7 +275,7 @@ function buildSafeConfig(row) {
 // Admin: list all integration configs (masked, never real secrets)
 router.get('/integrations/config', auth, requireAdmin, async (req, res, next) => {
     try {
-        const { rows } = await pool.query('SELECT * FROM integration_configs ORDER BY service_name');
+        const { rows } = await pool.query("SELECT * FROM integration_configs WHERE service_key NOT LIKE 'melhor_envio_oauth_state_%' AND service_key NOT LIKE 'melhor_envio_oauth_code_%' AND service_key <> 'melhor_envio_sandbox_oauth' ORDER BY service_name");
         res.json(rows.map(buildSafeConfig));
     } catch (e) { next(e); }
 });
@@ -282,6 +284,9 @@ router.get('/integrations/config', auth, requireAdmin, async (req, res, next) =>
 router.put('/integrations/config/:serviceKey', auth, requireAdmin, async (req, res, next) => {
     try {
         const { serviceKey } = req.params;
+        if (serviceKey.startsWith('melhor_envio_oauth_') || serviceKey === 'melhor_envio_sandbox_oauth') {
+            return res.status(403).json({ error: 'Configuração OAuth gerenciada pelo servidor.' });
+        }
         const { service_name, description, config_data, is_active } = req.body;
 
         // Fetch existing config to preserve secrets when field is left blank
@@ -338,6 +343,9 @@ router.put('/integrations/config/:serviceKey', auth, requireAdmin, async (req, r
 router.patch('/integrations/config/:serviceKey/toggle', auth, requireAdmin, async (req, res, next) => {
     try {
         const { serviceKey } = req.params;
+        if (serviceKey.startsWith('melhor_envio_oauth_') || serviceKey === 'melhor_envio_sandbox_oauth') {
+            return res.status(403).json({ error: 'Configuração OAuth gerenciada pelo servidor.' });
+        }
         const { rows: existing } = await pool.query(
             'SELECT is_active, service_name FROM integration_configs WHERE service_key = $1', [serviceKey]
         );
@@ -363,7 +371,10 @@ router.patch('/integrations/config/:serviceKey/toggle', auth, requireAdmin, asyn
 // INTEGRATIONS STATUS
 // ═══════════════════════════════════════════════════════════
 
-router.get('/integrations/status', auth, requireAdmin, (req, res) => {
+router.get('/integrations/status', auth, requireAdmin, async (req, res, next) => {
+    try {
+    const mpReadiness = getMercadoPagoReadiness();
+    const meReadiness = await melhorEnvioTokens.readiness();
     const check = (val) => val ? 'Configurado' : 'Não configurado';
     res.json([
         {
@@ -383,15 +394,17 @@ router.get('/integrations/status', auth, requireAdmin, (req, res) => {
         {
             key: 'mercadoPago',
             name: 'Mercado Pago',
-            status: check(process.env.MERCADO_PAGO_ACCESS_TOKEN),
-            environment: process.env.MERCADO_PAGO_ACCESS_TOKEN ? 'Produção' : '—',
+            status: check(mpReadiness.configured),
+            environment: getMercadoPagoEnvironment(),
+            readiness: mpReadiness,
             hint: 'Mercado Pago Developers → Suas aplicações → Credenciais.',
         },
         {
             key: 'melhorEnvio',
             name: 'Melhor Envio',
-            status: check(process.env.MELHOR_ENVIO_TOKEN),
-            environment: process.env.MELHOR_ENVIO_TOKEN ? 'Produção' : '—',
+            status: check((meReadiness.mode === 'sandbox' && meReadiness.oauth_token_present && !meReadiness.token_expired) || meReadiness.fallback_usable),
+            environment: meReadiness.mode === 'sandbox' ? 'Sandbox (teste)' : meReadiness.mode === 'production' ? 'Produção' : 'INDETERMINADO',
+            readiness: meReadiness,
             hint: 'Melhor Envio → Configurações → API Tokens.',
         },
         {
@@ -409,6 +422,7 @@ router.get('/integrations/status', auth, requireAdmin, (req, res) => {
             hint: 'Resend → API Keys. Defina RESEND_API_KEY e EMAIL_FROM.',
         },
     ]);
+    } catch (e) { next(e); }
 });
 
 export default router;
