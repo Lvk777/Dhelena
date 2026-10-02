@@ -29,6 +29,7 @@ const evidence = {
         reservation: { quantity: -1, previous_stock: 8, new_stock: 7, attribution: 'creation_time' } }],
     restorations: [], coupon_usages: [{ code: 'TEST-PIX', total_uses: 1 }],
     audit: [{ action: 'order.create' }], timeline: [], refund_in_flight: false,
+    transaction_id_column_compatible: true,
 };
 
 function authorize(request) {
@@ -57,6 +58,7 @@ test('admin preview reads local evidence and official TEST order without writes 
         if (statement.includes('FROM coupon_usages cu')) return { rows: [{ code: 'TEST-PIX', total_uses: '1', created_at: order.created_at }] };
         if (statement.includes('FROM audit_logs')) return { rows: [{ action: 'order.create', created_at: order.created_at }] };
         if (statement.includes('FROM order_events')) return { rows: [] };
+        if (statement.includes('FROM information_schema.columns')) return { rows: [{ data_type: 'text' }] };
         if (statement.includes('to_regclass')) return { rows: [{ relation: null }] };
         throw new Error(`Unexpected query: ${statement}`);
     } };
@@ -100,6 +102,9 @@ test('preview blocks mismatched provider fields and an already approved local or
     assert.equal(paid.checks.local_pending, false);
     assert.equal(paid.safe_to_reconcile, false);
     assert.equal(buildPaymentReconciliationPreview(order, provider, { ...evidence, restorations: [{ source: 'cancellation' }] }, true, mpOrderId).safe_to_reconcile, false);
+    const incompatible = buildPaymentReconciliationPreview(order, provider, { ...evidence, transaction_id_column_compatible: false }, true, mpOrderId);
+    assert.equal(incompatible.checks.transaction_id_column_compatible, false);
+    assert.equal(incompatible.safe_to_reconcile, false);
 });
 
 test('admin action pins the exact Orders API transaction before applying a payment', () => {
@@ -129,6 +134,7 @@ test('admin GET endpoint enforces 401/403 and returns a sanitized read-only prev
         if (statement.includes('FROM coupon_usages cu')) return { rows: [{ code: 'TEST-PIX', total_uses: 1, created_at: order.created_at }] };
         if (statement.includes('FROM audit_logs')) return { rows: [{ action: 'order.create', created_at: order.created_at }] };
         if (statement.includes('FROM order_events')) return { rows: [] };
+        if (statement.includes('FROM information_schema.columns')) return { rows: [{ data_type: 'text' }] };
         if (statement.includes('to_regclass')) return { rows: [{ relation: null }] };
         throw new Error(`Unexpected SQL: ${statement}`);
     };

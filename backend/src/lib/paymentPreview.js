@@ -65,12 +65,17 @@ export async function loadLocalPaymentEvidence(db, order) {
          WHERE entity_type = 'order' AND entity_id = $1 ORDER BY created_at`, [String(order.id)]);
     const { rows: timeline } = await db.query(
         'SELECT event, created_at FROM order_events WHERE order_id = $1 ORDER BY created_at', [order.id]);
+    const { rows: paymentIdColumn } = await db.query(
+        `SELECT data_type FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'orders'
+           AND column_name = 'mercado_pago_payment_id'`);
     return {
         stock_items: stockItems,
         restorations: restorations.map(row => ({ order_item_id: row.order_item_id, source: row.source, quantity: Number(row.quantity) })),
         coupon_usages: couponUsages.map(row => ({ code: row.code, created_at: row.created_at, total_uses: Number(row.total_uses) })),
         audit: audit.map(row => ({ action: row.action, created_at: row.created_at })),
         timeline: timeline.map(row => ({ event: row.event, created_at: row.created_at })),
+        transaction_id_column_compatible: paymentIdColumn[0]?.data_type === 'text',
         refund_in_flight: await refundInFlight(db, order.id),
     };
 }
@@ -99,6 +104,7 @@ export function buildPaymentReconciliationPreview(order, provider, evidence, web
         ids_compatible: (!order.mercado_pago_order_id || order.mercado_pago_order_id === provider.mp_order_id)
             && (!order.mercado_pago_payment_id || order.mercado_pago_payment_id === provider.mp_payment_id),
         payment_attempt_recorded: !!order.payment_attempt_started_at || !!order.mercado_pago_order_id,
+        transaction_id_column_compatible: evidence.transaction_id_column_compatible === true,
         stock_reservation_confirmed: stockItems.length > 0 && stockItems.every(item => item.reservation_count === 1),
         no_stock_restoration: (evidence.restorations || []).length === 0
             && stockItems.every(item => item.restoration_movement_count === 0),
