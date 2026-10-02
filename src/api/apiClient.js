@@ -287,6 +287,11 @@ const functions = {
                 return apiFetch(`/orders/${args.orderId}/payment/card`, { method: 'POST', body: JSON.stringify(args) });
             case 'getPaymentStatus':
                 return apiFetch(`/orders/${args.orderId}/payment/status`);
+            case 'getPaymentReconciliationPreview': {
+                const params = new URLSearchParams();
+                if (args.mpOrderId) params.set('mp_order_id', args.mpOrderId);
+                return apiFetch(`/admin/orders/${encodeURIComponent(args.orderId)}/payment-reconciliation-preview?${params}`);
+            }
             case 'getPaymentMethods':
                 return apiFetch('/payments/methods');
             case 'getOrderEvents':

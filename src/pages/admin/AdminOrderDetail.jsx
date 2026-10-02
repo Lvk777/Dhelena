@@ -5,6 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { formatBRL, ORDER_STATUS, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
 import OrderTimeline from "@/components/checkout/OrderTimeline";
 import AdminAfterSales from "@/components/admin/AdminAfterSales";
+import PaymentReconciliationPreview from "@/components/admin/PaymentReconciliationPreview";
 
 const STATUS_OPTIONS = Object.entries(ORDER_STATUS)
     .filter(([key]) => ['em_separacao', 'enviado', 'em_transporte', 'saiu_entrega', 'entregue'].includes(key))
@@ -150,6 +151,8 @@ export default function AdminOrderDetail() {
                             <InfoRow label="Data pagamento" value={order.paid_at ? new Date(order.paid_at).toLocaleString("pt-BR") : "—"} />
                         </div>
                     </div>
+
+                    <PaymentReconciliationPreview key={order.id} order={order} />
 
                     <AdminAfterSales order={order} onChanged={load} />
 

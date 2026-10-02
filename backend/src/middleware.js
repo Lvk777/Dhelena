@@ -59,7 +59,10 @@ export async function auth(req, res, next) {
                     );
                     if (legacy.rows.length === 1) rows = legacy.rows;
                 }
-                if (rows.length > 0) req.user = rows[0];
+                if (rows.length > 0) {
+                    req.user = rows[0];
+                    req.authProvider = 'supabase';
+                }
             }
         } catch {
             // Supabase unreachable — fall back to Express JWT (dev/preview mode)
@@ -86,6 +89,14 @@ export function requireAdmin(req, res, next) {
     if (!req.user) return res.status(401).json({ error: 'Autenticação necessária' });
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito a administradores' });
     next();
+}
+
+/** Financial administration requires a token verified by Supabase Auth. */
+export function requireSupabaseAdmin(req, res, next) {
+    if (!req.user || req.authProvider !== 'supabase') {
+        return res.status(401).json({ error: 'Sessão Supabase necessária' });
+    }
+    return requireAdmin(req, res, next);
 }
 
 // ─── Error handler ─────────────────────────────────────────────────

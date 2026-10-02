@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { pool, withTransaction } from '../config/db.js';
-import { auth, requireAdmin } from '../middleware.js';
+import { auth, requireAdmin, requireSupabaseAdmin } from '../middleware.js';
 import { placeOrder, cancelOrder } from '../orderService.js';
 import { validateCoupon, adjustStock, logAudit } from '../services.js';
 import { orderLimiter, couponLimiter } from '../middleware/rateLimiters.js';
@@ -9,9 +9,9 @@ import * as me from '../services/melhorEnvio.js';
 import { assertLabelEligible, buildShippingPackages, getPersistedShippingService, normalizeBrazilianPhone } from '../lib/shipping.js';
 import { getVerifiedPaymentForOrder } from '../lib/paymentVerification.js';
 import { assertFulfillmentTransition } from '../lib/afterSalesPolicy.js';
-import { refundInFlight } from '../lib/refundState.js';
-import { reconciliationPlan, applyVerifiedOrderInTransaction, recordVerifiedNonApprovedOrderInTransaction } from '../lib/paymentReconciliation.js';
+import { applyVerifiedOrderInTransaction, recordVerifiedNonApprovedOrderInTransaction } from '../lib/paymentReconciliation.js';
 import { createPaymentDiagnostic } from '../lib/paymentDiagnostics.js';
+import { loadPaymentReconciliationPreview } from '../lib/paymentPreview.js';
 
 const router = Router();
 const COUPON_MUTABLE_FIELDS = new Set([
@@ -477,34 +477,42 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
     }
 });
 
-// TEST-only preview: read the official MP order without changing the store order.
-router.get('/orders/:id/payment/reconciliation-preview', auth, requireAdmin, async (req, res) => {
+// TEST-only preview. This path never writes to the store or Mercado Pago.
+async function paymentReconciliationPreview(req, res) {
     try {
-        if (mp.getMercadoPagoMode() !== 'test') return res.status(409).json({ error: 'Disponível somente em TEST' });
-        const mpOrderId = req.query.mp_order_id;
-        if (typeof mpOrderId !== 'string' || !/^ORD[A-Z0-9]{10,60}$/.test(mpOrderId)) return res.status(400).json({ error: 'MP order ID inválido' });
-        const { rows } = await pool.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
-        if (!rows.length) return res.status(404).json({ error: 'Pedido não encontrado' });
-        const resource = await getVerifiedPaymentForOrder(rows[0], mp, null, mpOrderId);
-        res.json(reconciliationPlan(rows[0], resource, await refundInFlight(pool, rows[0].id)));
+        const { preview } = await loadPaymentReconciliationPreview(
+            pool, mp, req.params.orderId || req.params.id, req.query.mp_order_id);
+        res.json(preview);
     } catch (err) {
-        res.status(err.status || 500).json({ error: err.status === 409 ? err.message : 'Prévia de conciliação indisponível' });
+        const status = err.mpError ? 502 : (err.status || 500);
+        res.status(status).json({ error: [400, 404, 409].includes(status) ? err.message : 'Prévia de conciliação indisponível' });
     }
-});
+}
+router.get('/admin/orders/:orderId/payment-reconciliation-preview', auth, requireSupabaseAdmin, paymentReconciliationPreview);
+router.get('/orders/:id/payment/reconciliation-preview', auth, requireSupabaseAdmin, paymentReconciliationPreview);
 
 // Explicit admin action; never creates a payment or changes stock.
-router.post('/orders/:id/payment/reconcile', auth, requireAdmin, async (req, res) => {
+router.post('/orders/:id/payment/reconcile', auth, requireSupabaseAdmin, async (req, res) => {
     try {
-        if (mp.getMercadoPagoMode() !== 'test') return res.status(409).json({ error: 'Disponível somente em TEST' });
-        const mpOrderId = req.body?.mp_order_id;
-        if (typeof mpOrderId !== 'string' || !/^ORD[A-Z0-9]{10,60}$/.test(mpOrderId)) return res.status(400).json({ error: 'MP order ID inválido' });
-        const { rows } = await pool.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
-        if (!rows.length) return res.status(404).json({ error: 'Pedido não encontrado' });
-        const resource = await getVerifiedPaymentForOrder(rows[0], mp, null, mpOrderId);
-        const result = await withTransaction(client => applyVerifiedOrderInTransaction(client, rows[0].id, resource, 'admin'));
+        const result = await withTransaction(async client => {
+            const { rows } = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [req.params.id]);
+            if (!rows.length) throw Object.assign(new Error('Pedido não encontrado'), { status: 404 });
+            const { preview, provider } = await loadPaymentReconciliationPreview(
+                client, mp, req.params.id, req.body?.mp_order_id, rows[0]);
+            if (!preview.safe_to_reconcile) {
+                if (rows[0].payment_status === 'approved' && rows[0].paid_at
+                    && rows[0].mercado_pago_order_id === provider.mp_order_id
+                    && rows[0].mercado_pago_payment_id === provider.mp_payment_id) {
+                    return { outcome: 'already_reconciled', payment_status: 'approved' };
+                }
+                throw Object.assign(new Error('Prévia atual não autoriza conciliação'), { status: 409 });
+            }
+            return applyVerifiedOrderInTransaction(client, rows[0].id, provider, 'admin');
+        });
         res.json(result);
     } catch (err) {
-        res.status(err.status || 500).json({ error: err.status === 409 ? err.message : 'Conciliação indisponível' });
+        const status = err.mpError ? 502 : (err.status || 500);
+        res.status(status).json({ error: [400, 404, 409].includes(status) ? err.message : 'Conciliação indisponível' });
     }
 });
 
