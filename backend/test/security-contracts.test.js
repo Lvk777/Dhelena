@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import test from 'node:test';
+import express from 'express';
 import { normalizeBirthDate } from '../src/lib/validation.js';
 import {
     createCardPayment,
     createPixPayment,
     findTestOrdersByReference,
+    getOrderStatus,
+    inspectWebhookSignature,
     mapPaymentStatus,
     validateWebhookSignature,
 } from '../src/services/mercadoPago.js';
@@ -19,7 +22,9 @@ import { buildShippingPackages, getCheckoutShippingInput, getPersistedShippingSe
 import { assertLabelEligible } from '../src/lib/shipping.js';
 import { ALLOWED_SETTING_KEYS, buildFilter, buildSort, CATALOG_FILTER_FIELDS, CATALOG_SORT_FIELDS, PUBLIC_SETTING_KEYS } from '../src/routes/catalog.js';
 import { createWebhookEventId, isVerifiedPaymentForOrder } from '../src/routes/webhooks.js';
+import webhookRouter from '../src/routes/webhooks.js';
 import { getVerifiedPaymentForOrder, hasPaymentStateChanged } from '../src/lib/paymentVerification.js';
+import { applyVerifiedOrderInTransaction, reconciliationPlan, recordVerifiedNonApprovedOrderInTransaction } from '../src/lib/paymentReconciliation.js';
 import { assertMatchingIdempotencyRequest, createOrderRequestFingerprint, normalizeIdempotencyKey } from '../src/lib/idempotency.js';
 import { getMaintenanceRedirect } from '../../src/lib/maintenance.js';
 import { buildPlaceOrderRequest } from '../../src/api/orderRequest.js';
@@ -129,34 +134,48 @@ test('repeated payment creation reuses the same provider idempotency key', async
     }
 });
 
-test('Mercado Pago webhook payment verification mock rejects unknown order, amount and currency mismatches', () => {
+test('Mercado Pago Orders API verification rejects mismatched reference, amounts and currency', () => {
     const order = { order_number: 'DH-100', total: 99.9 };
-    const valid = { external_reference: 'DH-100', total_amount: '99.90', currency_id: 'BRL', mp_status: 'approved' };
+    const valid = {
+        mp_order_id: 'ORD-100', mp_payment_id: 'PAY-100', payment_count: 1,
+        external_reference: 'DH-100', total_amount: '99.90', transaction_amount: '99.90',
+        currency_id: 'BRL', order_status: 'processed', order_status_detail: 'accredited',
+        transaction_status: 'processed', transaction_status_detail: 'accredited',
+        mp_status: 'processed', mp_status_detail: 'accredited',
+    };
     assert.equal(isVerifiedPaymentForOrder(order, valid), true);
     assert.equal(isVerifiedPaymentForOrder(order, { ...valid, external_reference: 'OTHER-ORDER' }), false);
     assert.equal(isVerifiedPaymentForOrder(order, { ...valid, total_amount: '0.01' }), false);
+    assert.equal(isVerifiedPaymentForOrder(order, { ...valid, transaction_amount: '0.01' }), false);
     assert.equal(isVerifiedPaymentForOrder(order, { ...valid, currency_id: 'USD' }), false);
     assert.equal(isVerifiedPaymentForOrder(order, { ...valid, currency_id: undefined }), false);
     assert.equal(isVerifiedPaymentForOrder(order, { ...valid, mp_status: undefined }), false);
 });
 
-test('manual payment sync reads official resources and rejects every mismatch or missing payment', async () => {
+test('manual payment sync reads only GET /v1/orders and rejects mismatched evidence', async () => {
     const order = {
-        order_number: 'DH-200', total: 149.9, mercado_pago_order_id: 'ord-200',
+        order_number: 'DH-200', total: 149.9, mercado_pago_order_id: 'ORD-200',
         mercado_pago_status: 'pending', mercado_pago_status_detail: null, payment_status: 'pending',
     };
-    const officialOrder = { mp_status: 'approved', mp_status_detail: 'accredited', mp_payment_id: 'pay-200', external_reference: 'DH-200', total_amount: '149.90' };
-    const officialPayment = { mp_status: 'approved', mp_status_detail: 'accredited', mp_payment_id: 'pay-200', external_reference: 'DH-200', transaction_amount: 149.9, currency_id: 'BRL' };
+    const officialOrder = {
+        mp_order_id: 'ORD-200', mp_payment_id: 'PAY-200', payment_count: 1,
+        mp_status: 'processed', mp_status_detail: 'accredited',
+        order_status: 'processed', order_status_detail: 'accredited',
+        transaction_status: 'processed', transaction_status_detail: 'accredited',
+        external_reference: 'DH-200', total_amount: '149.90', transaction_amount: '149.90', currency_id: 'BRL',
+    };
+    let orderReads = 0;
     const provider = {
-        getOrderStatus: async () => officialOrder,
-        getPaymentStatus: async () => officialPayment,
+        getOrderStatus: async id => { orderReads++; assert.equal(id, 'ORD-200'); return officialOrder; },
+        getPaymentStatus: async () => { throw new Error('Legacy Payments API must not be used'); },
     };
 
     const verified = await getVerifiedPaymentForOrder(order, provider);
-    assert.equal(verified.mp_status, 'approved');
+    assert.equal(orderReads, 1);
+    assert.equal(verified.mp_status, 'processed');
     assert.equal(verified.currency_id, 'BRL');
     assert.equal(hasPaymentStateChanged(order, verified, 'approved'), true);
-    assert.equal(hasPaymentStateChanged({ ...order, mercado_pago_status: 'approved', mercado_pago_status_detail: 'accredited', mercado_pago_payment_id: 'pay-200', payment_status: 'approved' }, verified, 'approved'), false);
+    assert.equal(hasPaymentStateChanged({ ...order, mercado_pago_external_reference: 'DH-200', mercado_pago_status: 'processed', mercado_pago_status_detail: 'accredited', mercado_pago_payment_id: 'PAY-200', payment_status: 'approved' }, verified, 'approved'), false);
 
     for (const changed of [
         { external_reference: 'DH-OTHER' },
@@ -164,18 +183,123 @@ test('manual payment sync reads official resources and rejects every mismatch or
         { currency_id: 'USD' },
     ]) {
         await assert.rejects(
-            () => getVerifiedPaymentForOrder(order, { ...provider, getPaymentStatus: async () => ({ ...officialPayment, ...changed }) }),
+            () => getVerifiedPaymentForOrder(order, { ...provider, getOrderStatus: async () => ({ ...officialOrder, ...changed }) }),
             error => error.code === 'PAYMENT_MISMATCH'
         );
     }
     await assert.rejects(
-        () => getVerifiedPaymentForOrder({ ...order, mercado_pago_order_id: null }, { getOrderStatus: async () => null, getPaymentStatus: async () => null }),
+        () => getVerifiedPaymentForOrder({ ...order, mercado_pago_order_id: null }, provider),
         error => error.code === 'PAYMENT_NOT_CREATED'
     );
     await assert.rejects(
-        () => getVerifiedPaymentForOrder(order, { getOrderStatus: async () => { throw Object.assign(new Error('not found'), { status: 404 }); }, getPaymentStatus: async () => null }),
+        () => getVerifiedPaymentForOrder(order, { getOrderStatus: async () => { throw Object.assign(new Error('not found'), { status: 404 }); } }),
         error => error.status === 404
     );
+});
+
+test('processed/accredited Pix without QR is approved and PAY id stays inside GET /v1/orders', async () => {
+    const originalFetch = global.fetch;
+    const originalToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+    process.env.MERCADO_PAGO_ACCESS_TOKEN = 'TEST-safe-local-only';
+    const response = {
+        id: 'ORDTEST1234567890', external_reference: 'DH-300', total_amount: '50.00', currency_id: 'BRL',
+        status: 'processed', status_detail: 'accredited',
+        transactions: { payments: [{ id: 'PAYTEST1234567890', amount: '50.00', status: 'processed', status_detail: 'accredited' }] },
+    };
+    const calls = [];
+    global.fetch = async (url, options) => {
+        calls.push({ url, method: options.method || 'GET' });
+        return { ok: true, json: async () => response };
+    };
+    try {
+        const created = await createPixPayment({
+            orderNumber: 'DH-300', total: 50, idempotencyKey: 'pix-test-300',
+            payer: { email: 'test@example.invalid', first_name: 'Test', last_name: 'Buyer', identification: { type: 'CPF', number: '00000000000' } },
+        });
+        const official = await getOrderStatus(response.id);
+        assert.equal(created.pix_qr_code, null);
+        assert.equal(mapPaymentStatus(official.mp_status, official.mp_status_detail), 'approved');
+        assert.equal(official.mp_payment_id, response.transactions.payments[0].id);
+        assert.deepEqual(calls.map(call => new URL(call.url).pathname), ['/v1/orders', `/v1/orders/${response.id}`]);
+        assert.equal(calls.some(call => call.url.includes('/v1/payments/')), false);
+    } finally {
+        global.fetch = originalFetch;
+        if (originalToken === undefined) delete process.env.MERCADO_PAGO_ACCESS_TOKEN;
+        else process.env.MERCADO_PAGO_ACCESS_TOKEN = originalToken;
+    }
+});
+
+test('webhook and reconciliation serialize approval, persist IDs once, and never touch stock', async () => {
+    const order = {
+        id: 'local-400', order_number: 'DH-400', total: '50.00', status: 'recebido',
+        payment_status: 'pending', paid_at: null, payment_attempt_started_at: new Date(), stock: 7,
+        mercado_pago_order_id: null, mercado_pago_payment_id: null,
+    };
+    const resource = {
+        mp_order_id: 'ORDTEST400', mp_payment_id: 'PAYTEST400', payment_count: 1,
+        external_reference: 'DH-400', total_amount: '50.00', transaction_amount: '50.00', currency_id: 'BRL',
+        order_status: 'processed', order_status_detail: 'accredited',
+        transaction_status: 'processed', transaction_status_detail: 'accredited',
+        mp_status: 'processed', mp_status_detail: 'accredited',
+    };
+    const preview = reconciliationPlan(order, resource);
+    assert.equal(preview.safe_to_reconcile, true);
+    assert.equal(preview.would_change_stock, false);
+    let auditCount = 0;
+    let eventCount = 0;
+    const sql = [];
+    const client = { async query(statement, params = []) {
+        sql.push(statement);
+        if (statement.includes('FOR UPDATE')) return { rows: [{ ...order }] };
+        if (statement.includes('to_regclass')) return { rows: [{ relation: null }] };
+        if (statement.startsWith('UPDATE orders')) {
+            Object.assign(order, {
+                mercado_pago_order_id: params[0], mercado_pago_payment_id: params[1],
+                mercado_pago_external_reference: params[2], mercado_pago_status: params[3],
+                mercado_pago_status_detail: params[4], payment_status: params[5],
+                status: params[6], paid_at: order.paid_at || new Date(), payment_attempt_started_at: null,
+            });
+            return { rowCount: 1 };
+        }
+        if (statement.includes('INSERT INTO audit_logs')) auditCount++;
+        if (statement.includes('INSERT INTO order_events')) eventCount++;
+        return { rows: [], rowCount: 1 };
+    } };
+    let queue = Promise.resolve();
+    const transaction = source => {
+        const operation = queue.then(() => applyVerifiedOrderInTransaction(client, order.id, resource, source));
+        queue = operation.then(() => undefined);
+        return operation;
+    };
+    const outcomes = await Promise.all([transaction('webhook'), transaction('admin')]);
+    assert.deepEqual(outcomes.map(result => result.outcome), ['applied', 'already_reconciled']);
+    assert.equal(order.payment_status, 'approved');
+    assert.equal(order.status, 'pagamento_aprovado');
+    assert.equal(order.mercado_pago_order_id, resource.mp_order_id);
+    assert.equal(order.mercado_pago_payment_id, resource.mp_payment_id);
+    assert.ok(order.paid_at);
+    assert.equal(order.stock, 7);
+    assert.equal(auditCount, 1);
+    assert.equal(eventCount, 1);
+    assert.equal(sql.some(statement => /stock|coupon|inventory/i.test(statement)), false);
+    for (const changed of [
+        { external_reference: 'DH-OTHER' }, { total_amount: '50.01' },
+        { transaction_amount: '49.99' }, { currency_id: 'USD' },
+    ]) assert.throws(() => reconciliationPlan({ ...order, mercado_pago_order_id: null, mercado_pago_payment_id: null }, { ...resource, ...changed }), { code: 'PAYMENT_MISMATCH' });
+});
+
+test('historical Pix attempt cannot be changed by webhook or status polling', async () => {
+    const order = { id: 'held-order', order_number: 'DH-2026-000006', payment_status: 'pending' };
+    const statements = [];
+    const client = { query: async statement => {
+        statements.push(statement);
+        if (statement.includes('FOR UPDATE')) return { rows: [order] };
+        throw new Error('Historical order must remain unchanged');
+    } };
+    assert.equal((await applyVerifiedOrderInTransaction(client, order.id, {}, 'webhook')).outcome, 'manual_reconciliation_required');
+    assert.equal((await recordVerifiedNonApprovedOrderInTransaction(client, order.id, {}, 'status_poll')).outcome, 'manual_reconciliation_required');
+    assert.equal(statements.length, 2);
+    assert.equal(order.payment_status, 'pending');
 });
 
 test('Melhor Envio sandbox mock returns provider services and tracking without real freight', async () => {
@@ -291,9 +415,41 @@ test('Mercado Pago webhook signature uses the signed data.id and rejects tamperi
     assert.equal(validateWebhookSignature(req), true);
     req.query['data.id'] = 'tampered';
     assert.equal(validateWebhookSignature(req), false);
+    assert.equal(inspectWebhookSignature(req).reason, 'signature_mismatch');
+    req.query = {};
+    req.body = { data: { id: dataId } };
+    assert.equal(validateWebhookSignature(req), false);
     assert.equal(validateWebhookSignature({ query: {}, headers: {} }), false);
     if (previousSecret === undefined) delete process.env.MERCADO_PAGO_WEBHOOK_SECRET;
     else process.env.MERCADO_PAGO_WEBHOOK_SECRET = previousSecret;
+});
+
+test('Express preserves Mercado Pago query and signature headers; valid signed request passes 401 gate', async () => {
+    const prior = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
+    process.env.MERCADO_PAGO_WEBHOOK_SECRET = 'local-webhook-test-secret';
+    const app = express();
+    app.use(express.json());
+    app.use('/api', webhookRouter);
+    const server = await new Promise(resolve => {
+        const running = app.listen(0, '127.0.0.1', () => resolve(running));
+    });
+    try {
+        const dataId = '123456';
+        const requestId = 'request-express-1';
+        const ts = String(Date.now());
+        const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
+        const v1 = crypto.createHmac('sha256', process.env.MERCADO_PAGO_WEBHOOK_SECRET).update(manifest).digest('hex');
+        const send = id => fetch(`http://127.0.0.1:${server.address().port}/api/webhooks/mercado-pago?data.id=${id}&type=payment`, {
+            method: 'POST', headers: { 'content-type': 'application/json', 'x-request-id': requestId, 'x-signature': `ts=${ts},v1=${v1}` },
+            body: JSON.stringify({ type: 'payment', data: { id: dataId } }),
+        });
+        assert.equal((await send(dataId)).status, 200);
+        assert.equal((await send('tampered')).status, 401);
+    } finally {
+        await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+        if (prior === undefined) delete process.env.MERCADO_PAGO_WEBHOOK_SECRET;
+        else process.env.MERCADO_PAGO_WEBHOOK_SECRET = prior;
+    }
 });
 
 test('Melhor Envio webhook requires an HMAC over the unmodified raw body', () => {

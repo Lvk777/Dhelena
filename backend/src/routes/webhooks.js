@@ -6,11 +6,10 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { pool, withTransaction } from '../config/db.js';
-import { validateWebhookSignature, getOrderStatus, getPaymentStatus, mapPaymentStatus } from '../services/mercadoPago.js';
+import { inspectWebhookSignature, getOrderStatus, mapPaymentStatus } from '../services/mercadoPago.js';
 import { validateWebhook as validateMEWebhook, getTracking } from '../services/melhorEnvio.js';
-import { getVerifiedPaymentForOrder, hasPaymentStateChanged, isVerifiedPaymentForOrder } from '../lib/paymentVerification.js';
-import { shouldApplyProviderPayment } from '../lib/afterSalesPolicy.js';
-import { refundInFlight } from '../lib/refundState.js';
+import { getVerifiedPaymentForOrder, isVerifiedPaymentForOrder } from '../lib/paymentVerification.js';
+import { applyVerifiedOrderInTransaction, recordVerifiedNonApprovedOrderInTransaction } from '../lib/paymentReconciliation.js';
 
 const router = Router();
 
@@ -41,12 +40,20 @@ async function releaseWebhookForRetry(provider, eventId) {
 // POST /api/webhooks/mercado-pago
 router.post('/webhooks/mercado-pago', async (req, res) => {
     const event = req.body?.type || req.body?.event;
-    const dataId = req.query?.['data.id'] || req.body?.data?.id;
+    const dataId = req.query?.['data.id'];
 
     // Only authenticated deliveries receive a 2xx response.
-    if (!validateWebhookSignature(req)) {
-        console.warn('[Webhook MP] Invalid signature — rejected');
+    const signature = inspectWebhookSignature(req);
+    if (!signature.valid) {
+        console.warn(JSON.stringify({ event: 'mp_webhook_signature_rejected',
+            reason: signature.reason, has_signature: signature.has_signature,
+            has_request_id: signature.has_request_id, has_query_data_id: signature.has_query_data_id,
+            secret_configured: signature.secret_configured }));
         return res.status(401).json({ error: 'Assinatura inválida' });
+    }
+
+    if (typeof dataId !== 'string' || !/^ORD[A-Za-z0-9]{10,60}$/.test(dataId)) {
+        return res.status(200).json({ status: 'unsupported_event' });
     }
 
     // body.id is the provider's unique notification ID; data.id is the
@@ -62,64 +69,28 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
         );
         if (inserted.rowCount === 0) return res.status(200).json({ status: 'already_processed' });
     } catch (err) {
-        console.error('[Webhook MP] Could not reserve event:', err.message);
+        console.error(JSON.stringify({ event: 'mp_webhook_reservation_failed',
+            error_code: /^[A-Z0-9_]{2,30}$/.test(err.code || '') ? err.code : 'UNKNOWN' }));
         return res.status(503).json({ error: 'Serviço temporariamente indisponível' });
     }
 
     try {
-        // Find the order by external_reference or MP order ID
-        let orderRef = null;
-        let resolvedOrderResource = null;
-
-        // For Orders API webhooks, the body contains data.id which is the MP order ID
-        if (dataId) {
-            // Try to find by MP order ID
-            const { rows } = await pool.query(
-                'SELECT * FROM orders WHERE mercado_pago_order_id = $1 OR mercado_pago_payment_id = $1',
-                [String(dataId)]
-            );
-            if (rows.length > 0) {
-                orderRef = rows[0];
-            } else {
-                // Try to query MP for the order to get external_reference
-                try {
-                    const mpData = await getOrderStatus(String(dataId));
-                    resolvedOrderResource = mpData;
-                    if (mpData.external_reference) {
-                        const { rows: refRows } = await pool.query(
-                            'SELECT * FROM orders WHERE order_number = $1',
-                            [mpData.external_reference]
-                        );
-                        if (refRows.length > 0) orderRef = refRows[0];
-                    }
-                } catch (e) {
-                    // Maybe it's a payment ID, not an order ID
-                    try {
-                        const payData = await getPaymentStatus(parseInt(dataId));
-                        resolvedOrderResource = payData;
-                        if (payData.external_reference) {
-                            const { rows: refRows } = await pool.query(
-                                'SELECT * FROM orders WHERE order_number = $1',
-                                [payData.external_reference]
-                            );
-                            if (refRows.length > 0) orderRef = refRows[0];
-                        }
-                    } catch (e2) {
-                        console.warn('[Webhook MP] Could not resolve order for data.id:', dataId);
-                    }
-                }
-            }
-        }
+        const resolvedOrderResource = await getOrderStatus(dataId);
+        const { rows } = await pool.query(
+            'SELECT * FROM orders WHERE mercado_pago_order_id = $1 OR order_number = $2',
+            [dataId, resolvedOrderResource.external_reference]
+        );
+        const orderRef = rows[0] || null;
 
         if (!orderRef) {
-            console.warn('[Webhook MP] Order not found for event:', event, 'data.id:', dataId);
+            console.warn(JSON.stringify({ event: 'mp_webhook_order_not_found', mp_order_id: dataId }));
             await markWebhookProcessed('mercado_pago', eventId);
             return res.status(200).json({ status: 'order_not_found' });
         }
 
         let verifiedPayment;
         try {
-            verifiedPayment = await getVerifiedPaymentForOrder(orderRef, { getOrderStatus, getPaymentStatus }, resolvedOrderResource);
+            verifiedPayment = await getVerifiedPaymentForOrder(orderRef, { getOrderStatus }, resolvedOrderResource, dataId);
         } catch (error) {
             if (error.code !== 'PAYMENT_MISMATCH') throw error;
             console.warn('[Webhook MP] Rejected order with mismatched reference, amount, currency, or status');
@@ -127,64 +98,25 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
             return res.status(200).json({ status: 'mismatched_payment' });
         }
 
-        const mpStatus = verifiedPayment.mp_status;
-        const mpPaymentId = verifiedPayment.mp_payment_id;
-        const internalStatus = mapPaymentStatus(mpStatus);
+        const internalStatus = mapPaymentStatus(verifiedPayment.mp_status, verifiedPayment.mp_status_detail);
         const outcome = await withTransaction(async (client) => {
-            const { rows: locked } = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [orderRef.id]);
-            const current = locked[0];
-            if (!shouldApplyProviderPayment(current, internalStatus, await refundInFlight(client, current.id))) {
-                if ((current.status === 'cancelado' && internalStatus === 'approved')
-                    || (['refunded', 'partially_refunded'].includes(internalStatus)
-                        && current.payment_status !== internalStatus)) {
-                    await client.query(
-                        `INSERT INTO order_events (order_id, event, description, metadata)
-                         VALUES ($1, 'payment_anomaly', 'Divergência financeira no provedor; conciliação manual obrigatória', $2)`,
-                        [current.id, JSON.stringify({ mp_status: mpStatus, mp_payment_id: mpPaymentId })]);
-                }
-                await client.query(
-                    'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
-                    ['mercado_pago', eventId]);
-                return 'ignored';
-            }
-            const stateChanged = hasPaymentStateChanged(current, verifiedPayment, internalStatus);
-            const updates = {
-                mercado_pago_status: mpStatus,
-                mercado_pago_status_detail: verifiedPayment.mp_status_detail,
-                payment_status: internalStatus,
-                payment_updated_at: new Date(),
-            };
-            if (mpPaymentId) updates.mercado_pago_payment_id = mpPaymentId;
-            if (internalStatus === 'approved' && current.payment_status !== 'approved') {
-                updates.paid_at = new Date();
-                updates.status = current.status === 'recebido' ? 'pagamento_aprovado' : current.status;
-            }
-            const setParts = Object.keys(updates).map((k, i) => `${k} = $${i + 1}`);
-            const values = Object.values(updates);
-            values.push(current.id);
-            await client.query(
-                `UPDATE orders SET ${setParts.join(', ')}, updated_at = now() WHERE id = $${values.length}`,
-                values
-            );
-            if (stateChanged) {
-                await client.query(
-                    `INSERT INTO order_events (order_id, event, description, metadata)
-                     VALUES ($1, $2, $3, $4)`,
-                    [current.id, `payment_${internalStatus}`, `Pagamento ${internalStatus} via webhook MP`, JSON.stringify({ mp_status: mpStatus })]
-                );
-            }
+            const result = internalStatus === 'approved'
+                ? await applyVerifiedOrderInTransaction(client, orderRef.id, verifiedPayment, 'webhook')
+                : await recordVerifiedNonApprovedOrderInTransaction(client, orderRef.id, verifiedPayment, 'webhook');
             await client.query(
                 'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
                 ['mercado_pago', eventId]
             );
-            return 'applied';
+            return result.outcome;
         });
 
         console.log(`[Webhook MP] Order ${orderRef.order_number} → ${outcome}`);
         res.status(200).json({ status: outcome, payment_status: internalStatus });
 
     } catch (err) {
-        console.error('[Webhook MP] Error:', err.message);
+        console.error(JSON.stringify({ event: 'mp_webhook_processing_failed',
+            error_code: /^[A-Z0-9_]{2,30}$/.test(err.code || '') ? err.code : 'UNKNOWN',
+            provider_http_status: err.mpError && Number.isInteger(err.status) ? err.status : null }));
         await releaseWebhookForRetry('mercado_pago', eventId);
         res.status(503).json({ error: 'Serviço temporariamente indisponível' });
     }

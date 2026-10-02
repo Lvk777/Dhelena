@@ -108,6 +108,11 @@ export default function PixPaymentScreen({ order, onApproved }) {
                     </div>
                     <p className="mt-4 text-sm text-green-600">Pagamento confirmado!</p>
                 </div>
+            ) : pixData?.qr_unavailable && !pixData?.pix_qr_code ? (
+                <div className="text-center py-8" role="status">
+                    <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" strokeWidth={1.5} />
+                    <p className="mt-4 text-sm text-amber-700">O código Pix ainda não está disponível. Estamos verificando o pagamento deste pedido.</p>
+                </div>
             ) : expired ? (
                 <div className="text-center py-8">
                     <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" strokeWidth={1.5} />

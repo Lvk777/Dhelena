@@ -7,9 +7,11 @@ import { orderLimiter, couponLimiter } from '../middleware/rateLimiters.js';
 import * as mp from '../services/mercadoPago.js';
 import * as me from '../services/melhorEnvio.js';
 import { assertLabelEligible, buildShippingPackages, getPersistedShippingService, normalizeBrazilianPhone } from '../lib/shipping.js';
-import { getVerifiedPaymentForOrder, hasPaymentStateChanged } from '../lib/paymentVerification.js';
-import { assertFulfillmentTransition, shouldApplyProviderPayment } from '../lib/afterSalesPolicy.js';
+import { getVerifiedPaymentForOrder } from '../lib/paymentVerification.js';
+import { assertFulfillmentTransition } from '../lib/afterSalesPolicy.js';
 import { refundInFlight } from '../lib/refundState.js';
+import { reconciliationPlan, applyVerifiedOrderInTransaction, recordVerifiedNonApprovedOrderInTransaction } from '../lib/paymentReconciliation.js';
+import { createPaymentDiagnostic } from '../lib/paymentDiagnostics.js';
 
 const router = Router();
 const COUPON_MUTABLE_FIELDS = new Set([
@@ -264,6 +266,7 @@ router.get('/payments/test-orders/:orderNumber', auth, requireAdmin, async (req,
 
 // POST /api/orders/:id/payment/pix — create Pix payment
 router.post('/orders/:id/payment/pix', auth, async (req, res) => {
+    const diagnostic = createPaymentDiagnostic(req);
     try {
         // Fetch order and verify ownership
         let query, params;
@@ -278,16 +281,18 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
         if (rows.length === 0) return res.status(404).json({ error: 'Pedido não encontrado' });
 
         const order = rows[0];
+        diagnostic.setReference(order.order_number);
 
         // Idempotency: if already has MP order, return existing
         if (order.status === 'cancelado') return res.status(409).json({ error: 'Pedido cancelado' });
-        if (order.mercado_pago_order_id && order.pix_qr_code) {
-            return res.json({
+        if (order.mercado_pago_order_id && (order.payment_attempt_method === 'pix' || order.payment_method === 'pix')) {
+            return res.status(order.payment_status === 'pending' && !order.pix_qr_code ? 202 : 200).json({
                 order_id: order.id,
                 pix_qr_code: order.pix_qr_code,
                 pix_qr_code_base64: order.pix_qr_code_base64,
                 pix_expiration_at: order.pix_expiration_at,
                 payment_status: order.payment_status,
+                qr_unavailable: order.payment_status === 'pending' && !order.pix_qr_code,
             });
         }
         if (order.mercado_pago_order_id || order.payment_attempt_started_at || order.payment_status !== 'pending') {
@@ -301,6 +306,7 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
         if (!reserved.length) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
 
         // Get payer info from snapshot
+        diagnostic.setStage('build_payload');
         const snapshot = order.snapshot || {};
         const customer = snapshot.customer || {};
         const payer = {
@@ -317,56 +323,63 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
             total: order.total,
             payer,
             idempotencyKey,
+            onStage: (stage, mpOrderId) => diagnostic.setStage(stage, mpOrderId),
         });
+        diagnostic.setStage('validate_response', result.mp_order_id);
         if (!result.mp_order_id || result.external_reference !== order.order_number) {
-            return res.status(502).json({ error: 'Resposta do provedor exige conciliação manual' });
+            throw Object.assign(new Error('Resposta do provedor exige conciliação'), { status: 502 });
         }
-
-        // Save MP data to order
-        await pool.query(
-            `UPDATE orders SET
-                payment_provider = 'mercado_pago',
-                mercado_pago_order_id = $1,
-                mercado_pago_payment_id = $2,
-                mercado_pago_status = $3,
-                mercado_pago_status_detail = $4,
-                mercado_pago_external_reference = $5,
-                pix_qr_code = $6,
-                pix_qr_code_base64 = $7,
-                pix_expiration_at = $8,
-                payment_status = CASE WHEN payment_status = 'approved' THEN payment_status ELSE 'pending' END,
-                payment_attempt_started_at = NULL,
-                payment_updated_at = now(),
-                updated_at = now()
-             WHERE id = $9`,
-            [result.mp_order_id, result.mp_payment_id, result.mp_status, result.mp_status_detail,
-             result.external_reference, result.pix_qr_code, result.pix_qr_code_base64,
-             result.pix_expiration_at, order.id]
-        );
-
-        // Audit log
-        await pool.query(
-            `INSERT INTO audit_logs (action, entity_type, entity_id, changes)
-             VALUES ('payment_created', 'order', $1, $2)`,
-            [order.id, JSON.stringify({ method: 'pix', mp_order_id: result.mp_order_id })]
-        );
-
-        // Timeline event
-        await pool.query(
-            `INSERT INTO order_events (order_id, event, description)
-             VALUES ($1, 'payment_pending', 'Pagamento Pix criado — aguardando pagamento')`,
-            [order.id]
-        );
-
-        res.json({
+        diagnostic.setStage('mp_order_readback', result.mp_order_id);
+        const verified = await getVerifiedPaymentForOrder(order, mp, null, result.mp_order_id);
+        const internalStatus = mp.mapPaymentStatus(verified.mp_status, verified.mp_status_detail);
+        diagnostic.setStage('persist_provider_ids', result.mp_order_id);
+        const outcome = await withTransaction(async client => {
+            const { rows: locked } = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [order.id]);
+            const current = locked[0];
+            if (current.mercado_pago_order_id && current.mercado_pago_order_id !== result.mp_order_id) {
+                throw Object.assign(new Error('Outra order MP já vinculada'), { status: 409 });
+            }
+            if (current.payment_status === 'approved') return 'approved';
+            if (internalStatus === 'approved') {
+                diagnostic.setStage('persist_payment_status', result.mp_order_id);
+                const applied = await applyVerifiedOrderInTransaction(client, order.id, verified, 'pix_response');
+                diagnostic.setStage('commit_transaction', result.mp_order_id);
+                return applied.payment_status;
+            }
+            await client.query(
+                `UPDATE orders SET payment_provider = 'mercado_pago', mercado_pago_order_id = $1,
+                    mercado_pago_payment_id = $2, mercado_pago_status = $3, mercado_pago_status_detail = $4,
+                    mercado_pago_external_reference = $5, pix_qr_code = $6, pix_qr_code_base64 = $7,
+                    pix_expiration_at = $8, payment_status = $9, payment_attempt_started_at = NULL,
+                    payment_updated_at = now(), updated_at = now() WHERE id = $10`,
+                [verified.mp_order_id, verified.mp_payment_id, verified.mp_status, verified.mp_status_detail,
+                    verified.external_reference, result.pix_qr_code, result.pix_qr_code_base64,
+                    result.pix_expiration_at, internalStatus, order.id]
+            );
+            await client.query(
+                `INSERT INTO audit_logs (action, entity_type, entity_id, changes)
+                 VALUES ('payment_created', 'order', $1, $2)`,
+                [order.id, JSON.stringify({ method: 'pix', mp_order_id: verified.mp_order_id })]
+            );
+            await client.query(
+                `INSERT INTO order_events (order_id, event, description)
+                 VALUES ($1, 'payment_pending', 'Pagamento Pix criado — aguardando pagamento')`,
+                [order.id]
+            );
+            diagnostic.setStage('persist_payment_status', result.mp_order_id);
+            return internalStatus;
+        });
+        diagnostic.setStage('response_to_client', result.mp_order_id);
+        res.status(outcome === 'pending' && !result.pix_qr_code ? 202 : 200).json({
             order_id: order.id,
             pix_qr_code: result.pix_qr_code,
             pix_qr_code_base64: result.pix_qr_code_base64,
             pix_expiration_at: result.pix_expiration_at,
-            payment_status: 'pending',
+            payment_status: outcome,
+            qr_unavailable: outcome === 'pending' && !result.pix_qr_code,
         });
     } catch (err) {
-        console.error('[Payment Pix] Provider status:', err.status || 500);
+        diagnostic.logError(err);
         res.status(err.status || 500).json({ error: 'Não foi possível confirmar o pagamento; solicite conciliação' });
     }
 });
@@ -439,53 +452,59 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
             return res.status(502).json({ error: 'Resposta do provedor exige conciliação manual' });
         }
 
-        const internalStatus = mp.mapPaymentStatus(result.mp_status);
-
-        // Save MP data to order
-        await pool.query(
-            `UPDATE orders SET
-                payment_provider = 'mercado_pago',
-                mercado_pago_order_id = $1,
-                mercado_pago_payment_id = $2,
-                mercado_pago_status = $3,
-                mercado_pago_status_detail = $4,
-                mercado_pago_external_reference = $5,
-                installments = $6,
-                payment_status = CASE WHEN payment_status = 'approved' THEN payment_status ELSE $7 END,
-                payment_attempt_started_at = NULL,
-                payment_updated_at = now(),
-                paid_at = CASE WHEN $7 = 'approved' THEN now() ELSE paid_at END,
-                status = CASE WHEN $7 = 'approved' AND status = 'recebido' THEN 'pagamento_aprovado' ELSE status END,
-                updated_at = now()
-             WHERE id = $8`,
-            [result.mp_order_id, result.mp_payment_id, result.mp_status, result.mp_status_detail,
-             result.external_reference, result.installments, internalStatus, order.id]
-        );
-
-        // Audit log
-        await pool.query(
-            `INSERT INTO audit_logs (action, entity_type, entity_id, changes)
-             VALUES ('payment_${internalStatus}', 'order', $1, $2)`,
-            [order.id, JSON.stringify({ method: 'credit_card', mp_status: result.mp_status })]
-        );
-
-        // Timeline event
-        await pool.query(
-            `INSERT INTO order_events (order_id, event, description)
-             VALUES ($1, $2, $3)`,
-            [order.id, `payment_${internalStatus}`, `Pagamento via cartão: ${result.mp_status}`]
-        );
+        const verified = await getVerifiedPaymentForOrder(order, mp, null, result.mp_order_id);
+        const internalStatus = mp.mapPaymentStatus(verified.mp_status, verified.mp_status_detail);
+        const persisted = await withTransaction(async client => {
+            const applied = internalStatus === 'approved'
+                ? await applyVerifiedOrderInTransaction(client, order.id, verified, 'card_response')
+                : await recordVerifiedNonApprovedOrderInTransaction(client, order.id, verified, 'card_response');
+            if (applied.outcome === 'applied') {
+                await client.query('UPDATE orders SET installments = $1 WHERE id = $2', [result.installments, order.id]);
+            }
+            return applied;
+        });
 
         res.json({
             order_id: order.id,
-            payment_status: internalStatus,
-            mp_status: result.mp_status,
-            mp_status_detail: result.mp_status_detail,
+            payment_status: persisted.payment_status,
+            mp_status: verified.mp_status,
+            mp_status_detail: verified.mp_status_detail,
             installments: result.installments,
         });
     } catch (err) {
         console.error('[Payment Card] Provider status:', err.status || 500);
         res.status(err.status || 500).json({ error: 'Não foi possível confirmar o pagamento; solicite conciliação' });
+    }
+});
+
+// TEST-only preview: read the official MP order without changing the store order.
+router.get('/orders/:id/payment/reconciliation-preview', auth, requireAdmin, async (req, res) => {
+    try {
+        if (mp.getMercadoPagoMode() !== 'test') return res.status(409).json({ error: 'Disponível somente em TEST' });
+        const mpOrderId = req.query.mp_order_id;
+        if (typeof mpOrderId !== 'string' || !/^ORD[A-Z0-9]{10,60}$/.test(mpOrderId)) return res.status(400).json({ error: 'MP order ID inválido' });
+        const { rows } = await pool.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+        if (!rows.length) return res.status(404).json({ error: 'Pedido não encontrado' });
+        const resource = await getVerifiedPaymentForOrder(rows[0], mp, null, mpOrderId);
+        res.json(reconciliationPlan(rows[0], resource, await refundInFlight(pool, rows[0].id)));
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.status === 409 ? err.message : 'Prévia de conciliação indisponível' });
+    }
+});
+
+// Explicit admin action; never creates a payment or changes stock.
+router.post('/orders/:id/payment/reconcile', auth, requireAdmin, async (req, res) => {
+    try {
+        if (mp.getMercadoPagoMode() !== 'test') return res.status(409).json({ error: 'Disponível somente em TEST' });
+        const mpOrderId = req.body?.mp_order_id;
+        if (typeof mpOrderId !== 'string' || !/^ORD[A-Z0-9]{10,60}$/.test(mpOrderId)) return res.status(400).json({ error: 'MP order ID inválido' });
+        const { rows } = await pool.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+        if (!rows.length) return res.status(404).json({ error: 'Pedido não encontrado' });
+        const resource = await getVerifiedPaymentForOrder(rows[0], mp, null, mpOrderId);
+        const result = await withTransaction(client => applyVerifiedOrderInTransaction(client, rows[0].id, resource, 'admin'));
+        res.json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.status === 409 ? err.message : 'Conciliação indisponível' });
     }
 });
 
@@ -506,34 +525,14 @@ router.get('/orders/:id/payment/status', auth, async (req, res) => {
         const order = rows[0];
 
         const mpData = await getVerifiedPaymentForOrder(order, mp);
-        const internalStatus = mp.mapPaymentStatus(mpData.mp_status);
+        const internalStatus = mp.mapPaymentStatus(mpData.mp_status, mpData.mp_status_detail);
 
-        const effectiveStatus = await withTransaction(async client => {
-            const { rows: locked } = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [order.id]);
-            const current = locked[0];
-            if (!shouldApplyProviderPayment(current, internalStatus, await refundInFlight(client, current.id))) {
-                return current.payment_status;
-            }
-            if (hasPaymentStateChanged(current, mpData, internalStatus)) {
-                await client.query(
-                    `UPDATE orders SET
-                        mercado_pago_status = $1,
-                        mercado_pago_status_detail = $2,
-                        mercado_pago_payment_id = COALESCE($3, mercado_pago_payment_id),
-                        payment_status = $4,
-                        payment_updated_at = now(),
-                        paid_at = CASE WHEN $4 = 'approved' AND paid_at IS NULL THEN now() ELSE paid_at END,
-                        status = CASE WHEN $4 = 'approved' AND status = 'recebido' THEN 'pagamento_aprovado' ELSE status END,
-                        updated_at = now()
-                     WHERE id = $5`,
-                    [mpData.mp_status, mpData.mp_status_detail, mpData.mp_payment_id, internalStatus, order.id]
-                );
-            }
-            return internalStatus;
-        });
+        const result = await withTransaction(client => internalStatus === 'approved'
+            ? applyVerifiedOrderInTransaction(client, order.id, mpData, 'status_poll')
+            : recordVerifiedNonApprovedOrderInTransaction(client, order.id, mpData, 'status_poll'));
 
         res.json({
-            payment_status: effectiveStatus,
+            payment_status: result.payment_status,
             mp_status: mpData.mp_status,
             mp_status_detail: mpData.mp_status_detail,
             payment_method: order.payment_method,

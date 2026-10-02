@@ -103,7 +103,8 @@ export async function getAvailablePaymentTypes() {
 }
 
 // ─── Create Pix payment via Orders API ─────────────────────────
-export async function createPixPayment({ orderId, orderNumber, total, payer, idempotencyKey }) {
+export async function createPixPayment({ orderId, orderNumber, total, payer, idempotencyKey, onStage = () => {} }) {
+    onStage('build_payload');
     const body = {
         type: 'online',
         processing_mode: 'automatic',
@@ -127,14 +128,20 @@ export async function createPixPayment({ orderId, orderNumber, total, payer, ide
         description: `Pedido ${orderNumber}`,
     };
 
+    onStage('mp_request');
     const data = await mpFetch('/v1/orders', {
         method: 'POST',
         body: JSON.stringify(body),
         idempotencyKey: idempotencyKey || `pix-${orderNumber}`,
     });
 
-    // Extract Pix data from response
+    onStage('mp_response_received', data.id);
+    // A processed/accredited TEST order may have no QR code.
+    onStage('extract_order', data.id);
+    const resource = orderResource(data);
+    onStage('extract_transaction', data.id);
     const payment = data.transactions?.payments?.[0] || {};
+    onStage('extract_qr', data.id);
     const pixData = payment.payment_method || payment.point_of_interaction?.transaction_data || {};
 
     return {
@@ -146,6 +153,7 @@ export async function createPixPayment({ orderId, orderNumber, total, payer, ide
         pix_qr_code: pixData.qr_code || null,
         pix_qr_code_base64: pixData.qr_code_base64 || null,
         pix_expiration_at: pixData.expiration_date || null,
+        provider_resource: resource,
     };
 }
 
@@ -237,78 +245,78 @@ export async function findTestOrdersByReference(externalReference, createdAt) {
 }
 
 // ─── Get payment/order status from MP ─────────────────────────
-export async function getOrderStatus(mpOrderId) {
-    const data = await mpFetch(`/v1/orders/${mpOrderId}`);
-    const payment = data.transactions?.payments?.[0] || {};
+function orderResource(data) {
+    const payments = data.transactions?.payments || [];
+    const payment = payments[0] || {};
     return {
+        mp_order_id: data.id,
+        order_status: data.status,
+        order_status_detail: data.status_detail,
         mp_status: payment.status,
         mp_status_detail: payment.status_detail,
         mp_payment_id: payment.id,
+        payment_count: payments.length,
+        transaction_amount: payment.amount,
+        transaction_status: payment.status,
+        transaction_status_detail: payment.status_detail,
         total_amount: data.total_amount,
-        currency_id: data.currency_id || data.currency || payment.currency_id || payment.currency,
+        currency_id: data.currency_id || data.currency,
+        transaction_currency_id: payment.currency_id || payment.currency || null,
         external_reference: data.external_reference,
     };
 }
 
-export async function getPaymentStatus(mpPaymentId) {
-    const data = await mpFetch(`/v1/payments/${mpPaymentId}`);
-    return {
-        mp_status: data.status,
-        mp_status_detail: data.status_detail,
-        mp_payment_id: data.id,
-        external_reference: data.external_reference,
-        transaction_amount: data.transaction_amount,
-        currency_id: data.currency_id || data.currency,
-    };
+export async function getOrderStatus(mpOrderId) {
+    const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}`);
+    return orderResource(data);
 }
 
 // ─── Validate webhook signature ───────────────────────────────
-export function validateWebhookSignature(req) {
+export function inspectWebhookSignature(req) {
     const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
-    if (!secret) return false;
+    const signature = req.headers?.['x-signature'];
+    const requestId = req.headers?.['x-request-id'];
+    // Only the query value is signed. Never substitute body.data.id.
+    const dataId = req.query?.['data.id'];
+    const presence = {
+        has_signature: typeof signature === 'string' && signature.length > 0,
+        has_request_id: typeof requestId === 'string' && requestId.length > 0,
+        has_query_data_id: typeof dataId === 'string' && dataId.length > 0,
+        secret_configured: typeof secret === 'string' && secret.length > 0,
+    };
+    const reject = (reason) => ({ valid: false, reason, ...presence });
+    if (!presence.secret_configured) return reject('secret_not_configured');
+    if (!presence.has_signature) return reject('signature_missing');
 
-    // Mercado Pago sends x-signature header: "ts=...,v1=..."
-    const signature = req.headers['x-signature'] || req.headers['x-signature'];
-    const requestId = req.headers['x-request-id'];
-
-    if (!signature) return false;
-
-    // Parse the signature header
-    const parts = signature.split(',').reduce((acc, part) => {
-        const [key, value] = part.split('=');
-        acc[key.trim()] = value.trim();
-        return acc;
-    }, {});
-
+    const parts = Object.create(null);
+    for (const part of signature.split(',')) {
+        const separator = part.indexOf('=');
+        if (separator <= 0) return reject('signature_malformed');
+        const key = part.slice(0, separator).trim();
+        if (parts[key] !== undefined) return reject('signature_malformed');
+        parts[key] = part.slice(separator + 1).trim();
+    }
     const ts = parts.ts;
     const v1 = parts.v1;
+    if (!/^[a-fA-F0-9]{64}$/.test(v1 || '')) return reject('signature_malformed');
+    if (ts !== undefined && !/^\d+$/.test(ts)) return reject('timestamp_malformed');
 
-    if (!ts || !v1) return false;
-
-    // Validate timestamp (reject if older than 5 minutes)
-    const now = Math.floor(Date.now() / 1000);
-    const timestamp = Number(ts);
-    // Mercado Pago examples use both Unix seconds and milliseconds.
-    const timestampSeconds = timestamp > 1e11 ? Math.floor(timestamp / 1000) : timestamp;
-    if (!Number.isFinite(timestampSeconds) || Math.abs(now - timestampSeconds) > 300) return false;
-
-    // Mercado Pago omits manifest pairs that are absent from the request.
-    // Query data.id takes precedence over the body value.
-    const dataId = req.query?.['data.id'] || req.body?.data?.id || '';
+    // Official HMAC manifest: omit only genuinely absent pairs and keep case.
+    // Signed, delayed deliveries are handled by deduplication and a fresh GET.
     const manifest = [
-        dataId && `id:${dataId};`,
-        requestId && `request-id:${requestId};`,
-        `ts:${ts};`,
+        presence.has_query_data_id && `id:${dataId};`,
+        presence.has_request_id && `request-id:${requestId};`,
+        ts !== undefined && `ts:${ts};`,
     ].filter(Boolean).join('');
+    const expected = crypto.createHmac('sha256', secret).update(manifest).digest();
+    const received = Buffer.from(v1, 'hex');
+    return crypto.timingSafeEqual(expected, received)
+        ? { valid: true, reason: 'valid', ...presence }
+        : reject('signature_mismatch');
+}
 
-    // Use Node's crypto to validate
-    const hmac = crypto.createHmac('sha256', secret);
-    hmac.update(manifest);
-    const computed = hmac.digest('hex');
-
-    const expected = Buffer.from(computed, 'utf8');
-    const received = Buffer.from(v1, 'utf8');
-    return expected.length === received.length && crypto.timingSafeEqual(expected, received);
+export function validateWebhookSignature(req) {
+    return inspectWebhookSignature(req).valid;
 }
 
 // After-sales uses Orders API only. Return a limited shape without payer or credentials.
@@ -363,7 +371,8 @@ export async function cancelPendingOrder(mpOrderId, idempotencyKey) {
 }
 
 // ─── Map MP status to internal payment status ─────────────────
-export function mapPaymentStatus(mpStatus) {
+export function mapPaymentStatus(mpStatus, statusDetail = null) {
+    if (mpStatus === 'processed' && statusDetail === 'accredited') return 'approved';
     const map = {
         'pending': 'pending',
         'in_process': 'pending',

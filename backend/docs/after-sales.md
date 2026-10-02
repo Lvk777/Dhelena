@@ -18,7 +18,19 @@ As reservas de pagamento que tiveram resposta ambígua ficam bloqueadas para can
 
 Usa a [Orders API oficial](https://www.mercadopago.com.br/developers/pt/reference/online-payments/checkout-api/refund-order/post): `POST /v1/orders/{order_id}/refund` com `X-Idempotency-Key`. O reembolso total, quando ainda não há parciais, não envia body; o parcial e o saldo remanescente após parciais enviam `transactions: [{ id: payment_id, amount }]`. A aplicação calcula o valor a partir do pedido e valida order ID, transação, `external_reference`, total e BRL por GET antes de reservar a operação. Após o POST, consulta a order novamente e só registra `processed` quando identifica o `refund_id`, a transação e o valor exatos no provedor. Estados incertos exigem conciliação por GET, sem repetição automática do POST. Operações financeiras permanecem desabilitadas até `AFTER_SALES_REFUNDS_ENABLED=true`; cancelamento de pagamento pendente fica desabilitado até `AFTER_SALES_CANCELLATIONS_ENABLED=true`.
 
-Antes de habilitar, aplicar `011_after_sales.sql` de forma controlada, validar migração e executar testes operacionais somente com conta e credenciais TEST. Em produção, não habilitar essas flags até homologação formal, política de devolução aprovada, permissões administrativas revisadas e reconciliação financeira ensaiada.
+A migration `011_after_sales.sql` foi aplicada e validada no Supabase da D’Helenas em 2026-09-22. Em produção, não habilitar essas flags até homologação formal, política de devolução aprovada, permissões administrativas revisadas e reconciliação financeira ensaiada.
+
+## Homologação Mercado Pago TEST — bloqueio externo
+
+**MP PANEL ACCESS:** BLOQUEADO — somente a titular/cliente possui acesso à conta Mercado Pago usada pela D’Helenas.
+
+**MANUAL CLIENT ACTION:** A cliente deve acessar Mercado Pago Developers → Suas integrações → aplicação da D’Helenas → Contas de teste e confirmar:
+
+1. vendedor TEST Brasil;
+2. comprador TEST Brasil;
+3. comprador distinto do vendedor.
+
+Ela não deve compartilhar senha, access token, secret ou código de verificação. Até essa confirmação, o E2E Mercado Pago TEST permanece bloqueado e **não homologado**. Não tentar outro login, criar ou substituir contas, alterar credenciais, criar cupom TEST, criar pedido Pix ou executar reembolso para contornar o bloqueio. Trabalho independente permitido: revisão local/read-only do cálculo do checkout, testes automatizados e documentação, sem operações financeiras.
 
 ## Logística reversa Melhor Envio — mapeamento, sem execução
 
