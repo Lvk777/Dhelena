@@ -171,3 +171,13 @@ export async function loadPaymentReconciliationPreview(db, mercadoPago, orderId,
         mercadoPago.getMercadoPagoReadiness().webhook_configured, mpOrderId);
     return { preview, order, provider };
 }
+
+/** Pin the approved Orders API transaction to the admin's explicit expectation. */
+export function assertExpectedTransactionId(provider, expectedTransactionId) {
+    if (typeof expectedTransactionId !== 'string' || !/^PAY[A-Z0-9]{10,60}$/.test(expectedTransactionId)) {
+        throw Object.assign(new Error('ID esperado da transação inválido'), { status: 400 });
+    }
+    if (provider.mp_payment_id !== expectedTransactionId) {
+        throw Object.assign(new Error('ID da transação divergiu da confirmação administrativa'), { status: 409 });
+    }
+}

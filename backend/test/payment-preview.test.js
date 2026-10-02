@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import express from 'express';
 import { requireSupabaseAdmin } from '../src/middleware.js';
-import { buildPaymentReconciliationPreview, loadPaymentReconciliationPreview } from '../src/lib/paymentPreview.js';
+import { assertExpectedTransactionId, buildPaymentReconciliationPreview, loadPaymentReconciliationPreview } from '../src/lib/paymentPreview.js';
 import orderRouter from '../src/routes/orders.js';
 import { pool } from '../src/config/db.js';
 
@@ -100,6 +100,12 @@ test('preview blocks mismatched provider fields and an already approved local or
     assert.equal(paid.checks.local_pending, false);
     assert.equal(paid.safe_to_reconcile, false);
     assert.equal(buildPaymentReconciliationPreview(order, provider, { ...evidence, restorations: [{ source: 'cancellation' }] }, true, mpOrderId).safe_to_reconcile, false);
+});
+
+test('admin action pins the exact Orders API transaction before applying a payment', () => {
+    assert.doesNotThrow(() => assertExpectedTransactionId(provider, transactionId));
+    assert.throws(() => assertExpectedTransactionId(provider, 'PAYDIFFERENT1234567890'), { status: 409 });
+    assert.throws(() => assertExpectedTransactionId(provider, undefined), { status: 400 });
 });
 
 test('admin GET endpoint enforces 401/403 and returns a sanitized read-only preview', async () => {

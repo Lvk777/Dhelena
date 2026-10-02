@@ -11,7 +11,7 @@ import { getVerifiedPaymentForOrder } from '../lib/paymentVerification.js';
 import { assertFulfillmentTransition } from '../lib/afterSalesPolicy.js';
 import { applyVerifiedOrderInTransaction, recordVerifiedNonApprovedOrderInTransaction } from '../lib/paymentReconciliation.js';
 import { createPaymentDiagnostic } from '../lib/paymentDiagnostics.js';
-import { loadPaymentReconciliationPreview } from '../lib/paymentPreview.js';
+import { assertExpectedTransactionId, loadPaymentReconciliationPreview } from '../lib/paymentPreview.js';
 
 const router = Router();
 const COUPON_MUTABLE_FIELDS = new Set([
@@ -499,10 +499,15 @@ router.post('/orders/:id/payment/reconcile', auth, requireSupabaseAdmin, async (
             if (!rows.length) throw Object.assign(new Error('Pedido não encontrado'), { status: 404 });
             const { preview, provider } = await loadPaymentReconciliationPreview(
                 client, mp, req.params.id, req.body?.mp_order_id, rows[0]);
+            assertExpectedTransactionId(provider, req.body?.expected_mp_payment_id);
             if (!preview.safe_to_reconcile) {
                 if (rows[0].payment_status === 'approved' && rows[0].paid_at
+                    && rows[0].status === 'pagamento_aprovado'
                     && rows[0].mercado_pago_order_id === provider.mp_order_id
-                    && rows[0].mercado_pago_payment_id === provider.mp_payment_id) {
+                    && rows[0].mercado_pago_payment_id === provider.mp_payment_id
+                    && ['reference_match', 'amount_match', 'currency_match', 'provider_order_id_match',
+                        'single_transaction', 'approved_at_provider', 'ids_compatible',
+                        'no_refund_in_flight'].every(check => preview.checks[check])) {
                     return { outcome: 'already_reconciled', payment_status: 'approved' };
                 }
                 throw Object.assign(new Error('Prévia atual não autoriza conciliação'), { status: 409 });
