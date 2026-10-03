@@ -11,6 +11,7 @@ import { validateWebhook as validateMEWebhook, getTracking } from '../services/m
 import { getVerifiedPaymentForOrder, isVerifiedPaymentForOrder } from '../lib/paymentVerification.js';
 import { applyVerifiedOrderInTransaction, recordVerifiedNonApprovedOrderInTransaction } from '../lib/paymentReconciliation.js';
 import { createMercadoPagoWebhookLog, logMercadoPagoWebhookDelivery } from '../lib/mercadoPagoWebhookLog.js';
+import { reconcileRefundFromWebhook } from '../afterSalesService.js';
 
 const router = Router();
 
@@ -113,6 +114,10 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
             logMercadoPagoWebhookDelivery(delivery, 'warn');
             return res.status(200).json({ status: 'mismatched_payment' });
         }
+
+        // Reconcile a reserved refund from a second official Orders API GET.
+        // The notification carries no trusted amount or refund status.
+        await reconcileRefundFromWebhook(orderRef.id, verifiedPayment.mp_order_id);
 
         const internalStatus = mapPaymentStatus(verifiedPayment.mp_status, verifiedPayment.mp_status_detail);
         const outcome = await withTransaction(async (client) => {

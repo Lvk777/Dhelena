@@ -16,12 +16,12 @@ export default function AdminAfterSales({ order, onChanged }) {
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
     const [reason, setReason] = useState('');
-    const [kind, setKind] = useState(() => order.payment_status === 'partially_refunded' ? 'remaining' : 'full');
     const [itemId, setItemId] = useState('');
     const [quantity, setQuantity] = useState(1);
-    const [returnId, setReturnId] = useState('');
     const [restockable, setRestockable] = useState({});
     const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+    const [partialAmount, setPartialAmount] = useState('1.00');
+    const [refundPreview, setRefundPreview] = useState(null);
 
     const refresh = useCallback(async () => {
         try {
@@ -34,9 +34,6 @@ export default function AdminAfterSales({ order, onChanged }) {
     }, [order.id]);
 
     useEffect(() => { refresh(); }, [refresh]);
-    useEffect(() => {
-        if (order.payment_status === 'partially_refunded' && kind === 'full') setKind('remaining');
-    }, [order.payment_status, kind]);
 
     const run = async (action, confirmation) => {
         if (confirmation && !window.confirm(confirmation)) return;
@@ -53,6 +50,18 @@ export default function AdminAfterSales({ order, onChanged }) {
 
     const selected = (order.items || []).find(item => item.id === itemId);
     const selectedItems = selected ? [{ order_item_id: selected.id, quantity: Number(quantity) }] : [];
+    const amountCents = /^\d+(?:\.\d{1,2})?$/.test(partialAmount)
+        ? Math.round(Number(partialAmount) * 100) : 0;
+    const previewRefund = async () => {
+        setBusy(true);
+        setError('');
+        setRefundPreview(null);
+        try {
+            setRefundPreview(await base44.functions.invoke('previewRefund', { orderId: order.id, amountCents }));
+        } catch (failure) {
+            setError(failure.response?.data?.error || 'Prévia indisponível.');
+        } finally { setBusy(false); }
+    };
     const cancel = () => {
         if (SHIPPED.has(order.status)) return;
         if (order.payment_status === 'refunded') {
@@ -70,21 +79,22 @@ export default function AdminAfterSales({ order, onChanged }) {
 
     const submitRefund = () => {
         if (!reason.trim() || reason.trim().length < 5) return setError('Informe um motivo com pelo menos 5 caracteres.');
-        if (kind === 'partial' && (!selected || Number(quantity) < 1 || Number(quantity) > selected.quantity)) {
-            return setError('Selecione um item e uma quantidade válida.');
+        if (!refundPreview?.safe_to_partial_refund || refundPreview.requested_refund_cents !== amountCents) {
+            return setError('Consulte uma prévia segura e atual antes do reembolso parcial.');
         }
         return run(async () => {
             const result = await base44.functions.invoke('requestRefund', {
-                orderId: order.id, kind, reason: reason.trim(),
-                items: kind === 'partial' ? selectedItems : [], returnId: returnId || null, idempotencyKey,
+                orderId: order.id, kind: 'partial', reason: reason.trim(),
+                items: [], amountCents, returnId: null, idempotencyKey,
             });
             if (result.status !== 'processed') {
                 setError('Reembolso ainda não confirmado. Concilie antes de solicitar outro.');
             } else {
                 setIdempotencyKey(crypto.randomUUID());
                 setReason('');
+                setRefundPreview(null);
             }
-        }, `Confirmar ${kind === 'full' ? 'reembolso total' : kind === 'remaining' ? 'reembolso do saldo restante' : 'reembolso parcial'} via Mercado Pago? A operação financeira não pode ser desfeita.`);
+        }, `Confirmar reembolso parcial de ${formatBRL(amountCents / 100)} via Mercado Pago TEST? A operação financeira não pode ser desfeita.`);
     };
 
     const submitReturn = () => {
@@ -148,17 +158,28 @@ export default function AdminAfterSales({ order, onChanged }) {
                             onChange={event => setQuantity(Number(event.target.value))} aria-label="Quantidade" />
                         <button className="btn-outline text-xs" disabled={busy || !selected || order.status === 'cancelado'} onClick={submitReturn}>Solicitar devolução</button>
                     </div>
+                    {['approved', 'partially_refunded'].includes(order.payment_status) && <div className="space-y-2 pt-2">
+                        <div className="border border-border p-3 space-y-2" aria-label="Prévia de reembolso parcial">
+                            <h4 className="font-medium">Prévia de reembolso parcial · Mercado Pago TEST</h4>
+                            <label className="block text-xs">Valor solicitado (R$)
+                                <input className="block w-32 border border-border bg-background p-2 mt-1" type="number" min="0.01" step="0.01"
+                                    value={partialAmount} onChange={event => { setPartialAmount(event.target.value); setRefundPreview(null); }} />
+                            </label>
+                            <button className="btn-outline text-xs" disabled={busy || amountCents <= 0} onClick={previewRefund}>Consultar prévia read-only</button>
+                            {refundPreview && <div className="text-xs space-y-1" role="status">
+                                <p>Pago: {formatBRL(refundPreview.paid_amount_cents / 100)} · já reembolsado: {formatBRL(refundPreview.already_refunded_cents / 100)}</p>
+                                <p>Saldo: {formatBRL(refundPreview.refundable_balance_cents / 100)} · solicitado: {formatBRL(refundPreview.requested_refund_cents / 100)} · após: {formatBRL(refundPreview.remaining_balance_cents / 100)}</p>
+                                <p>MP order: {refundPreview.mp_order_id} · transação: {refundPreview.mp_transaction_id}</p>
+                                <p>Status local: {refundPreview.local_payment_status} · provedor: {refundPreview.provider_status?.order} / {refundPreview.provider_status?.payment}</p>
+                                <p>Refunds existentes: {refundPreview.existing_refunds.length} · em andamento: {refundPreview.refund_in_progress ? 'sim' : 'não'}</p>
+                                <p>Estoque: {refundPreview.stock.map(entry => `${entry.size}: ${entry.quantity ?? 'indisponível'}`).join(', ') || 'indisponível'} · reposições: {refundPreview.stock_restorations.length} · devoluções: {refundPreview.return_status.map(entry => entry.status).join(', ') || 'nenhuma'}</p>
+                                <p>Seguro para refund parcial: {refundPreview.safe_to_partial_refund ? 'SIM' : 'NÃO'}{!refundPreview.checks.refunds_enabled ? ' · flag desativada' : ''}</p>
+                            </div>}
+                        </div>
+                    </div>}
                     {data.refunds_enabled && ['approved', 'partially_refunded'].includes(order.payment_status) && <div className="space-y-2 pt-2">
-                        <select className="border border-border bg-background p-2 mr-2" value={kind} onChange={event => setKind(event.target.value)}>
-                            {order.payment_status === 'approved' && <option value="full">Total</option>}
-                            {order.payment_status === 'partially_refunded' && <option value="remaining">Saldo restante</option>}
-                            <option value="partial">Parcial por item</option>
-                        </select>
-                        <select className="border border-border bg-background p-2" value={returnId} onChange={event => setReturnId(event.target.value)}>
-                            <option value="">Sem devolução vinculada</option>{data.returns.filter(entry => entry.status === 'recebida').map(entry =>
-                                <option key={entry.id} value={entry.id}>Devolução recebida {entry.id.slice(0, 8)}</option>)}</select>
-                        <p className="text-xs text-muted-foreground">O valor é calculado e limitado pelo backend; reembolso não repõe estoque automaticamente.</p>
-                        <button className="btn-outline text-xs" disabled={busy || (kind === 'partial' && !selected)} onClick={submitRefund}>Solicitar reembolso MP</button>
+                        <p className="text-xs text-muted-foreground">Esta liberação TEST aceita somente R$ 1,00 para DH-2026-000006. O backend valida o saldo; não há devolução nem reposição de estoque.</p>
+                        <button className="btn-outline text-xs" disabled={busy || !refundPreview?.safe_to_partial_refund} onClick={submitRefund}>Solicitar reembolso MP TEST</button>
                     </div>}
                     {!data.refunds_enabled && <p className="text-xs text-muted-foreground">Reembolsos financeiros desabilitados até validação operacional.</p>}
                 </div>

@@ -330,7 +330,9 @@ export async function getRefundableOrder(mpOrderId) {
         currency: data.currency_id || data.currency || payments[0]?.currency_id,
         status: data.status,
         status_detail: data.status_detail,
-        payment: payments.length === 1 ? { id: payments[0].id, status: payments[0].status } : null,
+        payment: payments.length === 1 ? {
+            id: payments[0].id, status: payments[0].status, amount: payments[0].amount,
+        } : null,
         refunds: (data.transactions?.refunds || []).map(refund => ({
             id: refund.id,
             transaction_id: refund.transaction_id,

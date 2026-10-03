@@ -308,8 +308,11 @@ const functions = {
                 return apiFetch(`/orders/${args.orderId}/refunds`, {
                     method: 'POST', headers: { 'X-Idempotency-Key': args.idempotencyKey },
                     body: JSON.stringify({ kind: args.kind, reason: args.reason,
-                        items: args.items, return_id: args.returnId || null }),
+                        items: args.items, amount_cents: args.amountCents,
+                        return_id: args.returnId || null }),
                 });
+            case 'previewRefund':
+                return apiFetch(`/orders/${args.orderId}/refunds/preview?amount_cents=${encodeURIComponent(args.amountCents)}`);
             case 'reconcileRefund':
                 return apiFetch(`/orders/${args.orderId}/refunds/${args.refundId}/reconcile`, { method: 'POST' });
             case 'cancelAfterRefund':

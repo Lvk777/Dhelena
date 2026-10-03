@@ -2,8 +2,9 @@ import { pool, withTransaction } from './config/db.js';
 import * as mp from './services/mercadoPago.js';
 import {
     afterSalesError, assertRefundableOrder, canCancelAfterRefund,
-    findIdempotentRefund, moneyCents, nextReturnStatus, planRefund,
+    findIdempotentRefund, moneyCents, nextReturnStatus, planRefund, requestedRefundCents,
 } from './lib/afterSalesPolicy.js';
+import { isAuthorizedTestRefund } from './lib/testRefundScope.js';
 
 const queryOne = async (client, sql, values) => (await client.query(sql, values)).rows[0];
 const normalizedSelections = (items) => Array.isArray(items)
@@ -37,17 +38,28 @@ function matchNewProviderRefund(provider, ledger, amountCents, paymentId) {
     return matches[0];
 }
 
-async function recordRefundOutcome(refundId, provider, existingLedger) {
-    return withTransaction(async client => {
+async function recordRefundOutcome(refundId, provider, existingLedger, transaction = withTransaction) {
+    return transaction(async client => {
         const row = await queryOne(client, 'SELECT * FROM order_refunds WHERE id = $1 FOR UPDATE', [refundId]);
         if (!row) throw afterSalesError('Reembolso não encontrado', 404);
         if (row.status === 'processed') return row;
         const order = await queryOne(client, 'SELECT * FROM orders WHERE id = $1 FOR UPDATE', [row.order_id]);
         assertRefundableOrder(order, provider, processedAmount(existingLedger));
+        const recorded = existingLedger.filter(entry => entry.status === 'processed');
+        for (const prior of recorded) {
+            const match = provider.refunds.find(refund => refund.id === prior.provider_refund_id);
+            if (!match || String(match.transaction_id) !== String(prior.provider_payment_id)
+                || match.status !== 'processed' || moneyCents(match.amount) !== moneyCents(prior.amount)) {
+                throw afterSalesError('Histórico de reembolsos diverge do Mercado Pago');
+            }
+        }
         if (provider.refunds.length !== existingLedger.filter(entry => entry.status === 'processed').length + 1) {
             throw afterSalesError('Há reembolsos adicionais no provedor; conciliação necessária');
         }
         const matched = matchNewProviderRefund(provider, existingLedger, moneyCents(row.amount), row.provider_payment_id);
+        if (processedAmount(existingLedger) + moneyCents(matched.amount) > moneyCents(order.total)) {
+            throw afterSalesError('Reembolso acumulado excede o pagamento');
+        }
         if (!['processed', 'processing', 'pending'].includes(matched.status)) {
             throw afterSalesError('Status de reembolso no provedor exige conciliação');
         }
@@ -78,9 +90,13 @@ async function recordRefundOutcome(refundId, provider, existingLedger) {
     });
 }
 
-export async function requestRefund(orderId, actorId, request, idempotencyKey, provider = mp) {
+export async function requestRefund(orderId, actorId, request, idempotencyKey, provider = mp,
+    { db = pool, transaction = withTransaction } = {}) {
     if (process.env.AFTER_SALES_REFUNDS_ENABLED !== 'true') {
         throw afterSalesError('Reembolsos desabilitados até validação operacional', 503);
+    }
+    if (mp.getMercadoPagoMode() !== 'test') {
+        throw afterSalesError('Reembolso financeiro permitido somente no Mercado Pago TEST', 409);
     }
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey || '')) {
         throw afterSalesError('X-Idempotency-Key inválida', 400);
@@ -91,20 +107,31 @@ export async function requestRefund(orderId, actorId, request, idempotencyKey, p
         throw afterSalesError('Tipo ou motivo inválido', 400);
     }
     const selected = kind === 'partial' ? normalizedSelections(request.items) : [];
+    const explicitCents = kind === 'partial' && request.amount_cents !== undefined
+        ? requestedRefundCents(request.amount_cents) : undefined;
+    if (explicitCents !== undefined && selected.length) {
+        throw afterSalesError('Informe valor parcial ou itens, não ambos', 400);
+    }
     const returnId = request?.return_id || null;
     // This GET is read-only; it cannot trigger a refund.
-    const localOrder = await queryOne(pool, 'SELECT * FROM orders WHERE id = $1', [orderId]);
+    const localOrder = await queryOne(db, 'SELECT * FROM orders WHERE id = $1', [orderId]);
     if (!localOrder) throw afterSalesError('Pedido não encontrado', 404);
+    if (!isAuthorizedTestRefund(localOrder, explicitCents) || kind !== 'partial' || returnId) {
+        throw afterSalesError('Esta liberação TEST aceita somente R$ 1,00 no pedido autorizado', 409);
+    }
     if (!localOrder.mercado_pago_order_id) throw afterSalesError('Pedido sem order Mercado Pago');
-    const providerOrder = await provider.getRefundableOrder(localOrder.mercado_pago_order_id);
 
-    const reservation = await withTransaction(async client => {
+    const reservation = await transaction(async client => {
         const order = await queryOne(client, 'SELECT * FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
+        if (!isAuthorizedTestRefund(order, explicitCents)) {
+            throw afterSalesError('Pedido TEST divergiu antes da reserva');
+        }
         const ledger = (await client.query('SELECT * FROM order_refunds WHERE order_id = $1 ORDER BY created_at FOR UPDATE', [orderId])).rows;
-        const previous = findIdempotentRefund(ledger, idempotencyKey, kind, reason, selected, returnId);
+        const previous = findIdempotentRefund(ledger, idempotencyKey, kind, reason, selected, returnId, explicitCents);
         if (previous) {
             return { previous };
         }
+        const providerOrder = await provider.getRefundableOrder(order.mercado_pago_order_id);
         assertRefundableOrder(order, providerOrder, processedAmount(ledger));
         compareRefundLedger(providerOrder, ledger);
         if (returnId) {
@@ -124,7 +151,7 @@ export async function requestRefund(orderId, actorId, request, idempotencyKey, p
         }
         const orderItems = kind === 'partial'
             ? (await client.query('SELECT * FROM order_items WHERE order_id = $1', [orderId])).rows : [];
-        const amount = planRefund(order, providerOrder, ledger, kind, selected, orderItems);
+        const amount = planRefund(order, providerOrder, ledger, kind, selected, orderItems, explicitCents);
         const saved = await queryOne(client,
             `INSERT INTO order_refunds
              (order_id, idempotency_key, kind, amount, status, provider_order_id,
@@ -151,10 +178,10 @@ export async function requestRefund(orderId, actorId, request, idempotencyKey, p
             throw afterSalesError('Resposta de reembolso pertence a outra order');
         }
         const refreshed = await provider.getRefundableOrder(reservation.saved.provider_order_id);
-        return await recordRefundOutcome(reservation.saved.id, refreshed, reservation.ledger);
+        return await recordRefundOutcome(reservation.saved.id, refreshed, reservation.ledger, transaction);
     } catch (error) {
         // A timeout or provider error may still have effected the refund. Never replay here.
-        await pool.query(
+        await db.query(
             `UPDATE order_refunds SET status = 'reconciliation_required', updated_at = now()
              WHERE id = $1 AND status = 'reserved'`, [reservation.saved.id]);
         throw afterSalesError('Resultado do Mercado Pago exige conciliação; não repita o reembolso', 503);
@@ -173,6 +200,28 @@ export async function reconcileRefund(refundId, actorId, provider = mp) {
         VALUES ($1, 'refund.reconcile', 'order', $2, $3)`,
     [actorId, row.order_id, JSON.stringify({ refund_request_id: refundId, status: updated.status })]);
     return updated;
+}
+
+/** Webhook uses only a fresh official Orders API read; body values are ignored. */
+export async function reconcileRefundFromWebhook(orderId, expectedProviderOrderId, provider = mp,
+    db = pool, transaction = withTransaction) {
+    const pending = (await db.query(
+        `SELECT * FROM order_refunds WHERE order_id = $1
+         AND status IN ('reserved', 'processing', 'reconciliation_required') ORDER BY created_at`, [orderId])).rows;
+    if (!pending.length) return null;
+    if (pending.length !== 1 || pending[0].provider_order_id !== expectedProviderOrderId) {
+        throw afterSalesError('Reembolso do webhook exige conciliação manual');
+    }
+    const official = await provider.getRefundableOrder(expectedProviderOrderId);
+    const ledger = (await db.query('SELECT * FROM order_refunds WHERE order_id = $1 AND id <> $2',
+        [orderId, pending[0].id])).rows;
+    if (official.refunds.length === ledger.filter(row => row.status === 'processed').length) {
+        const order = await queryOne(db, 'SELECT * FROM orders WHERE id = $1', [orderId]);
+        assertRefundableOrder(order, official, processedAmount(ledger));
+        compareRefundLedger(official, ledger);
+        return pending[0];
+    }
+    return recordRefundOutcome(pending[0].id, official, ledger, transaction);
 }
 
 export async function restoreStock(client, order, item, quantity, source, returnItemId = null, actorId = null) {

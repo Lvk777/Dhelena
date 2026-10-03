@@ -3,9 +3,19 @@ export function afterSalesError(message, status = 409) {
 }
 
 export function moneyCents(value) {
-    const number = Number(value);
-    if (!Number.isFinite(number) || number < 0) throw afterSalesError('Valor monetário inválido', 400);
-    return Math.round(number * 100);
+    const raw = String(value ?? '');
+    if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) throw afterSalesError('Valor monetário inválido', 400);
+    const [whole, fraction = ''] = raw.split('.');
+    const cents = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+    if (!Number.isSafeInteger(cents)) throw afterSalesError('Valor monetário inválido', 400);
+    return cents;
+}
+
+export function requestedRefundCents(value) {
+    if (!Number.isSafeInteger(value) || value <= 0) {
+        throw afterSalesError('Valor parcial deve ser inteiro positivo em centavos', 400);
+    }
+    return value;
 }
 
 export function canCancelWithoutRefund(order) {
@@ -36,6 +46,8 @@ export function assertRefundableOrder(order, provider, refundedCents = 0) {
         || String(provider.payment?.id) !== String(order.mercado_pago_payment_id)
         || provider.currency !== 'BRL'
         || moneyCents(provider.total_amount) !== moneyCents(order.total)
+        || (provider.payment?.amount !== undefined
+            && moneyCents(provider.payment.amount) !== moneyCents(order.total))
         || !['approved', 'processed', 'partially_refunded', 'refunded'].includes(provider.payment?.status)) {
         throw afterSalesError('Dados do pagamento não correspondem ao pedido');
     }
@@ -69,17 +81,18 @@ export function calculateItemRefundCents(order, orderItems, selectedItems, alrea
     return amount;
 }
 
-export function findIdempotentRefund(ledger, key, kind, reason, selected, returnId) {
+export function findIdempotentRefund(ledger, key, kind, reason, selected, returnId, requestedCents) {
     const previous = ledger.find(row => row.idempotency_key === key);
     if (!previous) return null;
     if (previous.kind !== kind || previous.reason !== reason || previous.return_id !== returnId
-        || JSON.stringify(previous.selected_items || []) !== JSON.stringify(selected)) {
+        || JSON.stringify(previous.selected_items || []) !== JSON.stringify(selected)
+        || (requestedCents !== undefined && moneyCents(previous.amount) !== requestedCents)) {
         throw afterSalesError('Chave de idempotência usada para outra solicitação');
     }
     return previous;
 }
 
-export function planRefund(order, provider, ledger, kind, selected, orderItems) {
+export function planRefund(order, provider, ledger, kind, selected, orderItems, explicitCents) {
     if (ledger.some(row => ['reserved', 'processing', 'reconciliation_required'].includes(row.status))) {
         throw afterSalesError('Existe reembolso pendente de conciliação');
     }
@@ -97,8 +110,10 @@ export function planRefund(order, provider, ledger, kind, selected, orderItems) 
         return remaining;
     }
     if (kind !== 'partial') throw afterSalesError('Tipo de reembolso inválido', 400);
-    const amount = calculateItemRefundCents(order, orderItems, selected,
-        ledger.filter(row => row.status === 'processed').map(row => row.selected_items));
+    const amount = explicitCents === undefined
+        ? calculateItemRefundCents(order, orderItems, selected,
+            ledger.filter(row => row.status === 'processed').map(row => row.selected_items))
+        : requestedRefundCents(explicitCents);
     if (amount > remaining) throw afterSalesError('Valor acima do pagamento disponível');
     return amount;
 }

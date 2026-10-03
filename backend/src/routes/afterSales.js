@@ -4,6 +4,7 @@ import { auth, requireAdmin } from '../middleware.js';
 import {
     advanceReturn, cancelPaidOrder, cancelPendingProviderOrder, createReturn, reconcileRefund, requestRefund,
 } from '../afterSalesService.js';
+import { loadRefundPreview } from '../lib/refundPreview.js';
 
 const router = Router();
 router.use('/orders', auth, (req, res, next) => {
@@ -70,6 +71,17 @@ router.post('/orders/:id/refunds', requireAdmin, async (req, res) => {
             req.get('X-Idempotency-Key'));
         res.status(result.status === 'processed' ? 200 : 202).json(result);
     } catch (error) { replyError(res, error); }
+});
+
+router.get('/orders/:id/refunds/preview', requireAdmin, async (req, res) => {
+    try {
+        const amount = Number(req.query.amount_cents);
+        const result = await loadRefundPreview(req.params.id, amount);
+        res.json(result);
+    } catch (error) {
+        if (error.mpError) return res.status(502).json({ error: 'Prévia Mercado Pago indisponível' });
+        replyError(res, error);
+    }
 });
 
 router.post('/orders/:id/refunds/:refundId/reconcile', requireAdmin, async (req, res) => {
