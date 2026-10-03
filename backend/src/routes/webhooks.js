@@ -10,6 +10,7 @@ import { inspectWebhookSignature, getOrderStatus, mapPaymentStatus } from '../se
 import { validateWebhook as validateMEWebhook, getTracking } from '../services/melhorEnvio.js';
 import { getVerifiedPaymentForOrder, isVerifiedPaymentForOrder } from '../lib/paymentVerification.js';
 import { applyVerifiedOrderInTransaction, recordVerifiedNonApprovedOrderInTransaction } from '../lib/paymentReconciliation.js';
+import { createMercadoPagoWebhookLog, logMercadoPagoWebhookDelivery } from '../lib/mercadoPagoWebhookLog.js';
 
 const router = Router();
 
@@ -44,15 +45,16 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
 
     // Only authenticated deliveries receive a 2xx response.
     const signature = inspectWebhookSignature(req);
+    const delivery = createMercadoPagoWebhookLog(req, signature);
     if (!signature.valid) {
-        console.warn(JSON.stringify({ event: 'mp_webhook_signature_rejected',
-            reason: signature.reason, has_signature: signature.has_signature,
-            has_request_id: signature.has_request_id, has_query_data_id: signature.has_query_data_id,
-            secret_configured: signature.secret_configured }));
+        delivery.processing_result = signature.reason;
+        logMercadoPagoWebhookDelivery(delivery, 'warn');
         return res.status(401).json({ error: 'Assinatura inválida' });
     }
 
     if (typeof dataId !== 'string' || !/^ORD[A-Za-z0-9]{10,60}$/.test(dataId)) {
+        delivery.processing_result = 'unsupported_event';
+        logMercadoPagoWebhookDelivery(delivery);
         return res.status(200).json({ status: 'unsupported_event' });
     }
 
@@ -67,15 +69,24 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
               RETURNING id`,
             [eventId, event || 'unknown', JSON.stringify(req.body)]
         );
-        if (inserted.rowCount === 0) return res.status(200).json({ status: 'already_processed' });
+        if (inserted.rowCount === 0) {
+            delivery.processing_result = 'already_processed';
+            delivery.deduplication_result = 'duplicate';
+            logMercadoPagoWebhookDelivery(delivery);
+            return res.status(200).json({ status: 'already_processed' });
+        }
+        delivery.deduplication_result = 'reserved';
     } catch (err) {
-        console.error(JSON.stringify({ event: 'mp_webhook_reservation_failed',
-            error_code: /^[A-Z0-9_]{2,30}$/.test(err.code || '') ? err.code : 'UNKNOWN' }));
+        delivery.processing_result = 'reservation_failed';
+        delivery.deduplication_result = 'reservation_failed';
+        logMercadoPagoWebhookDelivery(delivery, 'error');
         return res.status(503).json({ error: 'Serviço temporariamente indisponível' });
     }
 
     try {
+        delivery.provider_resource_fetch = 'failure';
         const resolvedOrderResource = await getOrderStatus(dataId);
+        delivery.provider_resource_fetch = 'success';
         const { rows } = await pool.query(
             'SELECT * FROM orders WHERE mercado_pago_order_id = $1 OR order_number = $2',
             [dataId, resolvedOrderResource.external_reference]
@@ -83,18 +94,23 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
         const orderRef = rows[0] || null;
 
         if (!orderRef) {
-            console.warn(JSON.stringify({ event: 'mp_webhook_order_not_found', mp_order_id: dataId }));
             await markWebhookProcessed('mercado_pago', eventId);
+            delivery.processing_result = 'order_not_found';
+            delivery.deduplication_result = 'processed';
+            logMercadoPagoWebhookDelivery(delivery, 'warn');
             return res.status(200).json({ status: 'order_not_found' });
         }
+        delivery.local_order_number = orderRef.order_number;
 
         let verifiedPayment;
         try {
             verifiedPayment = await getVerifiedPaymentForOrder(orderRef, { getOrderStatus }, resolvedOrderResource, dataId);
         } catch (error) {
             if (error.code !== 'PAYMENT_MISMATCH') throw error;
-            console.warn('[Webhook MP] Rejected order with mismatched reference, amount, currency, or status');
             await markWebhookProcessed('mercado_pago', eventId);
+            delivery.processing_result = 'mismatched_payment';
+            delivery.deduplication_result = 'processed';
+            logMercadoPagoWebhookDelivery(delivery, 'warn');
             return res.status(200).json({ status: 'mismatched_payment' });
         }
 
@@ -110,14 +126,16 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
             return result.outcome;
         });
 
-        console.log(`[Webhook MP] Order ${orderRef.order_number} → ${outcome}`);
+        delivery.processing_result = outcome;
+        delivery.deduplication_result = 'processed';
+        logMercadoPagoWebhookDelivery(delivery);
         res.status(200).json({ status: outcome, payment_status: internalStatus });
 
     } catch (err) {
-        console.error(JSON.stringify({ event: 'mp_webhook_processing_failed',
-            error_code: /^[A-Z0-9_]{2,30}$/.test(err.code || '') ? err.code : 'UNKNOWN',
-            provider_http_status: err.mpError && Number.isInteger(err.status) ? err.status : null }));
+        delivery.processing_result = 'processing_failed';
         await releaseWebhookForRetry('mercado_pago', eventId);
+        delivery.deduplication_result = 'released_for_retry';
+        logMercadoPagoWebhookDelivery(delivery, 'error');
         res.status(503).json({ error: 'Serviço temporariamente indisponível' });
     }
 });
