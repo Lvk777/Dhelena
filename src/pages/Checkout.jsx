@@ -346,8 +346,8 @@ export default function Checkout() {
                             ) : null}
                             {errors.payment && <p className="text-[11px] text-[hsl(var(--rose))]">{errors.payment}</p>}
                             <div className="p-4 bg-[hsl(var(--bone))] text-xs text-muted-foreground leading-relaxed">
-                                <p>Ao confirmar, seu pedido será criado e o pagamento processado pelo Mercado Pago.</p>
-                                <p className="mt-1">Você verá o valor confirmado antes de pagar.</p>
+                                <p>Ao confirmar, seu pedido será criado. O pagamento pelo Mercado Pago será iniciado na próxima tela.</p>
+                                <p className="mt-1">Você verá o valor final confirmado antes de pagar.</p>
                             </div>
                         </div>
                     )}
