@@ -110,13 +110,13 @@ export default function Cart() {
 
             <div className="grid lg:grid-cols-3 gap-12 mt-12">
                 {/* items */}
-                <div className="lg:col-span-2 space-y-6">
+                <div className="lg:col-span-2 space-y-6 min-w-0">
                     {lines.map((l) => (
                         <div key={`${l.productId}-${l.colorId}-${l.size}`} className="flex gap-5 pb-6 border-b border-border">
                             <Link to={`/produto/${l.productId}`} className="shrink-0">
                                 <img src={l.product.images[0]} alt={l.product.name} className="w-24 h-32 sm:w-28 sm:h-36 object-cover bg-bone" />
                             </Link>
-                            <div className="flex-1 flex flex-col">
+                            <div className="flex-1 flex flex-col min-w-0">
                                 <div className="flex justify-between gap-4">
                                     <div>
                                         <Link to={`/produto/${l.productId}`} className="text-base font-medium hover:text-[hsl(var(--rose))] transition-colors">{l.product.name}</Link>
@@ -131,7 +131,7 @@ export default function Cart() {
                                         <span className="px-4 text-sm">{l.qty}</span>
                                         <button onClick={() => updateQty({ productId: l.productId, colorId: l.colorId, size: l.size }, l.qty + 1, stockFor(l.product, l.colorId, l.size))} className="px-3 py-2 hover:bg-bone" aria-label="Aumentar"><Plus className="w-3.5 h-3.5" strokeWidth={1.5} /></button>
                                     </div>
-                                    <span className="text-base font-medium">{formatBRL((l.product.salePrice || l.product.price) * l.qty)}</span>
+                                    <span className="text-base font-medium whitespace-nowrap">{formatBRL((l.product.salePrice || l.product.price) * l.qty)}</span>
                                 </div>
                             </div>
                         </div>
@@ -140,15 +140,15 @@ export default function Cart() {
                 </div>
 
                 {/* summary */}
-                <div className="lg:col-span-1">
+                <div className="lg:col-span-1 min-w-0">
                     <div className="bg-[hsl(var(--bone))] p-7 space-y-5">
                         <h3 className="text-[11px] uppercase tracking-[0.24em]">Resumo do pedido</h3>
 
                         {/* coupon */}
                         <form onSubmit={handleApplyCoupon} className="flex gap-2">
-                            <div className="flex-1 flex items-center gap-2 border border-border bg-background px-3">
+                            <div className="flex-1 min-w-0 flex items-center gap-2 border border-border bg-background px-3">
                                 <Tag className="w-4 h-4 text-muted-foreground" strokeWidth={1.25} />
-                                <input value={couponInput} onChange={(e) => setCouponInput(e.target.value)} placeholder="Cupom de desconto" disabled={couponLoading} className="flex-1 py-3 text-sm bg-transparent focus:outline-none disabled:opacity-50" />
+                                <input value={couponInput} onChange={(e) => setCouponInput(e.target.value)} placeholder="Cupom de desconto" disabled={couponLoading} className="flex-1 min-w-0 py-3 text-sm bg-transparent focus:outline-none disabled:opacity-50" />
                             </div>
                             <button type="submit" disabled={couponLoading} className="btn-outline px-5 disabled:opacity-50">{couponLoading ? "..." : "Aplicar"}</button>
                         </form>
@@ -163,9 +163,9 @@ export default function Cart() {
 
                         {/* shipping */}
                         <form onSubmit={calcFrete} className="flex gap-2">
-                            <div className="flex-1 flex items-center gap-2 border border-border bg-background px-3">
+                            <div className="flex-1 min-w-0 flex items-center gap-2 border border-border bg-background px-3">
                                 <Truck className="w-4 h-4 text-muted-foreground" strokeWidth={1.25} />
-                                <input value={cep} onChange={(e) => { quoteVersion.current += 1; setCep(e.target.value); setFrete(null); setShippingOptions([]); setShippingLoading(false); }} placeholder="Calcular frete (CEP)" inputMode="numeric" aria-label="CEP para calcular frete" className="flex-1 py-3 text-sm bg-transparent focus:outline-none" />
+                                <input value={cep} onChange={(e) => { quoteVersion.current += 1; setCep(e.target.value); setFrete(null); setShippingOptions([]); setShippingLoading(false); }} placeholder="Calcular frete (CEP)" inputMode="numeric" aria-label="CEP para calcular frete" className="flex-1 min-w-0 py-3 text-sm bg-transparent focus:outline-none" />
                             </div>
                             <button type="submit" disabled={shippingLoading} className="btn-outline px-5 disabled:opacity-50">{shippingLoading ? "..." : "OK"}</button>
                         </form>
