@@ -191,3 +191,47 @@ test('customer cannot read another order, mutate a return or access an admin ret
         await new Promise(resolve => server.close(resolve));
     }
 });
+
+test('unmigrated production schema keeps history readable and blocks physical mutations', async () => {
+    const original = pool.query;
+    const writes = [];
+    pool.query = async sql => {
+        if (sql.includes('SELECT authorized_at FROM order_returns')
+            || sql.includes('SELECT condition_note FROM order_return_items')) {
+            throw Object.assign(new Error('column missing'), { code: '42703' });
+        }
+        if (sql.includes('SELECT id FROM orders WHERE id')
+            || sql.includes('SELECT id FROM order_returns WHERE id')) return { rows: [{ id: 'order-1' }] };
+        if (sql.includes('FROM order_returns r LEFT JOIN order_return_items')) {
+            return { rows: [{ id: 'return-1', status: 'solicitada', reason: 'Tamanho errado', items: [] }] };
+        }
+        if (sql.includes('FROM order_refunds WHERE order_id')) return { rows: [] };
+        if (/\b(INSERT INTO|UPDATE|DELETE FROM)\b/i.test(sql)) writes.push(sql);
+        return { rows: [] };
+    };
+    const app = express();
+    app.use(express.json());
+    app.use((req, res, next) => { req.user = { id: 'admin-1', role: 'admin' }; next(); });
+    app.use('/api', afterSalesRoutes);
+    const server = await new Promise(resolve => {
+        const running = app.listen(0, '127.0.0.1', () => resolve(running));
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    try {
+        const history = await fetch(`${base}/api/orders/order-1/after-sales`);
+        assert.equal(history.status, 200);
+        assert.equal((await history.json()).physical_schema_ready, false);
+        assert.equal((await fetch(`${base}/api/orders/order-1/returns`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: [{ order_item_id: 'item-1', quantity: 1 }], reason: 'Tamanho errado' }),
+        })).status, 503);
+        assert.equal((await fetch(`${base}/api/orders/order-1/returns/return-1`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'autorizada' }),
+        })).status, 503);
+        assert.deepEqual(writes, []);
+    } finally {
+        pool.query = original;
+        await new Promise(resolve => server.close(resolve));
+    }
+});

@@ -62,7 +62,7 @@ export default function CustomerAfterSales({ order, onChanged }) {
             {entry.reverse_posting_code && <p className="text-xs">Código de postagem: {entry.reverse_posting_code}</p>}
             {entry.reverse_tracking_code && <p className="text-xs">Rastreio reverso: {entry.reverse_tracking_code}</p>}
         </div>)}
-        {data && ['approved', 'partially_refunded', 'refunded'].includes(order.payment_status)
+        {data?.physical_schema_ready && ['approved', 'partially_refunded', 'refunded'].includes(order.payment_status)
             && ['enviado', 'em_transporte', 'saiu_entrega', 'entregue'].includes(order.status)
             && order.order_number !== 'DH-2026-000006' && <div className="space-y-2 max-w-lg">
                 <p className="text-sm">Solicitar devolução física</p>

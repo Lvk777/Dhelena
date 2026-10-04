@@ -16,13 +16,27 @@ const replyError = (res, error) => res.status(error.status || 500).json({
     error: error.status ? error.message : 'Falha no processamento de pós-venda',
 });
 
+async function physicalSchemaReady() {
+    try {
+        await Promise.all([
+            pool.query('SELECT authorized_at FROM order_returns LIMIT 0'),
+            pool.query('SELECT condition_note FROM order_return_items LIMIT 0'),
+        ]);
+        return true;
+    } catch (error) {
+        if (error.code === '42703') return false;
+        throw error;
+    }
+}
+
 router.get('/orders/:id/after-sales', async (req, res) => {
     try {
         const own = req.user.role === 'admin' ? '' : ' AND user_id = $2';
         const params = req.user.role === 'admin' ? [req.params.id] : [req.params.id, req.user.id];
         const { rows } = await pool.query(`SELECT id FROM orders WHERE id = $1${own}`, params);
         if (!rows.length) return res.status(404).json({ error: 'Pedido não encontrado' });
-        const returns = await pool.query(
+        const schemaReady = await physicalSchemaReady();
+        const returns = schemaReady ? await pool.query(
             `SELECT r.id, r.status, r.reason, r.created_at, r.updated_at, r.authorized_at,
                 r.awaiting_post_at, r.posted_at, r.in_transit_at, r.received_at, r.closed_at,
                 r.posting_instructions, r.reverse_tracking_code, r.reverse_posting_code,
@@ -38,13 +52,22 @@ router.get('/orders/:id/after-sales', async (req, res) => {
                 COALESCE((SELECT json_agg(json_build_object('id', rf.id, 'status', rf.status,
                     'amount', rf.amount, 'provider_refund_id', rf.provider_refund_id))
                     FROM order_refunds rf WHERE rf.return_id = r.id), '[]'::json) AS related_refunds
-             FROM order_returns r WHERE r.order_id = $1 ORDER BY r.created_at`, [req.params.id]);
+             FROM order_returns r WHERE r.order_id = $1 ORDER BY r.created_at`, [req.params.id])
+            : await pool.query(
+                `SELECT r.id, r.status, r.reason, r.created_at, r.updated_at, r.received_at,
+                    COALESCE(json_agg(json_build_object('order_item_id', ri.order_item_id,
+                    'quantity', ri.quantity, 'restockable', ri.restockable,
+                    'return_item_id', ri.id, 'stock_restored', EXISTS (
+                        SELECT 1 FROM stock_restorations sr WHERE sr.return_item_id = ri.id)))
+                    FILTER (WHERE ri.id IS NOT NULL), '[]') AS items
+                 FROM order_returns r LEFT JOIN order_return_items ri ON ri.return_id = r.id
+                 WHERE r.order_id = $1 GROUP BY r.id ORDER BY r.created_at`, [req.params.id]);
         const refundReason = req.user.role === 'admin' ? 'reason' : 'NULL::text AS reason';
         const refunds = await pool.query(
             `SELECT id, kind, amount, status, provider_refund_id, provider_status,
                     ${refundReason}, created_at, processed_at
              FROM order_refunds WHERE order_id = $1 ORDER BY created_at`, [req.params.id]);
-        res.json({ returns: returns.rows, refunds: refunds.rows,
+        res.json({ returns: returns.rows, refunds: refunds.rows, physical_schema_ready: schemaReady,
             ...(req.user.role === 'admin' ? {
                 refunds_enabled: process.env.AFTER_SALES_REFUNDS_ENABLED === 'true',
                 pending_cancellation_enabled: process.env.AFTER_SALES_CANCELLATIONS_ENABLED === 'true',
@@ -59,6 +82,7 @@ router.post('/orders/:id/returns', async (req, res) => {
                 [req.params.id, req.user.id]);
             if (!rows.length) return res.status(404).json({ error: 'Pedido não encontrado' });
         }
+        if (!await physicalSchemaReady()) return res.status(503).json({ error: 'Migração física 012 pendente' });
         const result = await createReturn(req.params.id, req.user.id, req.body?.items, req.body?.reason);
         res.status(201).json(result);
     } catch (error) { replyError(res, error); }
@@ -69,6 +93,7 @@ router.patch('/orders/:id/returns/:returnId', requireAdmin, async (req, res) => 
         const { rows } = await pool.query('SELECT id FROM order_returns WHERE id = $1 AND order_id = $2',
             [req.params.returnId, req.params.id]);
         if (!rows.length) return res.status(404).json({ error: 'Devolução não encontrada' });
+        if (!await physicalSchemaReady()) return res.status(503).json({ error: 'Migração física 012 pendente' });
         const result = await advanceReturn(req.params.returnId, req.user.id,
             req.body?.status, req.body?.restockable || {}, {
                 expectedOrderId: req.params.id,

@@ -121,6 +121,7 @@ export default function AdminAfterSales({ order, onChanged }) {
             <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Pós-venda</h2>
             {error && <p role="alert" className="text-xs text-red-700 mb-3">{error}</p>}
             {!data ? <p className="text-xs text-muted-foreground">Histórico de pós-venda indisponível.</p> : <div className="space-y-5 text-sm">
+                {!data.physical_schema_ready && <p role="status" className="text-xs text-amber-800">Devoluções físicas aguardam a migração 012 do banco. O histórico continua disponível para consulta.</p>}
                 <div>
                     <h3 className="font-medium mb-2">Cancelamento</h3>
                     {order.status === 'cancelado' ? <p>Pedido cancelado.</p>
@@ -169,7 +170,7 @@ export default function AdminAfterSales({ order, onChanged }) {
                             <input className="block w-full border border-border bg-background p-2 mt-1" maxLength={500} placeholder="Descreva a condição ao receber" value={conditionNotes[item.return_item_id] || ''}
                                 onChange={event => setConditionNotes(previous => ({ ...previous, [item.return_item_id]: event.target.value }))} />
                         </label>)}
-                        <div className="flex flex-wrap gap-2">{(RETURN_NEXT[entry.status] || []).map(status => <button key={status} className="btn-outline text-xs min-h-11" disabled={busy || (status === 'aguardando_postagem' && (postingInstructions[entry.id]?.trim().length || 0) < 10) || (status === 'recebida' && entry.items.some(item => restockable[item.return_item_id] === undefined || (conditionNotes[item.return_item_id]?.trim().length || 0) < 3))}
+                        <div className="flex flex-wrap gap-2">{(RETURN_NEXT[entry.status] || []).map(status => <button key={status} className="btn-outline text-xs min-h-11" disabled={busy || !data.physical_schema_ready || (status === 'aguardando_postagem' && (postingInstructions[entry.id]?.trim().length || 0) < 10) || (status === 'recebida' && entry.items.some(item => restockable[item.return_item_id] === undefined || (conditionNotes[item.return_item_id]?.trim().length || 0) < 3))}
                             onClick={() => advance(entry, status)}>{status.replaceAll('_', ' ')}</button>)}</div>
                     </div>)}
                     {!data.returns?.length && <p className="text-xs text-muted-foreground">Nenhuma devolução solicitada.</p>}
@@ -185,7 +186,7 @@ export default function AdminAfterSales({ order, onChanged }) {
                         </select>
                         <input className="w-20 border border-border bg-background p-2" type="number" min="1" max={selected?.quantity || 1} value={quantity}
                             onChange={event => setQuantity(Number(event.target.value))} aria-label="Quantidade" />
-                        <button className="btn-outline text-xs" disabled={busy || !selected || order.order_number === 'DH-2026-000006'
+                        <button className="btn-outline text-xs" disabled={busy || !data.physical_schema_ready || !selected || order.order_number === 'DH-2026-000006'
                             || !SHIPPED.has(order.status)} onClick={submitReturn}>Solicitar devolução</button>
                     </div>
                     {order.order_number === 'DH-2026-000006' && <p className="text-xs text-muted-foreground">Pedido preservado como evidência da homologação financeira.</p>}
