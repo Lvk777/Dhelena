@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 
+const showDate = value => value ? new Date(value).toLocaleString('pt-BR') : '—';
+
 export default function CustomerAfterSales({ order, onChanged }) {
     const [data, setData] = useState(null);
     const [itemId, setItemId] = useState('');
@@ -54,9 +56,15 @@ export default function CustomerAfterSales({ order, onChanged }) {
         {data?.returns?.map(entry => <div key={entry.id} className="text-sm border border-border p-3 mb-2">
             <p className="font-medium">Devolução: {entry.status.replaceAll('_', ' ')}</p>
             <p className="text-xs text-muted-foreground">{entry.reason}</p>
+            <p className="text-xs">Itens: {entry.items.map(item => `${item.quantity}x ${order.items?.find(row => row.id === item.order_item_id)?.product_name || 'Item'}`).join(', ')}</p>
+            <p className="text-xs text-muted-foreground">Solicitada: {showDate(entry.created_at)} · autorizada: {showDate(entry.authorized_at)} · postada: {showDate(entry.posted_at)} · recebida: {showDate(entry.received_at)}</p>
+            {entry.posting_instructions && <p className="text-xs mt-2">Instruções de postagem: {entry.posting_instructions}</p>}
+            {entry.reverse_posting_code && <p className="text-xs">Código de postagem: {entry.reverse_posting_code}</p>}
+            {entry.reverse_tracking_code && <p className="text-xs">Rastreio reverso: {entry.reverse_tracking_code}</p>}
         </div>)}
         {data && ['approved', 'partially_refunded', 'refunded'].includes(order.payment_status)
-            && order.status !== 'cancelado' && <div className="space-y-2 max-w-lg">
+            && ['enviado', 'em_transporte', 'saiu_entrega', 'entregue'].includes(order.status)
+            && order.order_number !== 'DH-2026-000006' && <div className="space-y-2 max-w-lg">
                 <p className="text-sm">Solicitar devolução física</p>
                 <div className="flex flex-wrap gap-2">
                     <select className="border border-border bg-background p-2 text-sm" value={itemId} onChange={event => setItemId(event.target.value)}>

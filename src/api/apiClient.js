@@ -302,7 +302,9 @@ const functions = {
                 return apiFetch(`/orders/${args.orderId}/returns`, { method: 'POST', body: JSON.stringify(args) });
             case 'advanceReturn':
                 return apiFetch(`/orders/${args.orderId}/returns/${args.returnId}`, {
-                    method: 'PATCH', body: JSON.stringify({ status: args.status, restockable: args.restockable }),
+                    method: 'PATCH', body: JSON.stringify({ status: args.status, restockable: args.restockable,
+                        conditionNotes: args.conditionNotes, postingInstructions: args.postingInstructions,
+                        reverseTrackingCode: args.reverseTrackingCode, reversePostingCode: args.reversePostingCode }),
                 });
             case 'requestRefund':
                 return apiFetch(`/orders/${args.orderId}/refunds`, {

@@ -246,6 +246,7 @@ export async function cancelPaidOrder(orderId, actorId) {
     return withTransaction(async client => {
         const order = await queryOne(client, 'SELECT * FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
         if (!order) throw afterSalesError('Pedido não encontrado', 404);
+        if (order.order_number === 'DH-2026-000006') throw afterSalesError('Pedido de homologação encerrado');
         if (order.status === 'cancelado') return order;
         const refunds = (await client.query(
             "SELECT amount FROM order_refunds WHERE order_id = $1 AND status = 'processed'", [orderId])).rows;
@@ -314,15 +315,19 @@ export async function cancelPendingProviderOrder(orderId, actorId, provider = mp
     });
 }
 
-export async function createReturn(orderId, actorId, items, reason) {
-    if (!Array.isArray(items) || !items.length || String(reason || '').trim().length < 5) {
+export async function createReturn(orderId, actorId, items, reason, transaction = withTransaction) {
+    if (!Array.isArray(items) || !items.length || typeof reason !== 'string'
+        || reason.trim().length < 5 || reason.trim().length > 500) {
         throw afterSalesError('Itens e motivo são obrigatórios', 400);
     }
-    return withTransaction(async client => {
+    return transaction(async client => {
         const order = await queryOne(client, 'SELECT * FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
         if (!order) throw afterSalesError('Pedido não encontrado', 404);
+        if (order.order_number === 'DH-2026-000006') throw afterSalesError('Pedido de homologação encerrado');
         if (!['approved', 'partially_refunded', 'refunded'].includes(order.payment_status)
-            || order.status === 'cancelado') throw afterSalesError('Pedido não elegível à devolução');
+            || !['enviado', 'em_transporte', 'saiu_entrega', 'entregue'].includes(order.status)) {
+            throw afterSalesError('Pedido não elegível à devolução física');
+        }
         const purchased = (await client.query('SELECT * FROM order_items WHERE order_id = $1', [orderId])).rows;
         const existing = (await client.query(
             `SELECT ri.order_item_id, SUM(ri.quantity)::integer AS quantity FROM order_return_items ri
@@ -341,7 +346,7 @@ export async function createReturn(orderId, actorId, items, reason) {
         }
         const created = await queryOne(client,
             `INSERT INTO order_returns (order_id, reason, requested_by) VALUES ($1, $2, $3) RETURNING *`,
-            [orderId, String(reason).trim().slice(0, 500), actorId]);
+            [orderId, reason.trim(), actorId]);
         for (const selected of items) {
             await client.query(
                 `INSERT INTO order_return_items (return_id, order_item_id, quantity) VALUES ($1, $2, $3)`,
@@ -354,31 +359,49 @@ export async function createReturn(orderId, actorId, items, reason) {
     });
 }
 
-export async function advanceReturn(returnId, actorId, desired, restockable = {}) {
-    return withTransaction(async client => {
+export async function advanceReturn(returnId, actorId, desired, restockable = {}, options = {},
+    transaction = withTransaction) {
+    return transaction(async client => {
         const pre = await queryOne(client, 'SELECT order_id FROM order_returns WHERE id = $1', [returnId]);
         if (!pre) throw afterSalesError('Devolução não encontrada', 404);
+        if (options.expectedOrderId && pre.order_id !== options.expectedOrderId) {
+            throw afterSalesError('Devolução não pertence ao pedido', 404);
+        }
         const order = await queryOne(client, 'SELECT * FROM orders WHERE id = $1 FOR UPDATE', [pre.order_id]);
+        if (!order) throw afterSalesError('Pedido não encontrado', 404);
+        if (order.order_number === 'DH-2026-000006') throw afterSalesError('Pedido de homologação encerrado');
         const row = await queryOne(client, 'SELECT * FROM order_returns WHERE id = $1 FOR UPDATE', [returnId]);
         if (!nextReturnStatus(row.status, desired)) return row;
-        if (desired === 'reembolso_processado') {
-            const processed = await queryOne(client,
-                `SELECT EXISTS(SELECT 1 FROM order_refunds
-                 WHERE order_id = $1 AND return_id = $2 AND status = 'processed') AS yes`,
-                [order.id, returnId]);
-            if (!processed.yes) throw afterSalesError('Nenhum reembolso confirmado para o pedido');
+        for (const value of [options.postingInstructions, options.reverseTrackingCode, options.reversePostingCode]) {
+            if (value !== undefined && value !== null && typeof value !== 'string') {
+                throw afterSalesError('Dados de postagem inválidos', 400);
+            }
+        }
+        const instructions = options.postingInstructions?.trim();
+        const tracking = options.reverseTrackingCode?.trim();
+        const postingCode = options.reversePostingCode?.trim();
+        if (desired === 'aguardando_postagem' && (!instructions || instructions.length < 10 || instructions.length > 2000)) {
+            throw afterSalesError('Informe instruções de postagem para a cliente', 400);
+        }
+        if (instructions && instructions.length > 2000 || tracking && tracking.length > 100
+            || postingCode && postingCode.length > 100) {
+            throw afterSalesError('Dados de postagem inválidos', 400);
         }
         if (desired === 'recebida') {
             const items = (await client.query(
                 `SELECT ri.id AS return_item_id, ri.quantity AS return_quantity, oi.* FROM order_return_items ri
                  JOIN order_items oi ON oi.id = ri.order_item_id WHERE ri.return_id = $1`, [returnId])).rows;
-            if (Object.keys(restockable).length !== items.length
-                || items.some(item => typeof restockable[item.return_item_id] !== 'boolean')) {
-                throw afterSalesError('Admin deve classificar cada item recebido como revendável ou não', 400);
+            if (!restockable || typeof restockable !== 'object' || Array.isArray(restockable)
+                || Object.keys(restockable).length !== items.length
+                || items.some(item => typeof restockable[item.return_item_id] !== 'boolean'
+                    || typeof options.conditionNotes?.[item.return_item_id] !== 'string'
+                    || options.conditionNotes[item.return_item_id].trim().length < 3
+                    || options.conditionNotes[item.return_item_id].trim().length > 500)) {
+                throw afterSalesError('Classifique e descreva a condição de cada item recebido', 400);
             }
             for (const item of items) {
-                await client.query('UPDATE order_return_items SET restockable = $1 WHERE id = $2',
-                    [restockable[item.return_item_id], item.return_item_id]);
+                await client.query('UPDATE order_return_items SET restockable = $1, condition_note = $2 WHERE id = $3',
+                    [restockable[item.return_item_id], options.conditionNotes[item.return_item_id].trim(), item.return_item_id]);
                 if (restockable[item.return_item_id]) {
                     await restoreStock(client, order, item, item.return_quantity, 'return', item.return_item_id, actorId);
                 }
@@ -386,9 +409,19 @@ export async function advanceReturn(returnId, actorId, desired, restockable = {}
         }
         const updated = await queryOne(client,
             `UPDATE order_returns SET status = $1, reviewed_by = $2,
+             authorized_at = CASE WHEN $1 = 'autorizada' THEN now() ELSE authorized_at END,
+             awaiting_post_at = CASE WHEN $1 = 'aguardando_postagem' THEN now() ELSE awaiting_post_at END,
+             posted_at = CASE WHEN $1 = 'em_transito_retorno' THEN now() ELSE posted_at END,
+             in_transit_at = CASE WHEN $1 = 'em_transito_retorno' THEN now() ELSE in_transit_at END,
+             closed_at = CASE WHEN $1 IN ('recusada', 'cancelada') THEN now() ELSE closed_at END,
+             posting_instructions = CASE WHEN $1 = 'aguardando_postagem' THEN $4 ELSE posting_instructions END,
+             reverse_tracking_code = CASE WHEN $1 = 'em_transito_retorno' THEN $5 ELSE reverse_tracking_code END,
+             reverse_posting_code = CASE WHEN $1 IN ('aguardando_postagem', 'em_transito_retorno')
+                 THEN COALESCE($6, reverse_posting_code) ELSE reverse_posting_code END,
              received_by = CASE WHEN $1 = 'recebida' THEN $2 ELSE received_by END,
              received_at = CASE WHEN $1 = 'recebida' THEN now() ELSE received_at END,
-             updated_at = now() WHERE id = $3 RETURNING *`, [desired, actorId, returnId]);
+             updated_at = now() WHERE id = $3 RETURNING *`,
+            [desired, actorId, returnId, instructions || null, tracking || null, postingCode || null]);
         await client.query(`INSERT INTO order_events (order_id, event, description, metadata)
             VALUES ($1, $2, $3, $4)`, [order.id, `return_${desired}`, `Devolução: ${desired}`,
             JSON.stringify({ return_id: returnId, actor_id: actorId })]);

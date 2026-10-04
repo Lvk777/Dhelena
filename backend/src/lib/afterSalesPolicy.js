@@ -121,10 +121,10 @@ export function planRefund(order, provider, ledger, kind, selected, orderItems, 
 export function nextReturnStatus(current, desired) {
     const allowed = {
         solicitada: ['autorizada', 'recusada', 'cancelada'],
-        autorizada: ['aguardando_postagem', 'recebida', 'cancelada'],
-        aguardando_postagem: ['em_transito_retorno', 'recebida', 'cancelada'],
+        autorizada: ['aguardando_postagem', 'cancelada'],
+        aguardando_postagem: ['em_transito_retorno', 'cancelada'],
         em_transito_retorno: ['recebida'],
-        recebida: ['reembolso_processado'],
+        recebida: [],
         reembolso_processado: [], recusada: [], cancelada: [],
     };
     if (current === desired) return false;

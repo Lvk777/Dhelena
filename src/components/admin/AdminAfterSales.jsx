@@ -5,11 +5,11 @@ import { formatBRL } from '@/data/products';
 const SHIPPED = new Set(['enviado', 'em_transporte', 'saiu_entrega', 'entregue']);
 const RETURN_NEXT = {
     solicitada: ['autorizada', 'recusada', 'cancelada'],
-    autorizada: ['aguardando_postagem', 'recebida', 'cancelada'],
-    aguardando_postagem: ['em_transito_retorno', 'recebida', 'cancelada'],
+    autorizada: ['aguardando_postagem', 'cancelada'],
+    aguardando_postagem: ['em_transito_retorno', 'cancelada'],
     em_transito_retorno: ['recebida'],
-    recebida: ['reembolso_processado'],
 };
+const showDate = value => value ? new Date(value).toLocaleString('pt-BR') : '—';
 
 export default function AdminAfterSales({ order, onChanged }) {
     const [data, setData] = useState(null);
@@ -19,6 +19,10 @@ export default function AdminAfterSales({ order, onChanged }) {
     const [itemId, setItemId] = useState('');
     const [quantity, setQuantity] = useState(1);
     const [restockable, setRestockable] = useState({});
+    const [conditionNotes, setConditionNotes] = useState({});
+    const [postingInstructions, setPostingInstructions] = useState({});
+    const [reverseTrackingCode, setReverseTrackingCode] = useState({});
+    const [reversePostingCode, setReversePostingCode] = useState({});
     const idempotencyKey = `remaining-${order.id}`;
     const [refundPreview, setRefundPreview] = useState(null);
 
@@ -105,6 +109,11 @@ export default function AdminAfterSales({ order, onChanged }) {
         orderId: order.id, returnId: entry.id, status,
         restockable: status === 'recebida'
             ? Object.fromEntries(entry.items.map(item => [item.return_item_id, restockable[item.return_item_id]])) : {},
+        conditionNotes: status === 'recebida'
+            ? Object.fromEntries(entry.items.map(item => [item.return_item_id, conditionNotes[item.return_item_id]])) : {},
+        postingInstructions: status === 'aguardando_postagem' ? postingInstructions[entry.id] : undefined,
+        reverseTrackingCode: status === 'em_transito_retorno' ? reverseTrackingCode[entry.id] : undefined,
+        reversePostingCode: ['aguardando_postagem', 'em_transito_retorno'].includes(status) ? reversePostingCode[entry.id] : undefined,
     }), status === 'recebida' ? 'Confirmar recebimento físico e classificação de todos os itens?' : null);
 
     return (
@@ -118,7 +127,8 @@ export default function AdminAfterSales({ order, onChanged }) {
                         : SHIPPED.has(order.status) ? <p className="text-muted-foreground">Pedido enviado ou entregue: use devolução física, não cancelamento.</p>
                             : ['approved', 'partially_refunded'].includes(order.payment_status)
                                 ? <p className="text-muted-foreground">Pagamento confirmado: concilie o reembolso integral antes de cancelar.</p>
-                                : <button className="btn-outline text-xs" disabled={busy || (!!order.mercado_pago_order_id && !data.pending_cancellation_enabled)} onClick={cancel}>Cancelar pedido</button>}
+                                : <button className="btn-outline text-xs" disabled={busy || order.order_number === 'DH-2026-000006'
+                                    || (!!order.mercado_pago_order_id && !data.pending_cancellation_enabled)} onClick={cancel}>Cancelar pedido</button>}
                     {!!order.mercado_pago_order_id && !data.pending_cancellation_enabled && order.payment_status === 'pending'
                         && <p className="text-xs text-muted-foreground mt-1">Cancelamento no provedor desabilitado até validação operacional.</p>}
                 </div>
@@ -127,15 +137,39 @@ export default function AdminAfterSales({ order, onChanged }) {
                     <h3 className="font-medium mb-2">Devoluções físicas</h3>
                     {(data.returns || []).map(entry => <div key={entry.id} className="border border-border p-3 mb-2 space-y-2">
                         <p><span className="font-medium">{entry.status.replaceAll('_', ' ')}</span> · {entry.reason}</p>
-                        <p className="text-xs text-muted-foreground">{entry.items.map(item => `${item.quantity}x ${order.items?.find(row => row.id === item.order_item_id)?.product_name || 'Item'}`).join(', ')}</p>
+                        <p className="text-xs text-muted-foreground">Solicitada: {showDate(entry.created_at)} · autorizada: {showDate(entry.authorized_at)} · aguardando postagem: {showDate(entry.awaiting_post_at)} · postada/em trânsito: {showDate(entry.in_transit_at)} · recebida: {showDate(entry.received_at)} · encerrada: {showDate(entry.closed_at)}</p>
+                        {entry.posting_instructions && <p className="text-xs">Instruções: {entry.posting_instructions}</p>}
+                        <p className="text-xs">Código de postagem: {entry.reverse_posting_code || 'não informado'} · rastreio reverso: {entry.reverse_tracking_code || 'não informado'} · envio ME: {entry.reverse_shipment_id || 'não vinculado'}</p>
+                        {entry.items.map(item => <p key={item.return_item_id} className="text-xs">
+                            {item.quantity}x {order.items?.find(row => row.id === item.order_item_id)?.product_name || 'Item'} · condição: {item.condition_note || 'pendente'} · revendável: {item.restockable === null ? 'pendente' : item.restockable ? 'sim' : 'não'} · estoque restaurado: {item.stock_restored ? 'sim' : 'não'}
+                        </p>)}
+                        <p className="text-xs">Reembolso relacionado: {entry.related_refunds?.length ? entry.related_refunds.map(refund => `${formatBRL(Number(refund.amount))} (${refund.status})`).join(', ') : 'nenhum'}</p>
+                        {entry.status === 'autorizada' && <div className="space-y-2">
+                            <label className="block text-xs">Instruções de postagem para a cliente
+                                <textarea className="block w-full border border-border bg-background p-2 mt-1" maxLength={2000} value={postingInstructions[entry.id] || ''}
+                                    onChange={event => setPostingInstructions(previous => ({ ...previous, [entry.id]: event.target.value }))} />
+                            </label>
+                            <label className="block text-xs">Código de postagem reversa, se houver
+                                <input className="block w-full border border-border bg-background p-2 mt-1" maxLength={100} value={reversePostingCode[entry.id] || ''}
+                                    onChange={event => setReversePostingCode(previous => ({ ...previous, [entry.id]: event.target.value }))} />
+                            </label>
+                        </div>}
+                        {entry.status === 'aguardando_postagem' && <div className="grid gap-2 sm:grid-cols-2">
+                            <label className="text-xs">Código de postagem reversa, se houver<input className="block w-full border border-border bg-background p-2 mt-1" maxLength={100} value={reversePostingCode[entry.id] || ''}
+                                onChange={event => setReversePostingCode(previous => ({ ...previous, [entry.id]: event.target.value }))} /></label>
+                            <label className="text-xs">Rastreio reverso, se houver<input className="block w-full border border-border bg-background p-2 mt-1" maxLength={100} value={reverseTrackingCode[entry.id] || ''}
+                                onChange={event => setReverseTrackingCode(previous => ({ ...previous, [entry.id]: event.target.value }))} /></label>
+                        </div>}
                         {RETURN_NEXT[entry.status]?.includes('recebida') && entry.items.map(item => <label key={item.return_item_id} className="block text-xs">
                             {order.items?.find(row => row.id === item.order_item_id)?.product_name || 'Item'}: condição física
                             <select className="border border-border bg-background ml-2 p-1" value={restockable[item.return_item_id] === undefined ? '' : String(restockable[item.return_item_id])}
                                 onChange={event => setRestockable(previous => ({ ...previous, [item.return_item_id]: event.target.value === 'true' }))}>
                                 <option value="">Selecione</option><option value="true">Revenda</option><option value="false">Não revenda</option>
                             </select>
+                            <input className="block w-full border border-border bg-background p-2 mt-1" maxLength={500} placeholder="Descreva a condição ao receber" value={conditionNotes[item.return_item_id] || ''}
+                                onChange={event => setConditionNotes(previous => ({ ...previous, [item.return_item_id]: event.target.value }))} />
                         </label>)}
-                        <div className="flex flex-wrap gap-2">{(RETURN_NEXT[entry.status] || []).map(status => <button key={status} className="btn-outline text-xs" disabled={busy || (status === 'recebida' && entry.items.some(item => restockable[item.return_item_id] === undefined))}
+                        <div className="flex flex-wrap gap-2">{(RETURN_NEXT[entry.status] || []).map(status => <button key={status} className="btn-outline text-xs min-h-11" disabled={busy || (status === 'aguardando_postagem' && (postingInstructions[entry.id]?.trim().length || 0) < 10) || (status === 'recebida' && entry.items.some(item => restockable[item.return_item_id] === undefined || (conditionNotes[item.return_item_id]?.trim().length || 0) < 3))}
                             onClick={() => advance(entry, status)}>{status.replaceAll('_', ' ')}</button>)}</div>
                     </div>)}
                     {!data.returns?.length && <p className="text-xs text-muted-foreground">Nenhuma devolução solicitada.</p>}
@@ -151,8 +185,10 @@ export default function AdminAfterSales({ order, onChanged }) {
                         </select>
                         <input className="w-20 border border-border bg-background p-2" type="number" min="1" max={selected?.quantity || 1} value={quantity}
                             onChange={event => setQuantity(Number(event.target.value))} aria-label="Quantidade" />
-                        <button className="btn-outline text-xs" disabled={busy || !selected || order.status === 'cancelado'} onClick={submitReturn}>Solicitar devolução</button>
+                        <button className="btn-outline text-xs" disabled={busy || !selected || order.order_number === 'DH-2026-000006'
+                            || !SHIPPED.has(order.status)} onClick={submitReturn}>Solicitar devolução</button>
                     </div>
+                    {order.order_number === 'DH-2026-000006' && <p className="text-xs text-muted-foreground">Pedido preservado como evidência da homologação financeira.</p>}
                     {['approved', 'partially_refunded'].includes(order.payment_status) && <div className="space-y-2 pt-2">
                         <div className="border border-border p-3 space-y-2" aria-label="Prévia de reembolso do saldo restante">
                             <h4 className="font-medium">Prévia do saldo restante · Mercado Pago TEST</h4>

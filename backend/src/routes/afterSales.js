@@ -23,12 +23,22 @@ router.get('/orders/:id/after-sales', async (req, res) => {
         const { rows } = await pool.query(`SELECT id FROM orders WHERE id = $1${own}`, params);
         if (!rows.length) return res.status(404).json({ error: 'Pedido não encontrado' });
         const returns = await pool.query(
-            `SELECT r.id, r.status, r.reason, r.created_at, r.received_at,
-                COALESCE(json_agg(json_build_object('order_item_id', ri.order_item_id,
-                'quantity', ri.quantity, 'restockable', ri.restockable,
-                'return_item_id', ri.id)) FILTER (WHERE ri.id IS NOT NULL), '[]') AS items
-             FROM order_returns r LEFT JOIN order_return_items ri ON ri.return_id = r.id
-             WHERE r.order_id = $1 GROUP BY r.id ORDER BY r.created_at`, [req.params.id]);
+            `SELECT r.id, r.status, r.reason, r.created_at, r.updated_at, r.authorized_at,
+                r.awaiting_post_at, r.posted_at, r.in_transit_at, r.received_at, r.closed_at,
+                r.posting_instructions, r.reverse_tracking_code, r.reverse_posting_code,
+                ${req.user.role === 'admin' ? 'r.reverse_shipment_id,' : ''}
+                COALESCE((SELECT json_agg(json_build_object(
+                    'order_item_id', ri.order_item_id, 'quantity', ri.quantity,
+                    'restockable', ${req.user.role === 'admin' ? 'ri.restockable' : 'NULL::boolean'},
+                    'condition_note', ${req.user.role === 'admin' ? 'ri.condition_note' : 'NULL::text'},
+                    'return_item_id', ri.id, 'stock_restored', ${req.user.role === 'admin'
+                        ? 'EXISTS (SELECT 1 FROM stock_restorations sr WHERE sr.return_item_id = ri.id)'
+                        : 'NULL::boolean'}))
+                    FROM order_return_items ri WHERE ri.return_id = r.id), '[]'::json) AS items,
+                COALESCE((SELECT json_agg(json_build_object('id', rf.id, 'status', rf.status,
+                    'amount', rf.amount, 'provider_refund_id', rf.provider_refund_id))
+                    FROM order_refunds rf WHERE rf.return_id = r.id), '[]'::json) AS related_refunds
+             FROM order_returns r WHERE r.order_id = $1 ORDER BY r.created_at`, [req.params.id]);
         const refundReason = req.user.role === 'admin' ? 'reason' : 'NULL::text AS reason';
         const refunds = await pool.query(
             `SELECT id, kind, amount, status, provider_refund_id, provider_status,
@@ -60,7 +70,13 @@ router.patch('/orders/:id/returns/:returnId', requireAdmin, async (req, res) => 
             [req.params.returnId, req.params.id]);
         if (!rows.length) return res.status(404).json({ error: 'Devolução não encontrada' });
         const result = await advanceReturn(req.params.returnId, req.user.id,
-            req.body?.status, req.body?.restockable || {});
+            req.body?.status, req.body?.restockable || {}, {
+                expectedOrderId: req.params.id,
+                conditionNotes: req.body?.conditionNotes,
+                postingInstructions: req.body?.postingInstructions,
+                reverseTrackingCode: req.body?.reverseTrackingCode,
+                reversePostingCode: req.body?.reversePostingCode,
+            });
         res.json(result);
     } catch (error) { replyError(res, error); }
 });
