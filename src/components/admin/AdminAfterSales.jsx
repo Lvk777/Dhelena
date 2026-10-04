@@ -163,9 +163,13 @@ export default function AdminAfterSales({ order, onChanged }) {
                                 <p>MP order: {refundPreview.mp_order_id} · transação: {refundPreview.mp_transaction_id}</p>
                                 <p>Status local: {refundPreview.local_payment_status} · provedor: {refundPreview.provider_status?.order} / {refundPreview.provider_status?.payment}</p>
                                 <p>Refunds provedor: {refundPreview.provider_refund_count} · locais: {refundPreview.local_refund_count} · em andamento: {refundPreview.refund_in_progress ? 'sim' : 'não'}</p>
+                                <p>Reconciliation required: {refundPreview.reconciliation_required ? 'sim' : 'não'}</p>
+                                {(refundPreview.provider_refunds || []).map(entry => <p key={entry.id}>Provider refund: {entry.id} · {formatBRL(entry.amount_cents / 100)} · {entry.status} · transação {entry.transaction_id}</p>)}
                                 {refundPreview.existing_refunds.map(entry => <p key={entry.id}>Refund anterior: {formatBRL(entry.amount_cents / 100)} · {entry.status} · MP {entry.provider_refund_id || 'pendente'} · local {entry.id}</p>)}
-                                <p>Ledger provedor/local: {refundPreview.checks.provider_ledger_matches ? 'CONFERE' : 'DIVERGENTE'}</p>
+                                <p>Ledger provedor/local: {refundPreview.ledger_match ? 'CONFERE' : 'DIVERGENTE'} · total provedor: {formatBRL(refundPreview.provider_total_refunded_cents / 100)} · total local: {formatBRL(refundPreview.local_total_refunded_cents / 100)}</p>
                                 <p>Estoque: {refundPreview.stock.map(entry => `${entry.size}: ${entry.quantity ?? 'indisponível'}`).join(', ') || 'indisponível'} · reposições: {refundPreview.stock_restorations.length} · devoluções: {refundPreview.return_status.map(entry => entry.status).join(', ') || 'nenhuma'}</p>
+                                <p>Checks: {Object.entries(refundPreview.checks).map(([name, passed]) => `${name}=${passed ? 'OK' : 'BLOQUEADO'}`).join(' · ')}</p>
+                                <p>Único bloqueio é a flag: {refundPreview.only_blocker_is_flag ? 'SIM' : 'NÃO'}</p>
                                 <p>Seguro para refund do saldo restante: {refundPreview.safe_to_refund_remaining ? 'SIM' : 'NÃO'}{!refundPreview.checks.refunds_enabled ? ' · flag desativada' : ''}</p>
                             </div>}
                         </div>

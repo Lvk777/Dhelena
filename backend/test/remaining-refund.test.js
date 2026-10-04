@@ -70,12 +70,19 @@ test('read-only preview refetches Orders API and reports the exact financial and
         assert.equal(preview.existing_refunds[0].id, 'local-first');
         assert.equal(preview.existing_refunds[0].provider_refund_id, 'REF-FIRST');
         assert.equal(preview.existing_refunds[0].status, 'processed');
+        assert.deepEqual(preview.provider_refunds, [{ id: 'REF-FIRST', amount_cents: 100,
+            status: 'processed', transaction_id: order.mercado_pago_payment_id }]);
+        assert.equal(preview.provider_total_refunded_cents, 100);
+        assert.equal(preview.local_total_refunded_cents, 100);
+        assert.equal(preview.ledger_match, true);
         assert.equal(preview.checks.provider_ledger_matches, true);
         assert.equal(preview.refund_in_progress, false);
+        assert.equal(preview.reconciliation_required, false);
         assert.equal(preview.stock[0].quantity, 7);
         assert.deepEqual(preview.return_status, []);
         assert.deepEqual(preview.stock_restorations, []);
         assert.equal(preview.safe_to_refund_remaining, false);
+        assert.equal(preview.only_blocker_is_flag, true);
         assert.equal(preview.checks.refunds_enabled, false);
     } finally {
         if (oldFlag === undefined) delete process.env.AFTER_SALES_REFUNDS_ENABLED;
@@ -88,6 +95,8 @@ test('preview blocks mismatched ledger, pending refund, scope, mode and physical
         buildRefundPreview(o, p, l, r, s, x, mode, true);
     assert.equal(preview().safe_to_refund_remaining, true);
     assert.equal(preview(order, { ...official, refunds: [] }).checks.provider_ledger_matches, false);
+    assert.equal(buildRefundPreview(order, { ...official, refunds: [] }, [prior], [], stock, [], 'test', false)
+        .only_blocker_is_flag, false);
     assert.equal(preview(order, { ...official, refunds: [{ ...providerPrior, amount: '2.00' }] }).safe_to_refund_remaining, false);
     assert.equal(preview(order, official, [{ ...prior, amount: '2.00' }]).safe_to_refund_remaining, false);
     assert.equal(preview(order, official, [prior, { status: 'reserved', amount: '49.00' }]).safe_to_refund_remaining, false);

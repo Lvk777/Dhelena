@@ -21,6 +21,8 @@ export function buildRefundPreview(order, provider, ledger, returns, stock, rest
     const processed = ledger.filter(row => row.status === 'processed');
     const alreadyRefunded = processed
         .reduce((sum, row) => sum + moneyCents(row.amount), 0);
+    const providerTotalRefunded = provider.refunds
+        .reduce((sum, row) => sum + moneyCents(row.amount), 0);
     const balance = paid - alreadyRefunded;
     const requested = Math.max(0, balance);
     let paymentMatches = false;
@@ -29,6 +31,7 @@ export function buildRefundPreview(order, provider, ledger, returns, stock, rest
         paymentMatches = order.payment_status === 'partially_refunded';
     } catch { /* The checks below explain why the preview is unsafe. */ }
     const refundInProgress = ledger.some(row => ['reserved', 'processing', 'reconciliation_required'].includes(row.status));
+    const reconciliationRequired = ledger.some(row => row.status === 'reconciliation_required');
     const checks = {
         test_mode: mode === 'test',
         refunds_enabled: enabled,
@@ -50,6 +53,13 @@ export function buildRefundPreview(order, provider, ledger, returns, stock, rest
         remaining_balance_cents: Math.max(0, balance - requested),
         provider_refund_count: provider.refunds.length,
         local_refund_count: ledger.length,
+        provider_total_refunded_cents: providerTotalRefunded,
+        local_total_refunded_cents: alreadyRefunded,
+        ledger_match: checks.provider_ledger_matches,
+        provider_refunds: provider.refunds.map(row => ({
+            id: row.id, amount_cents: moneyCents(row.amount), status: row.status,
+            transaction_id: row.transaction_id,
+        })),
         mp_order_id: order.mercado_pago_order_id,
         mp_transaction_id: order.mercado_pago_payment_id,
         local_payment_status: order.payment_status,
@@ -59,11 +69,14 @@ export function buildRefundPreview(order, provider, ledger, returns, stock, rest
             provider_refund_id: row.provider_refund_id, provider_payment_id: row.provider_payment_id,
         })),
         refund_in_progress: refundInProgress,
+        reconciliation_required: reconciliationRequired,
         stock,
         stock_restorations: restorations,
         return_status: returns.map(row => ({ id: row.id, status: row.status })),
         checks,
         safe_to_refund_remaining: Object.values(checks).every(Boolean),
+        only_blocker_is_flag: !enabled && Object.entries(checks)
+            .every(([name, passed]) => name === 'refunds_enabled' || passed),
         stock_change: 0,
         stock_restoration: 0,
         return_created: false,
