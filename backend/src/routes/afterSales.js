@@ -82,7 +82,7 @@ router.post('/orders/:id/returns', async (req, res) => {
                 [req.params.id, req.user.id]);
             if (!rows.length) return res.status(404).json({ error: 'Pedido não encontrado' });
         }
-        if (!await physicalSchemaReady()) return res.status(503).json({ error: 'Migração física 012 pendente' });
+        if (!await physicalSchemaReady()) return res.status(503).json({ error: 'Migração física 013 pendente' });
         const result = await createReturn(req.params.id, req.user.id, req.body?.items, req.body?.reason);
         res.status(201).json(result);
     } catch (error) { replyError(res, error); }
@@ -93,7 +93,7 @@ router.patch('/orders/:id/returns/:returnId', requireAdmin, async (req, res) => 
         const { rows } = await pool.query('SELECT id FROM order_returns WHERE id = $1 AND order_id = $2',
             [req.params.returnId, req.params.id]);
         if (!rows.length) return res.status(404).json({ error: 'Devolução não encontrada' });
-        if (!await physicalSchemaReady()) return res.status(503).json({ error: 'Migração física 012 pendente' });
+        if (!await physicalSchemaReady()) return res.status(503).json({ error: 'Migração física 013 pendente' });
         const result = await advanceReturn(req.params.returnId, req.user.id,
             req.body?.status, req.body?.restockable || {}, {
                 expectedOrderId: req.params.id,

@@ -121,7 +121,7 @@ export default function AdminAfterSales({ order, onChanged }) {
             <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Pós-venda</h2>
             {error && <p role="alert" className="text-xs text-red-700 mb-3">{error}</p>}
             {!data ? <p className="text-xs text-muted-foreground">Histórico de pós-venda indisponível.</p> : <div className="space-y-5 text-sm">
-                {!data.physical_schema_ready && <p role="status" className="text-xs text-amber-800">Devoluções físicas aguardam a migração 012 do banco. O histórico continua disponível para consulta.</p>}
+                {!data.physical_schema_ready && <p role="status" className="text-xs text-amber-800">Devoluções físicas aguardam a migração 013 do banco. O histórico continua disponível para consulta.</p>}
                 <div>
                     <h3 className="font-medium mb-2">Cancelamento</h3>
                     {order.status === 'cancelado' ? <p>Pedido cancelado.</p>
