@@ -1,164 +1,76 @@
-# Railway Deploy Guide — D'Helenas
+# Railway — estado e operação da D'Helenas
 
-## Pré-requisitos
+Revisão documental: 4 de outubro de 2026. Este guia descreve a implantação existente; não é um roteiro para criar outro projeto ou trocar credenciais. Qualquer valor privado indicado abaixo deve ser **confirmado no ambiente** por quem tem acesso ao serviço, sem copiá-lo para este arquivo.
 
-- Conta no [Railway](https://railway.app)
-- Repositório GitHub: `Lvk777/Dhelena`
-- Projeto Supabase: `huxwnoxqtmpvxrapmyz` (já configurado)
-- Branch de deploy: `main` (ou a branch estável escolhida)
+## Estado atual e fontes de verificação
 
----
-
-## 1. Criar projeto no Railway
-
-1. Acesse [railway.app](https://railway.app) → **New Project**
-2. Selecione **Deploy from GitHub repo**
-3. Autorize Railway a acessar o repositório `Lvk777/Dhelena`
-4. Selecione o repositório
-
-## 2. Configurar o serviço Backend
-
-1. **New Service** → **GitHub Repo** → selecione `Dhelena`
-2. **Settings** do serviço:
-
-| Configuração | Valor |
+| Item | Estado |
 |---|---|
-| **Root Directory** | `backend` |
-| **Build Command** | `npm install` |
-| **Start Command** | `npm start` |
-| **Health Check Path** | `/health` |
+| Repositório | `Lvk777/Dhelena` |
+| Branch de trabalho | `codex/production-hardening`; PR [#3](https://github.com/Lvk777/Dhelena/pull/3) aberta contra `base44/setup-d4d01bd6`. O conteúdo da PR não deve ser descrito como já promovido a `main` ou implantado. Confirmar no ambiente o commit efetivamente implantado em cada serviço. |
+| Frontend | Serviço Railway `Dhelena`, domínio público `https://dhelenas.com`. Nome do serviço informado no estado operacional; confirmar no painel Railway, pois o CLI disponível nesta revisão não tinha acesso ao projeto D'Helenas. |
+| Backend | Serviço Railway `resourceful-joy`, API `https://api.dhelenas.com/api`, health `https://api.dhelenas.com/health`. Nome do serviço informado no estado operacional; confirmar no painel Railway. |
+| Supabase ativo no frontend publicado | Project ref `huxwnoxkqtmpvxrapmyz`; URL `https://huxwnoxkqtmpvxrapmyz.supabase.co`, confirmada no bundle servido por `dhelenas.com`. A variável privada do backend deve ser conferida no Railway sem revelar chaves. |
+| Manutenção | Ligada: `GET /api/settings` retornou `maintenance.maintenance_mode=true` nesta revisão. Preservar o estado até decisão operacional separada. |
+| Integrações | Mercado Pago em **TEST** e Melhor Envio em **Sandbox**, conforme estado operacional informado e registro de homologação. Confirmar `MERCADO_PAGO_MODE` e `MELHOR_ENVIO_MODE` no serviço antes de qualquer operação; não usar credenciais de produção na homologação. |
 
-3. **Networking** → **Generate Domain** → anote a URL (ex: `dhelenas-api.up.railway.app`)
+O frontend publicado contém `https://api.dhelenas.com` como base da API. `GET /health` e `GET /api/products?limit=1` responderam HTTP 200 nesta revisão. Isso não confirma a versão implantada da PR #3 nem o valor de variáveis privadas.
 
-## 3. Variáveis de Ambiente (Backend)
+## Frontend e backend no Railway
 
-Configure em **Variables** → **New Variable**:
+O frontend é React + Vite e está no Railway; não apontá-lo para um domínio Railway provisório. No build de produção, `VITE_API_URL` é obrigatória e deve ser **`https://api.dhelenas.com`**, sem `/api` no valor: o cliente acrescenta os caminhos `/api/...`. Sem essa variável, o build deve falhar; não há fallback para `/api` do host do SPA.
 
-### Obrigatórias (definir antes do primeiro deploy)
+O backend usa Node 22 (`backend/package.json` exige `>=22 <23`; o CI também usa Node 22). O `backend/railway.json` define `node src/index.js` como start e `/health` como health check. Diretório raiz, comandos e commit configurados nos dois serviços: **confirmar no ambiente** antes de qualquer alteração. Não usar este documento para recriar os serviços.
 
-| Variável | Descrição |
-|---|---|
-| `NODE_ENV` | `production` |
-| `DATABASE_URL` | Connection string do Supabase (Supabase Dashboard → Settings → Database → Connection string) |
-| `SUPABASE_URL` | `https://huxwnoxqtmpvxrapmyz.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service Role Key (Supabase Dashboard → Settings → API) |
-| `STORE_ASSETS_BUCKET` | `store-assets` |
-| `ADMIN_PASSWORD` | Senha do admin (definir valor seguro) |
-| `INTEGRATION_ENCRYPTION_KEY` | Chave de criptografia (32 bytes hex) |
-| `JWT_SECRET` | Secret para JWT (string aleatória longa) |
-| `CORS_ORIGIN` | `https://dhelenas.com,https://www.dhelenas.com` — **NUNCA usar `*` em produção** |
+### Variáveis de referência, sem valores privados
 
-### Futuras (opcionais — deixar vazio até ter as credenciais)
-
-| Variável | Descrição |
-|---|---|
-| `MERCADO_PAGO_ACCESS_TOKEN` | Token do Mercado Pago |
-| `MERCADO_PAGO_WEBHOOK_SECRET` | Secret do webhook MP |
-| `MELHOR_ENVIO_TOKEN` | Token do Melhor Envio |
-| `MELHOR_ENVIO_MODE` | `production` ou `sandbox` |
-| `MELHOR_ENVIO_USER_AGENT` | Nome da aplicação e e-mail técnico exigidos pela API |
-| `MELHOR_ENVIO_WEBHOOK_SECRET` | Secret do aplicativo para HMAC do webhook |
-| `RESEND_API_KEY` | API key do Resend |
-| `EMAIL_FROM` | Email remetente (ex: `contato@dhelenas.com`) |
-| `WHATSAPP_ACCESS_TOKEN` | Token do WhatsApp Cloud API |
-| `WHATSAPP_PHONE_NUMBER_ID` | Phone Number ID do WhatsApp |
-| `WHATSAPP_WEBHOOK_SECRET` | Secret do webhook WhatsApp |
-
-## 4. Variáveis de Ambiente (Frontend)
-
-O frontend (Vite) deve ser deployado separadamente (Vercel, Netlify, ou Cloudflare Pages).
-
-| Variável | Descrição |
-|---|---|
-| `VITE_API_URL` | URL do backend no Railway (ex: `https://dhelenas-api.up.railway.app/api`) |
-| `VITE_SUPABASE_URL` | `https://huxwnoxqtmpvxrapmyz.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | Anon Key (Supabase Dashboard → Settings → API) |
-
-> ⚠️ **NUNCA** usar prefixo `VITE_` para: service role, database password, JWT secret, encryption key, ou qualquer API key privada. Apenas `VITE_API_URL`, `VITE_SUPABASE_URL`, e `VITE_SUPABASE_ANON_KEY` são públicas.
-
-## 5. Testar o deploy
-
-Após o primeiro deploy:
-
-1. **Health check**: Acesse `https://<sua-url>.up.railway.app/health`
-   - Deve retornar: `{"status":"ok","database":"connected"}`
-
-2. **Login Admin**: 
-   ```
-   POST https://<sua-url>.up.railway.app/api/auth/login
-   Body: { "email": "admin@dhelenas.com", "password": "<ADMIN_PASSWORD>" }
-   ```
-   - Deve retornar token com `role: admin`
-
-3. **Produtos**:
-   ```
-   GET https://<sua-url>.up.railway.app/api/products
-   ```
-
-4. **Sitemap**:
-   ```
-   GET https://<sua-url>.up.railway.app/api/sitemap.xml
-   ```
-
-## 6. CORS
-
-Quando o domínio final do frontend estiver definido:
-
-1. Atualize `CORS_ORIGIN` no Railway para o domínio do frontend
-   - Ex: `https://dhelenas.com` ou `https://dhelenas.vercel.app`
-2. O backend já rejeita `*` em produção automaticamente
-3. Reinicie o serviço no Railway
-
-## 7. Migrations em Produção
-
-As migrations **NÃO rodam automaticamente** quando o schema já existe.
-
-- **Schema já provisionado** (Supabase): migrations são puladas automaticamente
-- **Schema novo**: rodar manualmente:
-  ```bash
-  railway run npm run migrate
-  ```
-- **Seed**: NUNCA roda em produção (`NODE_ENV=production`). Para popular manualmente:
-  ```bash
-  railway run npm run seed
-  ```
-
-## 8. Supabase
-
-- **Banco**: PostgreSQL provisionado e conectado via `DATABASE_URL`
-- **Storage**: Bucket `store-assets` com folders: `banners`, `products`, `collections`, `categories`, `promotions`, `branding/logo`, `branding/favicon`, `branding/og`, `misc`
-- **Auth**: Funcionando com Supabase Auth + Express JWT fallback
-- **Service Role**: Usada apenas no backend (NUNCA no frontend)
-
-## 9. Dependências Base44
-
-### PODE PERMANECER TEMPORARIAMENTE
-
-| Item | Local | Motivo |
+| Serviço | Variável | Referência segura |
 |---|---|---|
-| `base44Client.js` | `src/api/base44Client.js` | Apenas re-exporta `apiClient` — não é SDK Base44 |
-| `image-helpers.js` | `src/components/ui/image-helpers.js` | Utility para URL transformation — não depende de runtime Base44 |
-| Imagens `media.base44.com` | `src/data/products.js` | URLs de imagens de produtos seed — funcionais mas devem ser migradas para Supabase Storage |
+| Frontend | `VITE_API_URL` | `https://api.dhelenas.com` — valor observado no bundle público. |
+| Frontend | `VITE_SUPABASE_URL` | `https://huxwnoxkqtmpvxrapmyz.supabase.co` — valor observado no bundle público. |
+| Frontend | `VITE_SUPABASE_ANON_KEY` | Chave pública do **mesmo** projeto Supabase; confirmar correspondência no ambiente, sem registrar o valor aqui. |
+| Backend | `NODE_ENV` | `production`; confirmar no ambiente. |
+| Backend | `DATABASE_URL` | Conexão PostgreSQL do projeto Supabase correto; confirmar no ambiente, sem imprimir a connection string. |
+| Backend | `SUPABASE_URL` | `https://huxwnoxkqtmpvxrapmyz.supabase.co` é a URL de referência do projeto ativo. Confirmar o valor efetivo do backend no ambiente; não presumir que a variável privada já coincide. |
+| Backend | `SUPABASE_SERVICE_ROLE_KEY` | Chave privada do mesmo projeto; confirmar correspondência no ambiente. Nunca colocar em `VITE_*`, logs ou documentação. |
+| Backend | `STORE_ASSETS_BUCKET` | `store-assets`; uploads usam esse bucket por padrão em `backend/src/routes/upload.js`. Confirmar bucket e políticas no ambiente. |
+| Backend | `CORS_ORIGIN` | `https://dhelenas.com,https://www.dhelenas.com`; ambas as origens receberam o cabeçalho CORS esperado nesta revisão. `*` é recusado na inicialização em produção. |
+| Backend | `INTEGRATION_ENCRYPTION_KEY` | Confirmar apenas presença e continuidade no ambiente; não copiar nem girar por esta revisão. |
 
-### PRECISA SER REMOVIDO ANTES DA PRODUÇÃO
+`VITE_*` entra no bundle público. Chaves privadas do Supabase, banco, pagamentos, frete e criptografia pertencem somente ao backend. `ADMIN_PASSWORD` e `JWT_SECRET` são legados do fluxo local de seed/JWT Express; **não são pré-requisitos de autenticação de produção**, não devem ser solicitados ou expostos para validar o deploy. Não executar seed em produção.
 
-| Item | Ação |
-|---|---|
-| `media.base44.com` em `products.js` | Migrar imagens para Supabase Storage e atualizar URLs |
-| `IMG_BASE` constante | Remover após migrar todas as imagens |
+## Autenticação e CORS
 
-> As imagens `media.base44.com` NÃO quebram o funcionamento agora, mas devem ser migradas para não depender de infraestrutura Base44.
+Em produção, o backend exige `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` na inicialização. O frontend autentica com Supabase Auth; o backend valida o access token via `getUser()` e busca o perfil correspondente. A compatibilidade por e-mail para um perfil legado só ocorre após validação do token Supabase e quando existe exatamente um perfil. Um token JWT Express não é aceito em produção, mesmo se o Supabase estiver indisponível. `POST /api/auth/login` e `/register` do Express retornam 404 em produção; o login administrativo usa Supabase Auth.
 
-## 10. Checklist Final
+O backend aceita a lista de origens em `CORS_ORIGIN` e usa `credentials: true`. Nesta revisão, `https://dhelenas.com` e `https://www.dhelenas.com` foram aceitas e uma origem externa não recebeu `Access-Control-Allow-Origin`. Se a configuração for revista, conferir primeiro o domínio público efetivo e preservar a restrição; não adicionar `*`.
 
-- [ ] `NODE_ENV=production` configurado
-- [ ] `DATABASE_URL` aponta para Supabase
-- [ ] `CORS_ORIGIN` definido (não `*`)
-- [ ] `JWT_SECRET` definido (string aleatória)
-- [ ] `ADMIN_PASSWORD` definido (senha segura)
-- [ ] `INTEGRATION_ENCRYPTION_KEY` definido
-- [ ] Health check retorna 200
-- [ ] Login admin funciona
-- [ ] Produtos carregam
-- [ ] Sitemap XML válido
-- [ ] Frontend deployado com `VITE_API_URL` apontando para Railway
+## Banco e migrations
+
+O schema de produção já existe. **Migrations são aplicadas manualmente, após revisão da migration específica, backup e aprovação operacional.** Não executar `npm run migrate` ou `railway run npm run migrate` às cegas: `backend/src/runMigrations.js` percorre todos os arquivos SQL, sem controle de versões aplicadas. A migration `009_profile_contact_fields.sql` e as posteriores devem ser consideradas individualmente conforme o estado real do banco; a lista local vai até `013_return_physical_tracking.sql`, mas isso não comprova o que já foi aplicado em produção.
+
+O código atual de inicialização (`backend/src/index.js`) pula migrations quando encontra `public.products` e desativa seed automático em produção. Se o schema estiver ausente, esse mesmo código ainda tenta executar SQL no primeiro start. **Não usar esse caminho como processo de provisionamento de produção**; confirmar o schema antes de qualquer deploy. Nunca executar `npm run seed` em produção. Esta revisão não consulta nem altera o banco.
+
+## Pagamentos, frete e webhooks
+
+O estado operacional atual é Mercado Pago **TEST** e Melhor Envio **Sandbox** no backend existente. Confirmar no Railway os modos, a origem das credenciais e os segredos correspondentes antes de qualquer homologação. `MERCADO_PAGO_ACCESS_TOKEN`, `MERCADO_PAGO_WEBHOOK_SECRET`, `MELHOR_ENVIO_TOKEN`, `MELHOR_ENVIO_CLIENT_SECRET`, `MELHOR_ENVIO_WEBHOOK_SECRET` e `INTEGRATION_ENCRYPTION_KEY` nunca devem aparecer em documentação, logs ou comandos compartilhados. Um token fixo do Melhor Envio só é utilizável quando `MELHOR_ENVIO_TOKEN_MODE` coincide com `MELHOR_ENVIO_MODE`; o OAuth Sandbox pode usar token guardado em `integration_configs`.
+
+Endpoints implementados no backend:
+
+- `POST https://api.dhelenas.com/api/webhooks/mercado-pago` — assinatura validada com `MERCADO_PAGO_WEBHOOK_SECRET` e eventos deduplicados.
+- `POST https://api.dhelenas.com/api/webhooks/melhor-envio` — HMAC validado com `MELHOR_ENVIO_WEBHOOK_SECRET` e eventos deduplicados; esse segredo não é o token OAuth.
+- `GET https://api.dhelenas.com/api/integrations/melhor-envio/oauth/callback` — callback do OAuth Sandbox, com URL exata configurada no ambiente.
+
+Não há rota `/api/webhooks/whatsapp` em `backend/src/routes/webhooks.js` nesta revisão; não a cadastrar com base em documentação antiga. Confirmar as URLs e assinaturas configuradas nos painéis dos provedores antes de qualquer mudança. Esta revisão não envia eventos, pedidos, pagamentos, devoluções ou reembolsos.
+
+## Storage e ativos Base44
+
+Uploads Supabase usam `store-assets`. Há URLs `media.base44.com` em dados de seed/fallback e imagens institucionais; `src/api/base44Client.js` é apenas um reexport do cliente próprio. O [inventário de ativos](BASE44_ASSET_INVENTORY.md) registra origem, dependências e plano de migração. A permanência dessas URLs **não autoriza** copiar, substituir ou excluir ativos Base44, alterar referências no banco ou remover o helper de imagens. Qualquer migração de mídia requer decisão e autorização próprias.
+
+## Verificações somente leitura
+
+- Conferir o estado da PR #3 e os commits dos serviços Railway sem presumir que `main` ou a PR estejam implantadas.
+- Conferir no painel Railway a correspondência entre URLs do Supabase, banco, chaves e serviços, sem exibir valores privados.
+- Conferir `https://api.dhelenas.com/health`, o catálogo público e `https://api.dhelenas.com/api/sitemap.xml` por GET.
+- Conferir o modo de manutenção pela configuração pública; não desligá-lo como parte da verificação.
+- Conferir modos TEST/Sandbox e endpoints dos provedores apenas por configuração e leituras autorizadas.
