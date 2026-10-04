@@ -264,16 +264,13 @@ export default function Checkout() {
             <div className="flex justify-center mt-5"><div className="gold-rule" /></div>
 
             {/* Steps indicator */}
-            <div className="flex items-center justify-center mt-10 mb-12 overflow-x-auto no-scrollbar">
+            <div className="grid grid-cols-4 gap-1 sm:gap-4 mt-10 mb-12" aria-label="Etapas do checkout">
                 {STEPS.map((s, i) => (
-                    <div key={s} className="flex items-center shrink-0">
-                        <div className="flex flex-col items-center">
+                    <div key={s} className="flex flex-col items-center min-w-0">
                             <div className={`w-9 h-9 rounded-full border flex items-center justify-center text-xs transition-colors ${i < step ? "bg-[hsl(var(--gold))] border-[hsl(var(--gold))] text-white" : i === step ? "border-foreground text-foreground" : "border-border text-muted-foreground"}`}>
                                 {i < step ? <Check className="w-4 h-4" strokeWidth={2} /> : i + 1}
                             </div>
-                            <span className={`text-[10px] mt-2 whitespace-nowrap ${i === step ? "text-foreground font-medium" : "text-muted-foreground"}`}>{s}</span>
-                        </div>
-                        {i < STEPS.length - 1 && <div className={`w-12 sm:w-20 h-px mx-2 ${i < step ? "bg-[hsl(var(--gold))]" : "bg-border"}`} />}
+                            <span className={`text-[9px] sm:text-[10px] mt-2 text-center break-words ${i === step ? "text-foreground font-medium" : "text-muted-foreground"}`}>{s}</span>
                     </div>
                 ))}
             </div>
