@@ -28,8 +28,14 @@ export const COLOR_SWATCHES = {
 
 export const SIZES_LIST = ["PP", "P", "M", "G", "GG"];
 
-export const formatBRL = (v) =>
-    (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+export const toCurrencyAmount = (value) => {
+    const amount = Number(value);
+    return Number.isFinite(amount) ? amount : 0;
+};
+
+export const formatBRL = (value) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+        .format(toCurrencyAmount(value));
 
 export const installmentValue = (price, installments) =>
     (price || 0) / (installments || 1);
@@ -90,6 +96,7 @@ export const SHIPPING_LABELS = {
 export const PAYMENT_STATUS_PT = {
     pending: "Aguardando pagamento",
     approved: "Pago",
+    partially_refunded: "Parcialmente reembolsado",
     rejected: "Recusado",
     refunded: "Reembolsado",
     in_process: "Em análise",
@@ -99,6 +106,7 @@ export const PAYMENT_STATUS_PT = {
 export const PAYMENT_STATUS_COLORS = {
     pending: "text-amber-600",
     approved: "text-green-600",
+    partially_refunded: "text-blue-600",
     rejected: "text-red-600",
     refunded: "text-blue-600",
     in_process: "text-amber-600",

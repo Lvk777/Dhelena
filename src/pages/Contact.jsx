@@ -93,7 +93,7 @@ export default function Contact() {
     );
 }
 
-function ContactRow({ icon: Icon, label, value, link }) {
+function ContactRow({ icon: Icon, label, value, link = "" }) {
     const content = (
         <div className="flex items-center gap-4">
             <div className="w-11 h-11 rounded-full border border-border flex items-center justify-center text-[hsl(var(--gold))]">

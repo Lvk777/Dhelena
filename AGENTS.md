@@ -63,3 +63,11 @@ A mudança é automática: quando `SUPABASE_URL` está definida, o backend valid
 5. Setar `VITE_API_URL` no frontend para a URL do Railway.
 6. Deploy frontend (Vercel/Netlify/GitHub Pages).
 7. Promover primeiro usuário a admin: `UPDATE profiles SET role = 'admin' WHERE email = '...'`.
+
+## Invariantes de Produção
+
+- `VITE_API_URL` é obrigatório no build de produção e deve apontar para `https://api.dhelenas.com`; não existe fallback para `/api` do SPA.
+- Produção usa apenas tokens Supabase Auth. O fallback JWT Express é exclusivo de desenvolvimento; perfis usam `auth.users.id`, com compatibilidade de e-mail somente após `getUser()` validar o token e quando há exatamente um perfil legado correspondente.
+- Valores, dimensões e cotação de frete são recalculados no backend. O navegador pode apenas escolher o serviço retornado pela cotação.
+- Webhooks Mercado Pago e Melhor Envio são autenticados por assinatura e deduplicados. O segredo de webhook do Melhor Envio é `MELHOR_ENVIO_WEBHOOK_SECRET`, não o token OAuth.
+- Migrations e seed não rodam automaticamente em produção. A migration `009_profile_contact_fields.sql` deve ser aplicada conscientemente antes de usar CPF/data de nascimento.

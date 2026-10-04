@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Check, CreditCard, QrCode, Banknote, Loader2, Store } from "lucide-react";
+import { Check, CreditCard, QrCode, Banknote, Loader2 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { useCatalog } from "@/context/CatalogContext";
 import { useAuth } from "@/lib/AuthContext";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
 import { base44 } from "@/api/base44Client";
-import { COLOR_SWATCHES, formatBRL, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
+import { COLOR_SWATCHES, formatBRL } from "@/data/products";
 import AddressFields from "@/components/AddressFields";
 import { validateCPF, validateEmail, validatePhone, validateCEP, maskCPF, maskPhone } from "@/lib/forms";
 import { track } from "@/lib/analytics";
@@ -34,7 +34,7 @@ export default function Checkout() {
     const [done, setDone] = useState(false);
     const [order, setOrder] = useState(null);
     const [placing, setPlacing] = useState(false);
-    const [errors, setErrors] = useState({});
+    const [errors, setErrors] = useState(/** @type {Record<string, any>} */ ({}));
     const [orderError, setOrderError] = useState("");
     const [paymentScreen, setPaymentScreen] = useState(null); // null | 'pix' | 'card'
 
@@ -126,6 +126,7 @@ export default function Checkout() {
     // Create order via backend (validates stock, price, coupon, shipping)
     const createOrder = async () => {
         const res = await base44.functions.invoke("placeOrder", {
+            idempotencyKey,
             customer: { name: form.nome, email: form.email, phone: form.telefone, cpf: form.cpf },
             shipping_address: {
                 cep: form.cep, street: form.street, number: form.number, complement: form.complement,
@@ -134,11 +135,7 @@ export default function Checkout() {
             items: cart.map((i) => ({ productId: i.productId, colorId: i.colorId, size: i.size, qty: i.qty })),
             payment_method: paymentMethod === "pix" ? "pix" : paymentMethod === "credito" ? "credito" : "debito",
             shipping_method: shipping.method,
-            shipping_cost: shipping.cost,
             shipping_quote_id: shipping.quoteId,
-            shipping_carrier: shipping.carrier,
-            shipping_service_name: shipping.serviceName,
-            shipping_delivery_time: shipping.deliveryTime,
             coupon_code: couponCode || "",
         });
         return res;
@@ -394,7 +391,7 @@ function FormGrid({ children }) {
     return <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">{children}</div>;
 }
 
-function Field({ label, value, onChange, full, error }) {
+function Field({ label, value, onChange, full = false, error = "" }) {
     return (
         <div className={full ? "sm:col-span-2" : ""}>
             <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>

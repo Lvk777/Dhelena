@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Loader2, CreditCard, AlertCircle, Check } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { formatBRL, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
+import { formatBRL } from "@/data/products";
 
 // Loads Mercado Pago SDK v2 from CDN
 function loadMPSdk(publicKey) {
     return new Promise((resolve, reject) => {
-        if (window.MercadoPago) {
-            resolve(new window.MercadoPago(publicKey));
+        const MercadoPago = /** @type {any} */ (window).MercadoPago;
+        if (MercadoPago) {
+            resolve(new MercadoPago(publicKey));
             return;
         }
         const script = document.createElement("script");
         script.src = "https://sdk.mercadopago.com/js/v2";
         script.onload = () => {
-            if (window.MercadoPago) {
-                resolve(new window.MercadoPago(publicKey));
+            const LoadedMercadoPago = /** @type {any} */ (window).MercadoPago;
+            if (LoadedMercadoPago) {
+                resolve(new LoadedMercadoPago(publicKey));
             } else {
                 reject(new Error("Falha ao carregar SDK do Mercado Pago"));
             }

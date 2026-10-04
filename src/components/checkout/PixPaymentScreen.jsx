@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { QrCode, Copy, Check, Loader2, Clock, AlertCircle } from "lucide-react";
+import { Copy, Check, Loader2, Clock, AlertCircle } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
 
-export default function PixPaymentScreen({ order, onApproved, onExpired }) {
+export default function PixPaymentScreen({ order, onApproved }) {
     const [pixData, setPixData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -107,6 +107,11 @@ export default function PixPaymentScreen({ order, onApproved, onExpired }) {
                         <Check className="w-8 h-8 text-white" strokeWidth={1.5} />
                     </div>
                     <p className="mt-4 text-sm text-green-600">Pagamento confirmado!</p>
+                </div>
+            ) : pixData?.qr_unavailable && !pixData?.pix_qr_code ? (
+                <div className="text-center py-8" role="status">
+                    <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" strokeWidth={1.5} />
+                    <p className="mt-4 text-sm text-amber-700">O código Pix ainda não está disponível. Estamos verificando o pagamento deste pedido.</p>
                 </div>
             ) : expired ? (
                 <div className="text-center py-8">

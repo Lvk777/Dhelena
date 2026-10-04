@@ -23,8 +23,7 @@ export default function ShippingStep({ cep, products, totalValue, shippingMethod
         try {
             const res = await base44.functions.invoke("calculateShipping", {
                 to_postal_code: cleanCep,
-                products: products.map((p) => ({ qty: p.qty, weight: 300, height: 10, width: 15, length: 20 })),
-                total_value: totalValue,
+                items: products.map((p) => ({ productId: p.productId, qty: p.qty })),
             });
             setOptions(res.options || []);
             if ((res.options || []).length === 0) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { CreditCard, AlertCircle, Loader2, Check, X, QrCode, Banknote } from "lucide-react";
+import { CreditCard, Loader2, Check, X, QrCode, Banknote } from "lucide-react";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminToggle from "@/components/admin/AdminToggle";

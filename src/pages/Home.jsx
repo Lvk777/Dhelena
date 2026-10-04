@@ -169,7 +169,7 @@ export default function Home() {
     );
 }
 
-function Section({ children, title, eyebrow, id, className = "" }) {
+function Section({ children, title, eyebrow, id = undefined, className = "" }) {
     const { ref, visible } = useReveal();
     return (
         <section id={id} className={`py-20 sm:py-28 ${className}`}>

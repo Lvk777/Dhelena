@@ -4,154 +4,145 @@
  * Security comes from signature/secret validation.
  */
 import { Router } from 'express';
-import { pool } from '../config/db.js';
-import { validateWebhookSignature, getOrderStatus, getPaymentStatus, mapPaymentStatus } from '../services/mercadoPago.js';
+import crypto from 'crypto';
+import { pool, withTransaction } from '../config/db.js';
+import { inspectWebhookSignature, getOrderStatus, mapPaymentStatus } from '../services/mercadoPago.js';
 import { validateWebhook as validateMEWebhook, getTracking } from '../services/melhorEnvio.js';
+import { getVerifiedPaymentForOrder, isVerifiedPaymentForOrder } from '../lib/paymentVerification.js';
+import { applyVerifiedOrderInTransaction, recordVerifiedNonApprovedOrderInTransaction } from '../lib/paymentReconciliation.js';
+import { createMercadoPagoWebhookLog, logMercadoPagoWebhookDelivery } from '../lib/mercadoPagoWebhookLog.js';
+import { reconcileRefundFromWebhook } from '../afterSalesService.js';
 
 const router = Router();
+
+export { isVerifiedPaymentForOrder };
+
+export function createWebhookEventId(req, preferNotificationId = false) {
+    if (preferNotificationId && req.body?.id) return String(req.body.id);
+    return crypto.createHash('sha256').update(req.rawBody || JSON.stringify(req.body)).digest('hex');
+}
+
+async function markWebhookProcessed(provider, eventId) {
+    await pool.query(
+        'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
+        [provider, eventId]
+    );
+}
+
+async function releaseWebhookForRetry(provider, eventId) {
+    // The event is inserted before calling a provider API. If processing then
+    // fails, remove this unprocessed reservation so the provider retry can run.
+    await pool.query(
+        'DELETE FROM webhook_events WHERE provider = $1 AND event_id = $2 AND processed = false',
+        [provider, eventId]
+    ).catch(() => {});
+}
 
 // ─── Mercado Pago Webhook ──────────────────────────────────────
 // POST /api/webhooks/mercado-pago
 router.post('/webhooks/mercado-pago', async (req, res) => {
     const event = req.body?.type || req.body?.event;
-    const dataId = req.body?.data?.id;
+    const dataId = req.query?.['data.id'];
 
-    // Always respond 200 quickly to MP (it retries on non-200)
-    // Validate signature
-    if (!validateWebhookSignature(req)) {
-        console.warn('[Webhook MP] Invalid signature — rejecting');
-        // Log invalid attempt
-        await pool.query(
-            `INSERT INTO webhook_events (provider, event_id, event_type, payload, processed)
-             VALUES ('mercado_pago', $1, $2, $3, false)
-             ON CONFLICT DO NOTHING`,
-            [dataId || 'unknown', event || 'unknown', JSON.stringify(req.body)]
-        ).catch(() => {});
-        return res.status(200).json({ status: 'invalid_signature' });
+    // Only authenticated deliveries receive a 2xx response.
+    const signature = inspectWebhookSignature(req);
+    const delivery = createMercadoPagoWebhookLog(req, signature);
+    if (!signature.valid) {
+        delivery.processing_result = signature.reason;
+        logMercadoPagoWebhookDelivery(delivery, 'warn');
+        return res.status(401).json({ error: 'Assinatura inválida' });
     }
 
-    // Log the webhook event (idempotent)
-    const eventId = dataId ? String(dataId) : crypto.randomUUID();
+    if (typeof dataId !== 'string' || !/^ORD[A-Za-z0-9]{10,60}$/.test(dataId)) {
+        delivery.processing_result = 'unsupported_event';
+        logMercadoPagoWebhookDelivery(delivery);
+        return res.status(200).json({ status: 'unsupported_event' });
+    }
+
+    // body.id is the provider's unique notification ID; data.id is the
+    // resource and can recur for each status transition.
+    const eventId = createWebhookEventId(req, true);
     try {
-        await pool.query(
+        const inserted = await pool.query(
             `INSERT INTO webhook_events (provider, event_id, event_type, payload, processed)
-             VALUES ('mercado_pago', $1, $2, $3, false)
-             ON CONFLICT (provider, event_id) DO NOTHING`,
+              VALUES ('mercado_pago', $1, $2, $3, false)
+              ON CONFLICT (provider, event_id) DO NOTHING
+              RETURNING id`,
             [eventId, event || 'unknown', JSON.stringify(req.body)]
         );
-    } catch (e) {
-        // If already processed (unique constraint), respond OK
-        return res.status(200).json({ status: 'already_processed' });
+        if (inserted.rowCount === 0) {
+            delivery.processing_result = 'already_processed';
+            delivery.deduplication_result = 'duplicate';
+            logMercadoPagoWebhookDelivery(delivery);
+            return res.status(200).json({ status: 'already_processed' });
+        }
+        delivery.deduplication_result = 'reserved';
+    } catch (err) {
+        delivery.processing_result = 'reservation_failed';
+        delivery.deduplication_result = 'reservation_failed';
+        logMercadoPagoWebhookDelivery(delivery, 'error');
+        return res.status(503).json({ error: 'Serviço temporariamente indisponível' });
     }
 
     try {
-        // Find the order by external_reference or MP order ID
-        let orderRef = null;
-
-        // For Orders API webhooks, the body contains data.id which is the MP order ID
-        if (dataId) {
-            // Try to find by MP order ID
-            const { rows } = await pool.query(
-                'SELECT * FROM orders WHERE mercado_pago_order_id = $1 OR mercado_pago_external_reference = $1',
-                [String(dataId)]
-            );
-            if (rows.length > 0) {
-                orderRef = rows[0];
-            } else {
-                // Try to query MP for the order to get external_reference
-                try {
-                    const mpData = await getOrderStatus(String(dataId));
-                    if (mpData.external_reference) {
-                        const { rows: refRows } = await pool.query(
-                            'SELECT * FROM orders WHERE order_number = $1',
-                            [mpData.external_reference]
-                        );
-                        if (refRows.length > 0) orderRef = refRows[0];
-                    }
-                } catch (e) {
-                    // Maybe it's a payment ID, not an order ID
-                    try {
-                        const payData = await getPaymentStatus(parseInt(dataId));
-                        if (payData.external_reference) {
-                            const { rows: refRows } = await pool.query(
-                                'SELECT * FROM orders WHERE order_number = $1',
-                                [payData.external_reference]
-                            );
-                            if (refRows.length > 0) orderRef = refRows[0];
-                        }
-                    } catch (e2) {
-                        console.warn('[Webhook MP] Could not resolve order for data.id:', dataId);
-                    }
-                }
-            }
-        }
+        delivery.provider_resource_fetch = 'failure';
+        const resolvedOrderResource = await getOrderStatus(dataId);
+        delivery.provider_resource_fetch = 'success';
+        const { rows } = await pool.query(
+            'SELECT * FROM orders WHERE mercado_pago_order_id = $1 OR order_number = $2',
+            [dataId, resolvedOrderResource.external_reference]
+        );
+        const orderRef = rows[0] || null;
 
         if (!orderRef) {
-            console.warn('[Webhook MP] Order not found for event:', event, 'data.id:', dataId);
+            await markWebhookProcessed('mercado_pago', eventId);
+            delivery.processing_result = 'order_not_found';
+            delivery.deduplication_result = 'processed';
+            logMercadoPagoWebhookDelivery(delivery, 'warn');
             return res.status(200).json({ status: 'order_not_found' });
         }
+        delivery.local_order_number = orderRef.order_number;
 
-        // Get the latest status from MP
-        let mpStatus = null;
-        let mpPaymentId = null;
-        if (orderRef.mercado_pago_order_id) {
-            const mpData = await getOrderStatus(orderRef.mercado_pago_order_id);
-            mpStatus = mpData.mp_status;
-            mpPaymentId = mpData.mp_payment_id;
-        } else if (orderRef.mercado_pago_payment_id) {
-            const payData = await getPaymentStatus(orderRef.mercado_pago_payment_id);
-            mpStatus = payData.mp_status;
-            mpPaymentId = payData.mp_payment_id;
+        let verifiedPayment;
+        try {
+            verifiedPayment = await getVerifiedPaymentForOrder(orderRef, { getOrderStatus }, resolvedOrderResource, dataId);
+        } catch (error) {
+            if (error.code !== 'PAYMENT_MISMATCH') throw error;
+            await markWebhookProcessed('mercado_pago', eventId);
+            delivery.processing_result = 'mismatched_payment';
+            delivery.deduplication_result = 'processed';
+            logMercadoPagoWebhookDelivery(delivery, 'warn');
+            return res.status(200).json({ status: 'mismatched_payment' });
         }
 
-        if (!mpStatus) {
-            return res.status(200).json({ status: 'no_status' });
-        }
+        // Reconcile a reserved refund from a second official Orders API GET.
+        // The notification carries no trusted amount or refund status.
+        const refundOutcome = await reconcileRefundFromWebhook(orderRef.id, verifiedPayment.mp_order_id);
+        delivery.refund_reconciliation = refundOutcome?.status || 'none_pending';
 
-        const internalStatus = mapPaymentStatus(mpStatus);
+        const internalStatus = mapPaymentStatus(verifiedPayment.mp_status, verifiedPayment.mp_status_detail);
+        const outcome = await withTransaction(async (client) => {
+            const result = internalStatus === 'approved'
+                ? await applyVerifiedOrderInTransaction(client, orderRef.id, verifiedPayment, 'webhook')
+                : await recordVerifiedNonApprovedOrderInTransaction(client, orderRef.id, verifiedPayment, 'webhook');
+            await client.query(
+                'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
+                ['mercado_pago', eventId]
+            );
+            return result.outcome;
+        });
 
-        // Update order idempotently
-        const updates = {
-            mercado_pago_status: mpStatus,
-            payment_status: internalStatus,
-            payment_updated_at: new Date(),
-        };
-
-        if (mpPaymentId) updates.mercado_pago_payment_id = mpPaymentId;
-
-        if (internalStatus === 'approved' && orderRef.payment_status !== 'approved') {
-            updates.paid_at = new Date();
-            updates.status = orderRef.status === 'recebido' ? 'pagamento_aprovado' : orderRef.status;
-        }
-
-        const setParts = Object.keys(updates).map((k, i) => `${k} = $${i + 1}`);
-        const values = Object.values(updates);
-        values.push(orderRef.id);
-
-        await pool.query(
-            `UPDATE orders SET ${setParts.join(', ')}, updated_at = now() WHERE id = $${values.length}`,
-            values
-        );
-
-        // Record timeline event
-        await pool.query(
-            `INSERT INTO order_events (order_id, event, description, metadata)
-             VALUES ($1, $2, $3, $4)`,
-            [orderRef.id, `payment_${internalStatus}`, `Pagamento ${internalStatus} via webhook MP`, JSON.stringify({ mp_status: mpStatus })]
-        );
-
-        // Mark webhook as processed
-        await pool.query(
-            'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
-            ['mercado_pago', eventId]
-        );
-
-        console.log(`[Webhook MP] Order ${orderRef.order_number} → payment_status: ${internalStatus}`);
-        res.status(200).json({ status: 'ok', payment_status: internalStatus });
+        delivery.processing_result = outcome;
+        delivery.deduplication_result = 'processed';
+        logMercadoPagoWebhookDelivery(delivery);
+        res.status(200).json({ status: outcome, payment_status: internalStatus });
 
     } catch (err) {
-        console.error('[Webhook MP] Error:', err.message);
-        res.status(200).json({ status: 'error', message: err.message });
+        delivery.processing_result = 'processing_failed';
+        await releaseWebhookForRetry('mercado_pago', eventId);
+        delivery.deduplication_result = 'released_for_retry';
+        logMercadoPagoWebhookDelivery(delivery, 'error');
+        res.status(503).json({ error: 'Serviço temporariamente indisponível' });
     }
 });
 
@@ -160,25 +151,30 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
 router.post('/webhooks/melhor-envio', async (req, res) => {
     // Validate webhook
     if (!validateMEWebhook(req)) {
-        console.warn('[Webhook ME] Invalid token — rejecting');
-        return res.status(200).json({ status: 'invalid_token' });
+        console.warn('[Webhook ME] Invalid signature — rejected');
+        return res.status(401).json({ error: 'Assinatura inválida' });
     }
 
     const event = req.body?.event || req.body?.type;
-    const shipmentId = req.body?.shipment_id || req.body?.data?.shipment_id;
-    const trackingCode = req.body?.tracking_code || req.body?.data?.tracking_code;
+    const shipmentId = req.body?.shipment_id || req.body?.data?.shipment_id || req.body?.data?.id;
+    const trackingCode = req.body?.tracking_code || req.body?.data?.tracking_code || req.body?.data?.tracking;
     const status = req.body?.status || req.body?.data?.status;
 
-    const eventId = shipmentId ? String(shipmentId) : crypto.randomUUID();
+    // Melhor Envio does not send a separate delivery ID. The authenticated raw
+    // payload remains identical on retries and changes for later statuses.
+    const eventId = createWebhookEventId(req);
     try {
-        await pool.query(
+        const inserted = await pool.query(
             `INSERT INTO webhook_events (provider, event_id, event_type, payload, processed)
-             VALUES ('melhor_envio', $1, $2, $3, false)
-             ON CONFLICT (provider, event_id) DO NOTHING`,
+              VALUES ('melhor_envio', $1, $2, $3, false)
+              ON CONFLICT (provider, event_id) DO NOTHING
+              RETURNING id`,
             [eventId, event || 'unknown', JSON.stringify(req.body)]
         );
-    } catch (e) {
-        return res.status(200).json({ status: 'already_processed' });
+        if (inserted.rowCount === 0) return res.status(200).json({ status: 'already_processed' });
+    } catch (err) {
+        console.error('[Webhook ME] Could not reserve event:', err.message);
+        return res.status(503).json({ error: 'Serviço temporariamente indisponível' });
     }
 
     try {
@@ -195,6 +191,7 @@ router.post('/webhooks/melhor-envio', async (req, res) => {
 
         if (!orderRef) {
             console.warn('[Webhook ME] Order not found for shipment:', shipmentId);
+            await markWebhookProcessed('melhor_envio', eventId);
             return res.status(200).json({ status: 'order_not_found' });
         }
 
@@ -226,34 +223,36 @@ router.post('/webhooks/melhor-envio', async (req, res) => {
             updates.delivered_at = new Date();
         }
 
-        if (Object.keys(updates).length > 0) {
+        await withTransaction(async (client) => {
+            if (Object.keys(updates).length > 0) {
             const setParts = Object.keys(updates).map((k, i) => `${k} = $${i + 1}`);
             const values = Object.values(updates);
             values.push(orderRef.id);
-            await pool.query(
+            await client.query(
                 `UPDATE orders SET ${setParts.join(', ')}, updated_at = now() WHERE id = $${values.length}`,
                 values
             );
 
             // Record timeline event
-            await pool.query(
+            await client.query(
                 `INSERT INTO order_events (order_id, event, description, metadata)
                  VALUES ($1, $2, $3, $4)`,
                 [orderRef.id, `shipping_${status || 'update'}`, `Status de envio: ${status || 'atualizado'}`, JSON.stringify({ shipment_id: shipmentId, tracking_code: trackingCode })]
             );
-        }
-
-        await pool.query(
-            'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
-            ['melhor_envio', eventId]
-        );
+            }
+            await client.query(
+                'UPDATE webhook_events SET processed = true WHERE provider = $1 AND event_id = $2',
+                ['melhor_envio', eventId]
+            );
+        });
 
         console.log(`[Webhook ME] Order ${orderRef.order_number} → shipping_status: ${status}`);
         res.status(200).json({ status: 'ok', shipping_status: status });
 
     } catch (err) {
         console.error('[Webhook ME] Error:', err.message);
-        res.status(200).json({ status: 'error', message: err.message });
+        await releaseWebhookForRetry('melhor_envio', eventId);
+        res.status(503).json({ error: 'Serviço temporariamente indisponível' });
     }
 });
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { Plus, X, Loader2, Eye, Check, Package, ImageIcon, DollarSign, Palette, FolderTree, Settings, Truck } from "lucide-react";
+import { Plus, X, Eye, Check, Package, ImageIcon, DollarSign, Palette, FolderTree, Settings } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useCatalog } from "@/context/CatalogContext";
 import { COLOR_SWATCHES, SIZES_LIST } from "@/data/products";
@@ -120,7 +120,7 @@ export default function ProductForm() {
         price: parseFloat(form.price) || 0,
         sale_price: form.sale_price ? parseFloat(form.sale_price) : null,
         cost_price: parseFloat(form.cost_price) || 0,
-        installments: parseInt(form.installments) || 6,
+        installments: parseInt(String(form.installments), 10) || 6,
         images: form.images,
         colors: form.colors,
         sizes: form.sizes,
@@ -372,7 +372,7 @@ function SummaryRow({ label, value }) {
     );
 }
 
-function WizardInput({ label, value, onChange, type = "text", full, placeholder }) {
+function WizardInput({ label, value, onChange, type = "text", full = false, placeholder = "" }) {
     return (
         <div className={full ? "" : ""}>
             <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
@@ -381,7 +381,7 @@ function WizardInput({ label, value, onChange, type = "text", full, placeholder 
     );
 }
 
-function WizardTextarea({ label, value, onChange, full, rows = 3 }) {
+function WizardTextarea({ label, value, onChange, full = false, rows = 3 }) {
     return (
         <div className={full ? "" : ""}>
             <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>

@@ -19,7 +19,7 @@ export function PublicSettingsProvider({ children }) {
     const load = useCallback(async () => {
         try {
             const records = await base44.entities.Setting.filter({ is_public: true });
-            const data = {};
+            const data = /** @type {Record<string, any>} */ ({});
             (records || []).forEach((r) => {
                 // DTO allowlist: extrair APENAS campos definidos em DEFAULTS para esta key
                 // Evita vazar campos privados que possam ser adicionados futuramente ao mesmo registro
@@ -34,7 +34,7 @@ export function PublicSettingsProvider({ children }) {
                     data[r.key] = filtered;
                 }
             });
-            const merged = {};
+            const merged = /** @type {any} */ ({});
             for (const key of Object.keys(DEFAULTS)) {
                 merged[key] = { ...DEFAULTS[key], ...(data[key] || {}) };
             }

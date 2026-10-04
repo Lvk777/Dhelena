@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function AdminInput({ label, value, onChange, type = "text", placeholder, description, error, required, disabled, full, icon: Icon, mono, min, max, step }) {
+export default function AdminInput({ label, value, onChange, type = "text", placeholder = "", description = "", error = "", required = false, disabled = false, full = false, icon: Icon = null, mono = false, min = undefined, max = undefined, step = undefined }) {
     return (
         <div className={full ? "sm:col-span-2" : ""}>
             {label && (

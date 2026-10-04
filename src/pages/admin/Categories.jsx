@@ -5,7 +5,6 @@ import AdminModal from "@/components/admin/AdminModal";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminTextarea from "@/components/admin/AdminTextarea";
 import AdminImageUploader from "@/components/admin/AdminImageUploader";
-import AdminToggle from "@/components/admin/AdminToggle";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import { logAdminAction } from "@/lib/audit";
@@ -91,7 +90,7 @@ function CategoryForm({ item, onClose, onSaved }) {
     });
     const [slugEdited, setSlugEdited] = useState(!!item.slug);
     const [saving, setSaving] = useState(false);
-    const [errors, setErrors] = useState({});
+    const [errors, setErrors] = useState(/** @type {Record<string, any>} */ ({}));
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
     const onNameChange = (v) => {

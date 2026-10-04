@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Trash2, ChevronUp, ChevronDown, X } from "lucide-react";
-import { base44 } from "@/api/base44Client";
 
 const GUIDE_TYPES = ["Feminino padrão", "Vestidos", "Blusas", "Calças", "Conjuntos"];
 const DEFAULT_ROWS = [

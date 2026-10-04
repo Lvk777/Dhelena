@@ -5,7 +5,7 @@ export default function AdminConfirmDialog({
     open, onClose, onConfirm,
     title = "Confirmar exclusão",
     message,
-    itemName,
+    itemName = "",
     confirmLabel = "Excluir",
     cancelLabel = "Cancelar",
     danger = true,

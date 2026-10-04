@@ -1,21 +1,32 @@
 import { pool, withTransaction } from './config/db.js';
 import { validateCoupon, logAudit, sendOrderNotifications } from './services.js';
+import * as melhorEnvio from './services/melhorEnvio.js';
+import { restoreStock } from './afterSalesService.js';
+import { canCancelWithoutRefund } from './lib/afterSalesPolicy.js';
+import { buildShippingPackages, getCheckoutShippingInput, selectShippingQuote } from './lib/shipping.js';
+import { assertMatchingIdempotencyRequest, createOrderRequestFingerprint, normalizeIdempotencyKey } from './lib/idempotency.js';
+import { calculateServerOrderTotal, resolveCatalogLine } from './lib/orderPricing.js';
 
 // ─── placeOrder: atomic order creation ──────────────────────────────
 export async function placeOrder(userId, body, idempotencyKey) {
-    const { items, shipping_address, shipping_method, coupon_code, payment_method, customer,
-            shipping_cost: quotedShippingCost, shipping_quote_id, shipping_carrier, shipping_service_name, shipping_delivery_time } = body;
+    const normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
+    const idempotencyFingerprint = createOrderRequestFingerprint(body);
+    const { items, coupon_code, payment_method, customer } = body;
+    const { shipping_address, shipping_method, shipping_quote_id } = getCheckoutShippingInput(body);
 
     if (!items || !Array.isArray(items) || items.length === 0) {
         throw Object.assign(new Error('Carrinho vazio'), { status: 400 });
     }
 
     return withTransaction(async (client) => {
-        // Idempotency check
-        if (idempotencyKey) {
-            const { rows: existing } = await client.query('SELECT * FROM orders WHERE idempotency_key = $1 AND user_id = $2', [idempotencyKey, userId]);
-            if (existing.length > 0) return existing[0];
-        }
+        // Serialize retries for this user/key before checking or applying stock
+        // changes. The unique index is the final database-level safeguard.
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`checkout:${userId}:${normalizedIdempotencyKey}`]);
+        const { rows: existing } = await client.query(
+            'SELECT * FROM orders WHERE idempotency_key = $1 AND user_id = $2',
+            [normalizedIdempotencyKey, userId]
+        );
+        if (existing.length > 0) return assertMatchingIdempotencyRequest(existing[0], idempotencyFingerprint);
 
         let subtotal = 0;
         const orderItems = [];
@@ -23,28 +34,15 @@ export async function placeOrder(userId, body, idempotencyKey) {
         // Process each item: lock product, verify stock, calculate price
         for (const item of items) {
             const { productId, colorId, size, qty } = item;
-            const quantity = parseInt(qty);
-            if (!quantity || quantity <= 0) throw Object.assign(new Error('Quantidade inválida'), { status: 400 });
-
             // Lock product row
             const { rows: prodRows } = await client.query('SELECT * FROM products WHERE id = $1 FOR UPDATE', [productId]);
             if (prodRows.length === 0) throw Object.assign(new Error(`Produto não encontrado: ${productId}`), { status: 404 });
 
             const product = prodRows[0];
 
-            // Find color and check stock
+            // Resolve price and stock exclusively from the locked catalog row.
             const colors = product.colors || [];
-            const color = colors.find(c => c.id === colorId);
-            if (!color) throw Object.assign(new Error(`Cor não encontrada: ${colorId}`), { status: 404 });
-
-            const currentStock = color.stock?.[size] ?? 0;
-            if (currentStock < quantity) {
-                throw Object.assign(new Error(`Estoque insuficiente para ${product.name} (${color.name}, ${size}). Disponível: ${currentStock}`), { status: 409 });
-            }
-
-            // Use sale_price if available, otherwise regular price
-            const unitPrice = product.sale_price ? Number(product.sale_price) : Number(product.price);
-            const itemSubtotal = unitPrice * quantity;
+            const { color, currentStock, quantity, unitPrice, itemSubtotal } = resolveCatalogLine(product, { colorId, size, qty });
             subtotal += itemSubtotal;
 
             // Update stock in colors JSONB
@@ -63,12 +61,17 @@ export async function placeOrder(userId, body, idempotencyKey) {
                 product_name: product.name,
                 product_sku: product.sku,
                 product_image: product.images?.[0] || null,
+                product_category: product.category || '',
                 color_id: colorId,
                 color_name: color.name,
                 size,
                 quantity,
                 unit_price: unitPrice,
                 subtotal: itemSubtotal,
+                weight: Number(product.weight),
+                height: Number(product.package_height),
+                width: Number(product.package_width),
+                length: Number(product.package_length),
             });
         }
 
@@ -144,25 +147,58 @@ export async function placeOrder(userId, body, idempotencyKey) {
         }
         discount = Math.min(discount, subtotal); // Never exceed subtotal
 
-        // Calculate shipping
+        // Calculate shipping exclusively from the server-side cart and product
+        // dimensions.  Prices, carrier and delivery time supplied by the
+        // browser are intentionally ignored.
         let shippingCost = 0;
+        let shippingQuoteId = null;
+        let shippingCarrier = null;
+        let shippingServiceName = null;
+        let shippingDeliveryTime = null;
+        let shippingPackages = [];
         const { rows: shipSettings } = await client.query("SELECT value FROM settings WHERE key = 'shipping'");
         const shipConfig = shipSettings[0]?.value || {};
         const freeThreshold = shipConfig.free_shipping_threshold || 499;
         const freeEnabled = shipConfig.free_shipping_enabled !== false;
 
         if (shipping_method === 'retirada') {
+            if (shipConfig.pickup_enabled !== true) {
+                throw Object.assign(new Error('Retirada no estoque não está disponível'), { status: 400 });
+            }
             shippingCost = 0;
-        } else if (freeEnabled && subtotal - discount >= freeThreshold) {
-            shippingCost = 0;
-        } else if (shipping_method === 'melhor_envio' && quotedShippingCost != null) {
-            // Use the Melhor Envio quoted price (validated by the backend's own /api/shipping/quote endpoint)
-            shippingCost = Number(quotedShippingCost);
         } else {
-            shippingCost = 29.90; // Default shipping cost
+            if (shipping_method !== 'melhor_envio' || !shipping_quote_id) {
+                throw Object.assign(new Error('Selecione uma opção de entrega válida'), { status: 400 });
+            }
+            const destinationPostalCode = String(shipping_address?.cep || shipping_address?.zip_code || '').replace(/\D/g, '');
+            if (destinationPostalCode.length !== 8) {
+                throw Object.assign(new Error('CEP de entrega inválido'), { status: 400 });
+            }
+            const { rows: addressRows } = await client.query("SELECT value FROM settings WHERE key = 'address'");
+            const originPostalCode = String(addressRows[0]?.value?.cep || '').replace(/\D/g, '');
+            if (originPostalCode.length !== 8) {
+                throw Object.assign(new Error('CEP de origem não configurado'), { status: 503 });
+            }
+            if (!shipConfig.melhor_envio_enabled) {
+                throw Object.assign(new Error('Melhor Envio não está ativado'), { status: 503 });
+            }
+            const packages = buildShippingPackages(orderItems);
+            const options = await melhorEnvio.calculateShipping({
+                fromPostalCode: originPostalCode,
+                toPostalCode: destinationPostalCode,
+                products: packages,
+                totalValue: subtotal - discount,
+            });
+            const quote = selectShippingQuote(options, shipping_quote_id);
+            shippingQuoteId = String(quote.id);
+            shippingCarrier = quote.company || null;
+            shippingServiceName = quote.service || quote.name || null;
+            shippingDeliveryTime = Number.isInteger(Number(quote.delivery_time)) ? Number(quote.delivery_time) : null;
+            shippingPackages = Array.isArray(quote.packages) ? quote.packages : [];
+            shippingCost = freeEnabled && subtotal - discount >= freeThreshold ? 0 : Number(quote.price);
         }
 
-        const total = subtotal - discount + shippingCost;
+        const total = calculateServerOrderTotal(subtotal, discount, shippingCost);
 
         // Generate order number
         const year = new Date().getFullYear();
@@ -180,9 +216,15 @@ export async function placeOrder(userId, body, idempotencyKey) {
             coupon_code: coupon_code || null,
             promotion: appliedPromo ? { name: appliedPromo.name, title: appliedPromo.title, discount_percent: Number(appliedPromo.discount_percent) } : null,
             shipping_method,
+            shipping_quote_id: shippingQuoteId,
+            shipping_carrier: shippingCarrier,
+            shipping_service_name: shippingServiceName,
+            shipping_delivery_time: shippingDeliveryTime,
+            shipping_packages: shippingPackages,
             payment_method,
             shipping_address,
             customer: customer || {},
+            idempotency_fingerprint: idempotencyFingerprint,
             created_at: new Date().toISOString(),
         };
 
@@ -191,8 +233,8 @@ export async function placeOrder(userId, body, idempotencyKey) {
             `INSERT INTO orders (order_number, user_id, status, payment_status, payment_method, shipping_method, shipping_cost, discount, coupon_code, subtotal, total, snapshot, shipping_address, idempotency_key, shipping_quote_id, shipping_carrier, shipping_service_name, shipping_delivery_time)
              VALUES ($1, $2, 'recebido', 'pending', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
              RETURNING *`,
-            [orderNum, userId, payment_method || null, shipping_method || null, shippingCost, discount, coupon_code || null, subtotal, total, JSON.stringify(snapshot), JSON.stringify(shipping_address), idempotencyKey,
-             shipping_quote_id || null, shipping_carrier || null, shipping_service_name || null, shipping_delivery_time || null]
+            [orderNum, userId, payment_method || null, shipping_method || null, shippingCost, discount, coupon_code || null, subtotal, total, JSON.stringify(snapshot), JSON.stringify(shipping_address), normalizedIdempotencyKey,
+              shippingQuoteId, shippingCarrier, shippingServiceName, shippingDeliveryTime]
         );
         const order = orderRows[0];
 
@@ -239,35 +281,24 @@ export async function cancelOrder(orderId, userId, isAdmin = false) {
 
         const order = orderRows[0];
         if (order.status === 'cancelado') return order; // Idempotent — already cancelled
+        if (!canCancelWithoutRefund(order)) {
+            throw Object.assign(new Error('Pedido com pagamento no provedor exige conciliação antes do cancelamento'), { status: 409 });
+        }
 
         // Get order items
         const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id = $1', [orderId]);
 
-        // Restore stock for each item
-        for (const item of items) {
-            const { rows: prodRows } = await client.query('SELECT colors FROM products WHERE id = $1 FOR UPDATE', [item.product_id]);
-            if (prodRows.length === 0) continue;
-
-            const colors = prodRows[0].colors || [];
-            const color = colors.find(c => c.id === item.color_id);
-            if (!color) continue;
-
-            const currentStock = color.stock?.[item.size] ?? 0;
-            if (!color.stock) color.stock = {};
-            color.stock[item.size] = currentStock + item.quantity;
-
-            await client.query('UPDATE products SET colors = $1, sold_count = GREATEST(0, sold_count - $2), updated_date = now() WHERE id = $3', [JSON.stringify(colors), item.quantity, item.product_id]);
-
-            await client.query(
-                `INSERT INTO stock_movements (product_id, order_id, type, quantity, color_id, size, previous_stock, new_stock)
-                 VALUES ($1, $2, 'cancel', $3, $4, $5, $6, $7)`,
-                [item.product_id, orderId, item.quantity, item.color_id, item.size, currentStock, currentStock + item.quantity]
-            );
-        }
+        for (const item of items) await restoreStock(client, order, item, item.quantity, 'cancellation', null, isAdmin ? userId : null);
 
         // Update order status
         const { rows: updated } = await client.query(
-            "UPDATE orders SET status = 'cancelado', payment_status = 'refunded', updated_at = now() WHERE id = $1 RETURNING *",
+            "UPDATE orders SET status = 'cancelado', updated_at = now() WHERE id = $1 RETURNING *",
+            [orderId]
+        );
+
+        await client.query(
+            `INSERT INTO order_events (order_id, event, description)
+             VALUES ($1, 'order_cancelled', 'Pedido cancelado; estoque devolvido')`,
             [orderId]
         );
 

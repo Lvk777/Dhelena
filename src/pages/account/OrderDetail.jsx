@@ -4,6 +4,7 @@ import { ArrowLeft, Check, Truck, MapPin, QrCode, CreditCard, Banknote, Loader2 
 import { base44 } from "@/api/base44Client";
 import { formatBRL, ORDER_STATUS, ORDER_TIMELINE, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
 import OrderTimeline from "@/components/checkout/OrderTimeline";
+import CustomerAfterSales from "@/components/checkout/CustomerAfterSales";
 
 export default function OrderDetail() {
     const { id } = useParams();
@@ -13,7 +14,7 @@ export default function OrderDetail() {
     const [trackingInfo, setTrackingInfo] = useState(null);
     const [trackingLoading, setTrackingLoading] = useState(false);
 
-    useEffect(() => {
+    const load = () => {
         Promise.all([
             base44.entities.Order.get(id).catch(() => null),
             base44.functions.invoke("getOrderEvents", { orderId: id }).catch(() => []),
@@ -22,7 +23,8 @@ export default function OrderDetail() {
             setEvents(Array.isArray(evs) ? evs : []);
             setLoading(false);
         });
-    }, [id]);
+    };
+    useEffect(() => { load(); }, [id]);
 
     const fetchTracking = async () => {
         setTrackingLoading(true);
@@ -180,6 +182,7 @@ export default function OrderDetail() {
                     </p>
                 </InfoBlock>
             </div>
+            <CustomerAfterSales order={order} onChanged={load} />
         </div>
     );
 }
@@ -188,7 +191,7 @@ function Row({ label, value }) {
     return <div className="flex justify-between"><span className="text-muted-foreground">{label}</span><span>{value}</span></div>;
 }
 
-function InfoBlock({ title, children, full }) {
+function InfoBlock({ title, children, full = false }) {
     return (
         <div className={full ? "sm:col-span-2" : ""}>
             <h3 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-2">{title}</h3>

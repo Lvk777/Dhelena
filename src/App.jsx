@@ -1,3 +1,4 @@
+import React, { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
@@ -26,7 +27,6 @@ import Home from '@/pages/Home';
 import Shop from '@/pages/Shop';
 import ProductDetail from '@/pages/ProductDetail';
 import Cart from '@/pages/Cart';
-import Checkout from '@/pages/Checkout';
 import About from '@/pages/About';
 import Contact from '@/pages/Contact';
 import Collections from '@/pages/Collections';
@@ -45,26 +45,12 @@ import Addresses from '@/pages/account/Addresses';
 import Profile from '@/pages/account/Profile';
 import ChangePassword from '@/pages/account/ChangePassword';
 
-// Admin pages
-import AdminLayout from '@/pages/admin/AdminLayout';
-import Dashboard from '@/pages/admin/Dashboard';
-import AdminOrders from '@/pages/admin/AdminOrders';
-import AdminOrderDetail from '@/pages/admin/AdminOrderDetail';
-import AdminProducts from '@/pages/admin/Products';
-import ProductForm from '@/pages/admin/ProductForm';
-import Categories from '@/pages/admin/Categories';
-import AdminCollections from '@/pages/admin/Collections';
-import Inventory from '@/pages/admin/Inventory';
-import Customers from '@/pages/admin/Customers';
-import Coupons from '@/pages/admin/Coupons';
-import Banners from '@/pages/admin/Banners';
-import Reports from '@/pages/admin/Reports';
-import Settings from '@/pages/admin/Settings';
-import AuditLog from '@/pages/admin/AuditLog';
-import SizeGuides from '@/pages/admin/SizeGuides';
-import Integrations from '@/pages/admin/Integrations';
-import Promotions from '@/pages/admin/Promotions';
-import Analytics from '@/pages/admin/Analytics';
+const Checkout = lazy(() => import('@/pages/Checkout'));
+const AdminRoutes = lazy(() => import('@/pages/admin/AdminRoutes'));
+
+function RouteLoader() {
+    return <div className="fixed inset-0 flex items-center justify-center bg-background"><div className="w-8 h-8 border-4 border-[hsl(var(--bone))] border-t-[hsl(var(--gold))] rounded-full animate-spin" /></div>;
+}
 
 const AuthenticatedApp = () => {
     const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -118,7 +104,7 @@ const AuthenticatedApp = () => {
                                 <Route path="/termos-de-uso" element={<PolicyPage slug="termos-de-uso" />} />
                                 <Route path="/politica-de-entrega" element={<PolicyPage slug="politica-de-entrega" />} />
                                 <Route path="/checkout" element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login?returnTo=/checkout" replace />} />}>
-                                    <Route index element={<Checkout />} />
+                                    <Route index element={<Suspense fallback={<RouteLoader />}><Checkout /></Suspense>} />
                                 </Route>
                             </Route>
 
@@ -137,27 +123,7 @@ const AuthenticatedApp = () => {
                             </Route>
 
                             {/* Admin (admin-only) */}
-                            <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
-                                <Route index element={<Dashboard />} />
-                                <Route path="pedidos" element={<AdminOrders />} />
-                                <Route path="pedidos/:id" element={<AdminOrderDetail />} />
-                                <Route path="produtos" element={<AdminProducts />} />
-                                <Route path="produtos/novo" element={<ProductForm />} />
-                                <Route path="produtos/:id" element={<ProductForm />} />
-                                <Route path="categorias" element={<Categories />} />
-                                <Route path="colecoes" element={<AdminCollections />} />
-                                <Route path="estoque" element={<Inventory />} />
-                                <Route path="clientes" element={<Customers />} />
-                                <Route path="cupons" element={<Coupons />} />
-                                <Route path="banners" element={<Banners />} />
-                                <Route path="relatorios" element={<Reports />} />
-                                <Route path="auditoria" element={<AuditLog />} />
-                                <Route path="configuracoes" element={<Settings />} />
-                                <Route path="guias-medidas" element={<SizeGuides />} />
-                                <Route path="integracoes" element={<Integrations />} />
-                                <Route path="promocoes" element={<Promotions />} />
-                                <Route path="analytics" element={<Analytics />} />
-                            </Route>
+                            <Route path="/admin/*" element={<AdminRoute><Suspense fallback={<RouteLoader />}><AdminRoutes /></Suspense></AdminRoute>} />
 
                             <Route path="*" element={<PageNotFound />} />
                         </Routes>
