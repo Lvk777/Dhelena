@@ -5,7 +5,8 @@ import { restoreStock } from './afterSalesService.js';
 import { canCancelWithoutRefund } from './lib/afterSalesPolicy.js';
 import { buildShippingPackages, getCheckoutShippingInput, selectShippingQuote } from './lib/shipping.js';
 import { assertMatchingIdempotencyRequest, createOrderRequestFingerprint, normalizeIdempotencyKey } from './lib/idempotency.js';
-import { calculateServerOrderTotal, resolveCatalogLine } from './lib/orderPricing.js';
+import { calculateCheckoutShippingCost, calculateServerOrderTotal, resolveCatalogLine } from './lib/orderPricing.js';
+import { reserveVariantStock } from './lib/variantStock.js';
 
 // ─── placeOrder: atomic order creation ──────────────────────────────
 export async function placeOrder(userId, body, idempotencyKey) {
@@ -17,8 +18,18 @@ export async function placeOrder(userId, body, idempotencyKey) {
     if (!items || !Array.isArray(items) || items.length === 0) {
         throw Object.assign(new Error('Carrinho vazio'), { status: 400 });
     }
+    if (!['pix', 'credito', 'debito'].includes(payment_method)) {
+        throw Object.assign(new Error('Forma de pagamento inválida'), { status: 400 });
+    }
 
     return withTransaction(async (client) => {
+        const { rows: paymentSettings } = await client.query("SELECT value FROM settings WHERE key = 'payments'");
+        const paymentConfig = paymentSettings[0]?.value || {};
+        if ((payment_method === 'pix' && paymentConfig.pix_enabled === false)
+            || (payment_method !== 'pix' && paymentConfig.card_enabled === false)
+            || (payment_method === 'debito' && paymentConfig.debit_card_enabled === false)) {
+            throw Object.assign(new Error('Forma de pagamento indisponível'), { status: 409 });
+        }
         // Serialize retries for this user/key before checking or applying stock
         // changes. The unique index is the final database-level safeguard.
         await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`checkout:${userId}:${normalizedIdempotencyKey}`]);
@@ -46,7 +57,7 @@ export async function placeOrder(userId, body, idempotencyKey) {
             subtotal += itemSubtotal;
 
             // Update stock in colors JSONB
-            color.stock[size] = currentStock - quantity;
+            reserveVariantStock(product, color, size, quantity);
             await client.query('UPDATE products SET colors = $1, sold_count = sold_count + $2, updated_date = now() WHERE id = $3', [JSON.stringify(colors), quantity, productId]);
 
             // Record stock movement
@@ -158,7 +169,6 @@ export async function placeOrder(userId, body, idempotencyKey) {
         let shippingPackages = [];
         const { rows: shipSettings } = await client.query("SELECT value FROM settings WHERE key = 'shipping'");
         const shipConfig = shipSettings[0]?.value || {};
-        const freeThreshold = shipConfig.free_shipping_threshold || 499;
         const freeEnabled = shipConfig.free_shipping_enabled !== false;
 
         if (shipping_method === 'retirada') {
@@ -195,7 +205,7 @@ export async function placeOrder(userId, body, idempotencyKey) {
             shippingServiceName = quote.service || quote.name || null;
             shippingDeliveryTime = Number.isInteger(Number(quote.delivery_time)) ? Number(quote.delivery_time) : null;
             shippingPackages = Array.isArray(quote.packages) ? quote.packages : [];
-            shippingCost = freeEnabled && subtotal - discount >= freeThreshold ? 0 : Number(quote.price);
+            shippingCost = calculateCheckoutShippingCost(quote.price, subtotal, discount, freeEnabled);
         }
 
         const total = calculateServerOrderTotal(subtotal, discount, shippingCost);

@@ -5,7 +5,7 @@ const PublicSettingsContext = createContext(null);
 
 const DEFAULTS = {
     general: { store_name: "D'Helenas", trade_name: "", email: "", phone: "", whatsapp: "", logo: "", logo_dark: "" },
-    store: { top_bar_text: "Frete grátis acima de R$ 499 · Parcelamos em até 6x sem juros", free_shipping_threshold: 499, max_installments: 6, interest_free_installments: 6 },
+    store: { top_bar_text: "Frete grátis a partir de R$ 499 · Parcelamos em até 6x sem juros", free_shipping_threshold: 499, max_installments: 6, interest_free_installments: 6 },
     shipping: { free_shipping_enabled: true, free_shipping_threshold: 499, pickup_enabled: true, pickup_name: "Retirada no estoque" },
     social: { instagram: "", facebook: "", tiktok: "", whatsapp: "" },
     policies: { return_policy: "", privacy_policy: "", terms_of_use: "", shipping_policy: "" },
@@ -50,7 +50,7 @@ export function PublicSettingsProvider({ children }) {
 
     // Helper: free shipping threshold (uses shipping config, falls back to store config)
     const freeShippingThreshold = settings.shipping?.free_shipping_enabled
-        ? (settings.shipping?.free_shipping_threshold ?? settings.store?.free_shipping_threshold ?? 499)
+        ? 499
         : null;
 
     // Helper: is free shipping available for a given subtotal?

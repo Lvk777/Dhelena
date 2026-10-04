@@ -42,7 +42,7 @@ export default function StorefrontPreview({ position, banner, device: deviceProp
             <div className={`mx-auto bg-background border border-border rounded-lg overflow-hidden shadow-lg ${isMobile ? "max-w-[375px]" : "max-w-full"}`}>
                 {/* Top announcement bar */}
                 <div className="bg-[hsl(var(--rose))] text-white text-[8px] tracking-[0.25em] uppercase text-center py-1.5 px-4">
-                    Frete grátis acima de R$ 499
+                    Frete grátis a partir de R$ 499
                 </div>
 
                 {/* Header */}

@@ -1,4 +1,5 @@
 import { pool } from './config/db.js';
+import { effectiveSizes, stockForSize } from './lib/variantStock.js';
 
 // ─── Audit Log ─────────────────────────────────────────────────────
 export async function logAudit(adminId, action, entityType, entityId, changes, ip) {
@@ -59,18 +60,24 @@ export async function validateCoupon(code, userId, cartSubtotal, items) {
 
 // ─── Stock Adjust (admin manual) ───────────────────────────────────
 export async function adjustStock(client, productId, colorId, size, newStock, reason, adminId, orderId = null, type = 'adjust') {
-    const { rows: prodRows } = await client.query('SELECT colors FROM products WHERE id = $1 FOR UPDATE', [productId]);
+    const { rows: prodRows } = await client.query('SELECT colors, sizes FROM products WHERE id = $1 FOR UPDATE', [productId]);
     if (prodRows.length === 0) throw Object.assign(new Error('Produto não encontrado'), { status: 404 });
 
     const colors = prodRows[0].colors || [];
     const colorIdx = colors.findIndex(c => c.id === colorId);
     if (colorIdx === -1) throw Object.assign(new Error('Cor não encontrada'), { status: 404 });
 
-    const previousStock = colors[colorIdx].stock?.[size] ?? 0;
+    const product = prodRows[0];
+    if (!effectiveSizes(product).includes(size)
+        || !Number.isSafeInteger(newStock) || newStock < 0) {
+        throw Object.assign(new Error('Tamanho ou quantidade de estoque inválidos'), { status: 400 });
+    }
+    const previousStock = stockForSize(product, colors[colorIdx], size);
     const delta = newStock - previousStock;
 
     if (!colors[colorIdx].stock) colors[colorIdx].stock = {};
-    colors[colorIdx].stock[size] = newStock;
+    if (effectiveSizes(product).length === 1) colors[colorIdx].stock = { [size]: newStock };
+    else colors[colorIdx].stock[size] = newStock;
 
     await client.query('UPDATE products SET colors = $1, updated_date = now() WHERE id = $2', [JSON.stringify(colors), productId]);
 

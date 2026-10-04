@@ -31,7 +31,7 @@ function fixture(status = 'em_transito_retorno') {
             return { rows: [{ id: 'restore-1' }] };
         }
         if (sql.includes('FROM stock_restorations')) return { rows: [{ quantity: 0 }] };
-        if (sql.includes('SELECT colors FROM products')) return { rows: [{ colors: [
+        if (sql.includes('SELECT colors, sizes FROM products')) return { rows: [{ sizes: ['M'], colors: [
             { id: 'color-1', stock: { M: state.stock } },
         ] }] };
         if (sql.includes('UPDATE products SET colors')) {

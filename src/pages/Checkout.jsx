@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Check, CreditCard, QrCode, Banknote, Loader2 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
@@ -6,13 +6,14 @@ import { useCatalog } from "@/context/CatalogContext";
 import { useAuth } from "@/lib/AuthContext";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
 import { base44 } from "@/api/base44Client";
-import { COLOR_SWATCHES, formatBRL } from "@/data/products";
+import { COLOR_SWATCHES, formatBRL, stockFor } from "@/data/products";
 import AddressFields from "@/components/AddressFields";
 import { validateCPF, validateEmail, validatePhone, validateCEP, maskCPF, maskPhone } from "@/lib/forms";
 import { track } from "@/lib/analytics";
 import ShippingStep from "@/components/checkout/ShippingStep";
 import PixPaymentScreen from "@/components/checkout/PixPaymentScreen";
 import CardPaymentBrick from "@/components/checkout/CardPaymentBrick";
+import { selectedDelivery, selectedDeliveryCost, shippingContextKey } from "@/lib/shippingSelection";
 
 const STEPS = ["Identificação", "Endereço", "Entrega", "Pagamento"];
 
@@ -20,7 +21,7 @@ export default function Checkout() {
     const { cart, clearCart, couponCode, couponResult } = useStore();
     const { products } = useCatalog();
     const { user } = useAuth();
-    const { isFreeShipping, publicSettings } = usePublicSettings();
+    const { settings: publicSettings } = usePublicSettings();
 
     const [step, setStep] = useState(0);
     const [idempotencyKey] = useState(() => "dh_" + Date.now() + "_" + Math.random().toString(36).slice(2));
@@ -29,14 +30,24 @@ export default function Checkout() {
         cep: "", street: "", number: "", complement: "", district: "", city: "", state: "SP",
     });
     const [shipping, setShipping] = useState({ method: "", cost: null, carrier: null, serviceName: null, deliveryTime: null, quoteId: null });
+    const [quoteLoading, setQuoteLoading] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState("");
     const [paymentMethods, setPaymentMethods] = useState(null);
+    const [paymentLoadError, setPaymentLoadError] = useState("");
     const [done, setDone] = useState(false);
     const [order, setOrder] = useState(null);
     const [placing, setPlacing] = useState(false);
+    const placingRef = useRef(false);
     const [errors, setErrors] = useState(/** @type {Record<string, any>} */ ({}));
     const [orderError, setOrderError] = useState("");
     const [paymentScreen, setPaymentScreen] = useState(null); // null | 'pix' | 'card'
+    const shippingKey = shippingContextKey(form.cep, cart, couponCode);
+
+    useEffect(() => {
+        setShipping((current) => current.method === "melhor_envio"
+            ? { method: "", cost: null, carrier: null, serviceName: null, deliveryTime: null, quoteId: null }
+            : current);
+    }, [shippingKey]);
 
     useEffect(() => { track("begin_checkout"); }, []);
 
@@ -60,35 +71,37 @@ export default function Checkout() {
     }, [step]);
 
     const loadPaymentMethods = async () => {
+        setPaymentLoadError("");
         try {
             const res = await base44.functions.invoke("getPaymentMethods");
             setPaymentMethods(res);
-            // Auto-select first available method
-            if (res.enabled?.pix && !paymentMethod) setPaymentMethod("pix");
-            else if (res.enabled?.credit_card && !paymentMethod) setPaymentMethod("credito");
-            else if (res.enabled?.debit_card && !paymentMethod) setPaymentMethod("debito");
+            setPaymentMethod((selected) => {
+                const key = { pix: "pix", credito: "credit_card", debito: "debit_card" }[selected];
+                return key && res.enabled?.[key] ? selected : "";
+            });
         } catch (e) {
-            setOrderError("Não foi possível carregar métodos de pagamento. Tente novamente.");
+            setPaymentLoadError("Não foi possível carregar as formas de pagamento.");
         }
     };
 
     const lines = cart.map((i) => ({ ...i, product: products.find((p) => p.id === i.productId) })).filter((l) => l.product);
+    const invalidLines = lines.filter((line) => !Number.isInteger(line.qty) || line.qty <= 0
+        || stockFor(line.product, line.colorId, line.size) < line.qty);
     const subtotal = lines.reduce((s, l) => s + (l.product.salePrice || l.product.price) * l.qty, 0);
     const couponDiscount = couponResult?.valid ? (couponResult.discount || 0) : 0;
     const freeShippingFromCoupon = couponResult?.valid && couponResult.freeShipping;
-    const freeShippingThreshold = publicSettings?.shipping?.free_shipping_threshold || 499;
+    const freeShippingThreshold = 499;
     const freeShippingEnabled = publicSettings?.shipping?.free_shipping_enabled !== false;
     const pickupEnabled = publicSettings?.shipping?.pickup_enabled;
     const pickupName = publicSettings?.shipping?.pickup_name;
     const pickupTime = publicSettings?.shipping?.pickup_time;
 
-    // Shipping cost: use selected quote, or free shipping threshold, or default
-    const shippingCost = shipping.method === "retirada" ? 0
-        : shipping.cost !== null ? shipping.cost
-        : (freeShippingFromCoupon || (freeShippingEnabled && subtotal - couponDiscount >= freeShippingThreshold)) ? 0
-        : 0; // No shipping selected yet
+    const hasFreeShipping = freeShippingFromCoupon || (freeShippingEnabled && subtotal - couponDiscount >= freeShippingThreshold);
+    // Only a selected service can contribute a shipping amount.
+    const currentShipping = selectedDelivery(shipping, shippingKey);
+    const shippingCost = selectedDeliveryCost(shipping, shippingKey, hasFreeShipping);
 
-    const total = subtotal - couponDiscount + (shippingCost || 0);
+    const total = subtotal - couponDiscount + (shippingCost ?? 0);
 
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -108,10 +121,12 @@ export default function Checkout() {
             if (!form.city.trim()) e.city = "Informe a cidade";
         }
         if (s === 2) {
-            if (!shipping.method) e.shipping = "Selecione uma opção de entrega";
+            if (quoteLoading && currentShipping?.method !== "retirada") e.shipping = "Aguarde a cotação de frete";
+            else if (!currentShipping) e.shipping = "Selecione uma opção de entrega";
         }
         if (s === 3) {
-            if (!paymentMethod) e.payment = "Selecione um método de pagamento";
+            const enabledKey = { pix: "pix", credito: "credit_card", debito: "debit_card" }[paymentMethod];
+            if (!enabledKey || !paymentMethods?.enabled?.[enabledKey]) e.payment = "Selecione um método de pagamento disponível";
         }
         setErrors(e);
         return Object.keys(e).length === 0;
@@ -134,15 +149,19 @@ export default function Checkout() {
             },
             items: cart.map((i) => ({ productId: i.productId, colorId: i.colorId, size: i.size, qty: i.qty })),
             payment_method: paymentMethod === "pix" ? "pix" : paymentMethod === "credito" ? "credito" : "debito",
-            shipping_method: shipping.method,
-            shipping_quote_id: shipping.quoteId,
+            shipping_method: currentShipping?.method,
+            shipping_quote_id: currentShipping?.quoteId,
             coupon_code: couponCode || "",
         });
         return res;
     };
 
     const finish = async () => {
+        if (placingRef.current) return;
+        if (invalidLines.length || lines.length !== cart.length) { setOrderError("Revise os itens e o estoque da sacola antes de continuar."); return; }
+        if (!validateStep(2)) { setStep(2); return; }
         if (!validateStep(3)) return;
+        placingRef.current = true;
         setPlacing(true);
         setOrderError("");
         try {
@@ -159,6 +178,7 @@ export default function Checkout() {
         } catch (e) {
             setOrderError(e.response?.data?.error || e.message || "Erro ao finalizar pedido");
         } finally {
+            placingRef.current = false;
             setPlacing(false);
         }
     };
@@ -213,7 +233,8 @@ export default function Checkout() {
                     order={order}
                     publicKey={paymentMethods?.public_key}
                     amount={order.total}
-                    maxInstallments={isDebit ? 1 : (publicSettings?.payments?.max_installments || 12)}
+                    maxInstallments={isDebit ? 1 : (paymentMethods?.max_installments || 6)}
+                    isDebit={isDebit}
                     onApproved={onPaymentApproved}
                     onRejected={() => {}}
                 />
@@ -287,10 +308,14 @@ export default function Checkout() {
                             <ShippingStep
                                 cep={form.cep}
                                 products={lines}
-                                totalValue={subtotal}
-                                shippingMethod={shipping.method}
+                                quoteContextKey={shippingKey}
+                                shippingMethod={currentShipping?.method}
+                                shippingQuoteId={currentShipping?.quoteId}
+                                shippingCost={currentShipping?.cost}
+                                freeShipping={hasFreeShipping}
+                                onQuoteLoading={setQuoteLoading}
                                 onShippingSelect={(s) => {
-                                    setShipping(s);
+                                    setShipping(s.method === "melhor_envio" ? { ...s, contextKey: shippingKey } : s);
                                     setErrors((e) => ({ ...e, shipping: undefined }));
                                 }}
                                 pickupEnabled={pickupEnabled}
@@ -305,32 +330,27 @@ export default function Checkout() {
                     {step === 3 && (
                         <div className="space-y-5">
                             <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Forma de pagamento</h2>
-                            {!paymentMethods ? (
+                            {paymentLoadError && <div role="alert" className="text-sm text-destructive">{paymentLoadError} <button type="button" onClick={loadPaymentMethods} className="underline min-h-11">Tentar novamente</button></div>}
+                            {!paymentMethods && !paymentLoadError ? (
                                 <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                     <Loader2 className="w-4 h-4 animate-spin" /> Carregando métodos de pagamento...
                                 </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {paymentMethods.enabled?.pix && (
-                                        <PayOption selected={paymentMethod === "pix"} onClick={() => setPaymentMethod("pix")} icon={QrCode} title="Pix" desc="Pagamento instantâneo com QR Code" />
-                                    )}
-                                    {paymentMethods.enabled?.credit_card && (
-                                        <PayOption selected={paymentMethod === "credito"} onClick={() => setPaymentMethod("credito")} icon={CreditCard} title="Cartão de crédito" desc="Parcele em até 12x (Card Payment Brick)" />
-                                    )}
-                                    {paymentMethods.enabled?.debit_card && (
-                                        <PayOption selected={paymentMethod === "debito"} onClick={() => setPaymentMethod("debito")} icon={Banknote} title="Cartão de débito" desc="À vista" />
-                                    )}
+                            ) : paymentMethods ? (
+                                <div className="space-y-3" role="radiogroup" aria-label="Forma de pagamento">
+                                    <PayOption selected={paymentMethod === "pix"} disabled={!paymentMethods.enabled?.pix} onClick={() => setPaymentMethod("pix")} icon={QrCode} title="Pix" desc="Pagamento instantâneo com QR Code" />
+                                    <PayOption selected={paymentMethod === "credito"} disabled={!paymentMethods.enabled?.credit_card} onClick={() => setPaymentMethod("credito")} icon={CreditCard} title="Cartão de crédito" desc={`Parcele em até ${paymentMethods?.max_installments || 6}x, conforme as opções disponíveis no cartão`} />
+                                    <PayOption selected={paymentMethod === "debito"} disabled={!paymentMethods.enabled?.debit_card} onClick={() => setPaymentMethod("debito")} icon={Banknote} title="Cartão de débito" desc="Pagamento à vista" />
                                     {!paymentMethods.enabled?.pix && !paymentMethods.enabled?.credit_card && !paymentMethods.enabled?.debit_card && (
                                         <div className="p-4 border border-amber-500/30 bg-amber-500/5 text-sm text-amber-700">
                                             Nenhum método de pagamento disponível. Verifique a configuração do Mercado Pago no admin.
                                         </div>
                                     )}
                                 </div>
-                            )}
+                            ) : null}
                             {errors.payment && <p className="text-[11px] text-[hsl(var(--rose))]">{errors.payment}</p>}
                             <div className="p-4 bg-[hsl(var(--bone))] text-xs text-muted-foreground leading-relaxed">
                                 <p>Ao confirmar, seu pedido será criado e o pagamento processado pelo Mercado Pago.</p>
-                                <p className="mt-1">O valor final é calculado e validado pelo backend — o frontend não define o preço.</p>
+                                <p className="mt-1">Você verá o valor confirmado antes de pagar.</p>
                             </div>
                         </div>
                     )}
@@ -364,7 +384,7 @@ export default function Checkout() {
                                     <div className="flex-1 text-sm">
                                         <p className="font-medium leading-tight">{l.product.name}</p>
                                         <p className="text-[11px] text-muted-foreground">{COLOR_SWATCHES[l.colorId]?.name} · {l.size} · {l.qty}x</p>
-                                        <p className="text-sm mt-1">{formatBRL(l.product.price * l.qty)}</p>
+                                        <p className="text-sm mt-1">{formatBRL((l.product.salePrice ?? l.product.price) * l.qty)}</p>
                                     </div>
                                 </div>
                             ))}
@@ -374,10 +394,10 @@ export default function Checkout() {
                             {couponDiscount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Cupom ({couponCode})</span><span className="text-[hsl(var(--rose))]">- {formatBRL(couponDiscount)}</span></div>}
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Frete</span>
-                                <span>{shipping.method === "retirada" ? "Grátis" : shipping.cost !== null ? formatBRL(shipping.cost) : "—"}</span>
+                                <span>{currentShipping ? (shippingCost === 0 ? "Grátis" : formatBRL(shippingCost)) : "Selecione a entrega"}</span>
                             </div>
                             <div className="flex justify-between pt-3 border-t border-border text-base font-medium">
-                                <span>Total</span><span>{formatBRL(total)}</span>
+                                <span>{currentShipping ? "Total estimado" : "Total parcial"}</span><span>{formatBRL(total)}</span>
                             </div>
                         </div>
                     </div>
@@ -401,13 +421,13 @@ function Field({ label, value, onChange, full = false, error = "" }) {
     );
 }
 
-function PayOption({ selected, onClick, icon: Icon, title, desc }) {
+function PayOption({ selected, disabled, onClick, icon: Icon, title, desc }) {
     return (
-        <button onClick={onClick} className={`w-full flex items-center gap-4 p-5 border text-left transition-colors ${selected ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))]/5" : "border-border hover:border-foreground/40"}`}>
+        <button type="button" role="radio" aria-checked={selected} disabled={disabled} onClick={onClick} className={`w-full flex items-center gap-4 p-5 border text-left min-h-14 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${selected ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))]/5" : "border-border hover:border-foreground/40"}`}>
             <Icon className="w-5 h-5 text-[hsl(var(--gold))]" strokeWidth={1.25} />
             <div className="flex-1">
                 <p className="text-sm font-medium">{title}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{disabled ? "Indisponível no momento" : desc}</p>
             </div>
             <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selected ? "border-[hsl(var(--gold))]" : "border-border"}`}>
                 {selected && <div className="w-2.5 h-2.5 rounded-full bg-[hsl(var(--gold))]" />}

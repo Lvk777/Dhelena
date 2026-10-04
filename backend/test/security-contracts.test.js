@@ -20,7 +20,7 @@ import {
 } from '../src/services/melhorEnvio.js';
 import { buildShippingPackages, getCheckoutShippingInput, getPersistedShippingService, selectShippingQuote } from '../src/lib/shipping.js';
 import { assertLabelEligible } from '../src/lib/shipping.js';
-import { ALLOWED_SETTING_KEYS, buildFilter, buildSort, CATALOG_FILTER_FIELDS, CATALOG_SORT_FIELDS, PUBLIC_SETTING_KEYS } from '../src/routes/catalog.js';
+import { ALLOWED_SETTING_KEYS, buildFilter, buildSort, CATALOG_FILTER_FIELDS, CATALOG_SORT_FIELDS, PUBLIC_SETTING_KEYS, validateProductForPublication } from '../src/routes/catalog.js';
 import { createWebhookEventId, isVerifiedPaymentForOrder } from '../src/routes/webhooks.js';
 import webhookRouter from '../src/routes/webhooks.js';
 import { getVerifiedPaymentForOrder, hasPaymentStateChanged } from '../src/lib/paymentVerification.js';
@@ -28,9 +28,13 @@ import { applyVerifiedOrderInTransaction, reconciliationPlan, recordVerifiedNonA
 import { assertMatchingIdempotencyRequest, createOrderRequestFingerprint, normalizeIdempotencyKey } from '../src/lib/idempotency.js';
 import { getMaintenanceRedirect } from '../../src/lib/maintenance.js';
 import { buildPlaceOrderRequest } from '../../src/api/orderRequest.js';
-import { calculateServerOrderTotal, resolveCatalogLine } from '../src/lib/orderPricing.js';
-import { validateCoupon } from '../src/services.js';
+import { calculateCheckoutShippingCost, calculateServerOrderTotal, resolveCatalogLine } from '../src/lib/orderPricing.js';
+import { adjustStock, validateCoupon } from '../src/services.js';
 import { pool } from '../src/config/db.js';
+import { stockFor } from '../../src/data/products.js';
+import { reserveVariantStock, restoreVariantStock, stockForSize } from '../src/lib/variantStock.js';
+import { selectedDelivery, selectedDeliveryCost, shippingContextKey } from '../../src/lib/shippingSelection.js';
+import { validateCardPaymentChoice } from '../src/lib/paymentChoice.js';
 
 test('birth date accepts only real dates with a four-digit, non-future year', () => {
     assert.equal(normalizeBirthDate('12/03/1990'), '1990-03-12');
@@ -43,6 +47,26 @@ test('birth date accepts only real dates with a four-digit, non-future year', ()
     assert.throws(() => normalizeBirthDate('1990-02-29'));
 });
 
+test('free shipping uses the discounted eligible subtotal at the exact R$ 499 boundary', () => {
+    assert.equal(calculateCheckoutShippingCost(29.9, 498.99, 0, true), 29.9);
+    assert.equal(calculateCheckoutShippingCost(29.9, 499, 0, true), 0);
+    assert.equal(calculateCheckoutShippingCost(29.9, 520, 21, true), 0);
+    assert.equal(calculateCheckoutShippingCost(29.9, 520, 21.01, true), 29.9);
+    assert.equal(calculateCheckoutShippingCost(29.9, 520, 0, false), 29.9);
+});
+
+test('publication rejects variants whose sizes and stock keys diverge', () => {
+    const product = { status: 'published', price: 120, weight: 0.2, package_height: 10, package_width: 15, package_length: 20,
+        sizes: ['Único'], colors: [{ id: 'preto', name: 'Preto', stock: { 'Único': 2 } }] };
+    assert.doesNotThrow(() => validateProductForPublication(product));
+    assert.throws(() => validateProductForPublication({ ...product, sizes: ['P'] }), /Estoque e tamanhos/);
+    assert.throws(() => validateProductForPublication({ ...product, sale_price: 0 }), /Preço promocional/);
+    assert.throws(() => validateProductForPublication({ ...product, sale_price: 130 }), /Preço promocional/);
+    assert.throws(() => validateProductForPublication({ ...product, package_width: 0 }), /dimensões/);
+    assert.throws(() => validateProductForPublication({ ...product, colors: [{ id: 'preto', name: 'Preto', stock: { PP: 2 } }] }), /Estoque e tamanhos/);
+    assert.doesNotThrow(() => validateProductForPublication({ ...product, status: 'draft', sizes: ['P'] }));
+});
+
 test('Mercado Pago service mock preserves amount, external reference and idempotency contracts', async () => {
     const originalFetch = global.fetch;
     const originalToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
@@ -52,6 +76,7 @@ test('Mercado Pago service mock preserves amount, external reference and idempot
         { id: 'mp-approved', external_reference: 'DH-1', transactions: { payments: [{ id: 'p-approved', status: 'approved', installments: 3 }] } },
         { id: 'mp-rejected', external_reference: 'DH-2', transactions: { payments: [{ id: 'p-rejected', status: 'rejected', installments: 1 }] } },
         { id: 'mp-pending', external_reference: 'DH-3', transactions: { payments: [{ id: 'p-pending', status: 'pending', payment_method: { qr_code: 'mock-qr' } }] } },
+        { id: 'mp-debit', external_reference: 'DH-4', transactions: { payments: [{ id: 'p-debit', status: 'approved', installments: 1 }] } },
     ];
     global.fetch = async (url, options) => {
         calls.push({ url, options, body: JSON.parse(options.body) });
@@ -59,16 +84,20 @@ test('Mercado Pago service mock preserves amount, external reference and idempot
     };
     try {
         const payer = { email: 'customer@example.invalid', first_name: 'Test', last_name: 'User', identification: { type: 'CPF', number: '00000000000' } };
-        const approved = await createCardPayment({ orderNumber: 'DH-1', total: 120.5, payer, cardToken: 'mock-card-token', installments: 3, paymentMethodId: 'visa', idempotencyKey: 'card-DH-1' });
-        const rejected = await createCardPayment({ orderNumber: 'DH-2', total: 80, payer, cardToken: 'mock-card-token', installments: 1, paymentMethodId: 'visa', idempotencyKey: 'card-DH-2' });
+        const approved = await createCardPayment({ orderNumber: 'DH-1', total: 120.5, payer, cardToken: 'mock-card-token', installments: 3, paymentMethodId: 'visa', paymentType: 'credit_card', idempotencyKey: 'card-DH-1' });
+        const rejected = await createCardPayment({ orderNumber: 'DH-2', total: 80, payer, cardToken: 'mock-card-token', installments: 1, paymentMethodId: 'visa', paymentType: 'credit_card', idempotencyKey: 'card-DH-2' });
         const pending = await createPixPayment({ orderNumber: 'DH-3', total: 40, payer, idempotencyKey: 'pix-DH-3' });
+        const debit = await createCardPayment({ orderNumber: 'DH-4', total: 40, payer, cardToken: 'mock-card-token', installments: 1, paymentMethodId: 'debvisa', paymentType: 'debit_card', idempotencyKey: 'card-DH-4' });
         assert.equal(approved.mp_status, 'approved');
         assert.equal(rejected.mp_status, 'rejected');
         assert.equal(pending.mp_status, 'pending');
         assert.equal(pending.pix_qr_code, 'mock-qr');
-        assert.deepEqual(calls.map(c => c.options.headers['X-Idempotency-Key']), ['card-DH-1', 'card-DH-2', 'pix-DH-3']);
-        assert.deepEqual(calls.map(c => c.body.external_reference), ['DH-1', 'DH-2', 'DH-3']);
-        assert.deepEqual(calls.map(c => c.body.total_amount), ['120.50', '80.00', '40.00']);
+        assert.equal(debit.mp_status, 'approved');
+        assert.equal(calls[0].body.processing_mode, 'automatic');
+        assert.equal(calls[3].body.transactions.payments[0].payment_method.type, 'debit_card');
+        assert.deepEqual(calls.map(c => c.options.headers['X-Idempotency-Key']), ['card-DH-1', 'card-DH-2', 'pix-DH-3', 'card-DH-4']);
+        assert.deepEqual(calls.map(c => c.body.external_reference), ['DH-1', 'DH-2', 'DH-3', 'DH-4']);
+        assert.deepEqual(calls.map(c => c.body.total_amount), ['120.50', '80.00', '40.00', '40.00']);
         assert.equal(calls[2].body.processing_mode, 'automatic');
         assert.equal(mapPaymentStatus('approved'), 'approved');
         assert.equal(mapPaymentStatus('rejected'), 'rejected');
@@ -504,6 +533,7 @@ test('checkout propagates its idempotency key in the API header, not the JSON bo
 test('catalog price, stock and server totals cannot be imposed by the browser', () => {
     const catalogProduct = {
         name: 'Vestido', price: '200.00', sale_price: '150.00',
+        sizes: ['M'],
         colors: [{ id: 'black', name: 'Preto', stock: { M: 2 } }],
     };
     const browserLine = { productId: 'product-1', colorId: 'black', size: 'M', qty: 2, price: 0.01, subtotal: 0.02 };
@@ -512,6 +542,82 @@ test('catalog price, stock and server totals cannot be imposed by the browser', 
     assert.equal(resolved.itemSubtotal, 300);
     assert.equal(calculateServerOrderTotal(resolved.itemSubtotal, 30, 24.5), 294.5);
     assert.throws(() => resolveCatalogLine(catalogProduct, { ...browserLine, qty: 3 }), error => error.status === 409);
+});
+
+test('legacy single-size stock is reserved and restored without rewriting stock keys', () => {
+    const bag = { name: 'Bolsa', price: '180.00', sizes: ['Único'], colors: [
+        { id: 'rosa', name: 'Rosa', stock: { PP: 5, P: 5, M: 5, G: 5, GG: 5 } },
+    ] };
+    const line = resolveCatalogLine(bag, { colorId: 'rosa', size: 'Único', qty: 2 });
+    assert.equal(line.currentStock, 25);
+    assert.equal(stockFor(bag, 'rosa', 'Único'), 25);
+    const beforeKeys = Object.keys(bag.colors[0].stock);
+    assert.deepEqual(reserveVariantStock(bag, bag.colors[0], 'Único', 7), { previousStock: 25, newStock: 18 });
+    assert.deepEqual(Object.keys(bag.colors[0].stock), beforeKeys);
+    assert.equal(stockForSize(bag, bag.colors[0], 'Único'), 18);
+    assert.deepEqual(restoreVariantStock(bag, bag.colors[0], 'Único', 7), { previousStock: 18, newStock: 25 });
+    assert.equal(stockFor(bag, 'rosa', 'Único'), 25);
+    assert.deepEqual(Object.keys(bag.colors[0].stock), beforeKeys);
+    assert.throws(() => reserveVariantStock(bag, bag.colors[0], 'Único', 26), /Estoque insuficiente/);
+    assert.throws(() => resolveCatalogLine(bag, { colorId: 'rosa', size: 'PP', qty: 1 }), /Tamanho indisponível/);
+});
+
+test('sequential reservations from a locked product row cannot oversell the last unit', () => {
+    const product = { sizes: ['Único'], colors: [{ id: 'rosa', stock: { PP: 1, P: 0 } }] };
+    const color = product.colors[0];
+    assert.equal(reserveVariantStock(product, color, 'Único', 1).newStock, 0);
+    assert.throws(() => reserveVariantStock(product, color, 'Único', 1), /Estoque insuficiente/);
+    assert.equal(stockForSize(product, color, 'Único'), 0);
+});
+
+test('a size-less legacy accessory uses a single sellable variant', () => {
+    const product = { name: 'Colar', price: 100, sizes: [], colors: [{ id: 'dourado', name: 'Dourado', stock: { PP: 2 } }] };
+    assert.equal(resolveCatalogLine(product, { colorId: 'dourado', size: 'Único', qty: 1 }).currentStock, 2);
+    assert.equal(stockFor(product, 'dourado', 'Único'), 2);
+});
+
+test('admin adjustment converts legacy stock explicitly without changing its total by accident', async () => {
+    const product = { sizes: ['Único'], colors: [{ id: 'rosa', stock: { PP: 5, P: 5 } }] };
+    const client = { query: async (sql, values) => {
+        if (sql.includes('SELECT colors, sizes')) return { rows: [product] };
+        if (sql.includes('UPDATE products')) { product.colors = JSON.parse(values[0]); return { rows: [] }; }
+        return { rows: [] };
+    } };
+    assert.deepEqual(await adjustStock(client, 'product-1', 'rosa', 'Único', 8, 'Correção', 'admin-1'),
+        { previousStock: 10, newStock: 8, delta: -2 });
+    assert.deepEqual(product.colors[0].stock, { 'Único': 8 });
+    assert.equal(stockForSize(product, product.colors[0], 'Único'), 8);
+    await assert.rejects(adjustStock(client, 'product-1', 'rosa', 'PP', 1, 'Erro', 'admin-1'), /Tamanho/);
+});
+
+test('delivery selection is exclusive and expires with CEP, cart or coupon changes', () => {
+    const cart = [{ productId: 'bag', colorId: 'rosa', size: 'Único', qty: 1 }];
+    const key = shippingContextKey('01234-567', cart);
+    const first = { method: 'melhor_envio', quoteId: 'one', cost: 20, contextKey: key };
+    const second = { method: 'melhor_envio', quoteId: 'two', cost: 30, contextKey: key };
+    assert.equal(selectedDeliveryCost(first, key, false), 20);
+    assert.equal(selectedDeliveryCost(second, key, false), 30);
+    assert.equal(selectedDeliveryCost(second, key, true), 0);
+    assert.equal(selectedDelivery(second, shippingContextKey('', cart)), null);
+    assert.equal(selectedDelivery(second, shippingContextKey('99999-999', cart)), null);
+    assert.equal(selectedDelivery(second, shippingContextKey('01234-567', [{ ...cart[0], qty: 2 }])), null);
+    assert.equal(selectedDelivery(second, shippingContextKey('01234-567', cart, 'CUPOM')), null);
+});
+
+test('credit and debit choices match provider type and supported installments', () => {
+    const methods = [
+        { id: 'visa', payment_type_id: 'credit_card' },
+        { id: 'debvisa', payment_type_id: 'debit_card' },
+    ];
+    const config = { card_enabled: true, debit_card_enabled: true, max_installments: 6 };
+    assert.deepEqual(validateCardPaymentChoice('credito', methods, 'visa', 6, config),
+        { paymentType: 'credit_card', installments: 6 });
+    assert.deepEqual(validateCardPaymentChoice('debito', methods, 'debvisa', 1, config),
+        { paymentType: 'debit_card', installments: 1 });
+    assert.throws(() => validateCardPaymentChoice('debito', methods, 'visa', 1, config), /Tipo de cartão/);
+    assert.throws(() => validateCardPaymentChoice('debito', methods, 'debvisa', 2, config), /à vista/);
+    assert.throws(() => validateCardPaymentChoice('credito', methods, 'visa', 7, config), /Parcelamento/);
+    assert.throws(() => validateCardPaymentChoice('pix', methods, 'visa', 1, config), /não aceita/);
 });
 
 test('unknown coupon is rejected by the server lookup', async () => {

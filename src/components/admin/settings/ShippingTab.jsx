@@ -38,9 +38,9 @@ export default function ShippingTab({ data, onChange }) {
 
             <AdminFormSection title="Frete grátis">
                 <div className="sm:col-span-2">
-                    <AdminToggle label="Ativar frete grátis" checked={data.free_shipping_enabled} onChange={(v) => set("free_shipping_enabled", v)} description="Oferece frete grátis acima de um valor mínimo" />
+                    <AdminToggle label="Ativar frete grátis" checked={data.free_shipping_enabled} onChange={(v) => set("free_shipping_enabled", v)} description="Oferece frete grátis a partir de R$ 499 após descontos" />
                 </div>
-                <AdminInput label="Valor mínimo para frete grátis (R$)" type="number" value={data.free_shipping_threshold} onChange={(v) => set("free_shipping_threshold", parseFloat(v) || 0)} />
+                <p className="text-sm text-muted-foreground">Frete grátis para pedidos de R$ 499 ou mais, após descontos. A regra é aplicada no servidor.</p>
                 <div />
             </AdminFormSection>
 

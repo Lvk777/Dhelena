@@ -94,7 +94,7 @@ test('stock is restored only once per item and never beyond purchased quantity',
             return { rows: insertions === 1 ? [{ id: 'restore-1' }] : [] };
         }
         if (sql.includes('FROM stock_restorations')) return { rows: [{ quantity: 0 }] };
-        if (sql.includes('SELECT colors FROM products')) return { rows: [{ colors: [
+        if (sql.includes('SELECT colors, sizes FROM products')) return { rows: [{ sizes: ['M'], colors: [
             { id: 'color-1', stock: { M: stock } },
         ] }] };
         if (sql.includes('UPDATE products')) { stock++; return { rows: [] }; }
@@ -117,7 +117,7 @@ test('receiving the same return twice cannot restock twice', async () => {
             return { rows: [{ id: 'restore-return-1' }] };
         }
         if (sql.includes('FROM stock_restorations')) return { rows: [{ quantity: 0 }] };
-        if (sql.includes('SELECT colors FROM products')) return { rows: [{ colors: [{ id: 'color-1', stock: { M: stock } }] }] };
+        if (sql.includes('SELECT colors, sizes FROM products')) return { rows: [{ sizes: ['M'], colors: [{ id: 'color-1', stock: { M: stock } }] }] };
         if (sql.includes('UPDATE products')) { stock++; return { rows: [] }; }
         return { rows: [] };
     } };
@@ -125,6 +125,26 @@ test('receiving the same return twice cannot restock twice', async () => {
     assert.equal(await restoreStock(client, order, item, 1, 'return', 'return-item-1'), true);
     assert.equal(await restoreStock(client, order, item, 1, 'return', 'return-item-1'), false);
     assert.equal(stock, 4);
+});
+
+test('cancellation restores a legacy Único item once without duplicating its bins', async () => {
+    let stock = { PP: 2, P: 1 };
+    let inserted = false;
+    const client = { query: async (sql, values) => {
+        if (sql.includes('INSERT INTO stock_restorations')) {
+            if (inserted) return { rows: [] };
+            inserted = true;
+            return { rows: [{ id: 'restore-legacy' }] };
+        }
+        if (sql.includes('FROM stock_restorations')) return { rows: [{ quantity: 0 }] };
+        if (sql.includes('SELECT colors, sizes FROM products')) return { rows: [{ sizes: ['Único'], colors: [{ id: 'rosa', stock: { ...stock } }] }] };
+        if (sql.includes('UPDATE products')) { stock = JSON.parse(values[0])[0].stock; return { rows: [] }; }
+        return { rows: [] };
+    } };
+    const item = { id: 'item-legacy', product_id: 'product-legacy', color_id: 'rosa', size: 'Único', quantity: 1 };
+    assert.equal(await restoreStock(client, order, item, 1, 'cancellation'), true);
+    assert.equal(await restoreStock(client, order, item, 1, 'cancellation'), false);
+    assert.deepEqual(stock, { PP: 3, P: 1 });
 });
 
 test('concurrent cancellation restoration still applies one stock increment', async () => {
@@ -138,7 +158,7 @@ test('concurrent cancellation restoration still applies one stock increment', as
             return { rows: [{ id: 'one' }] };
         }
         if (sql.includes('FROM stock_restorations')) return { rows: [{ quantity: 0 }] };
-        if (sql.includes('SELECT colors FROM products')) return { rows: [{ colors: [{ id: 'color-1', stock: { M: 2 } }] }] };
+        if (sql.includes('SELECT colors, sizes FROM products')) return { rows: [{ sizes: ['M'], colors: [{ id: 'color-1', stock: { M: 2 } }] }] };
         if (sql.includes('UPDATE products')) updates++;
         return { rows: [] };
     } };

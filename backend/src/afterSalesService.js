@@ -6,6 +6,7 @@ import {
 } from './lib/afterSalesPolicy.js';
 import { isAuthorizedTestOrder, isAuthorizedTestRefund } from './lib/testRefundScope.js';
 import { isRefundPhysicalBaseline, loadRefundPhysicalState } from './lib/refundPhysicalState.js';
+import { restoreVariantStock } from './lib/variantStock.js';
 
 const queryOne = async (client, sql, values) => (await client.query(sql, values)).rows[0];
 const processedAmount = rows => rows.filter(row => row.status === 'processed')
@@ -222,14 +223,12 @@ export async function restoreStock(client, order, item, quantity, source, return
     if (priorRestored.quantity + quantity > item.quantity) {
         throw afterSalesError('Reposição excede quantidade comprada');
     }
-    const product = await queryOne(client, 'SELECT colors FROM products WHERE id = $1 FOR UPDATE', [item.product_id]);
+    const product = await queryOne(client, 'SELECT colors, sizes FROM products WHERE id = $1 FOR UPDATE', [item.product_id]);
     if (!product) throw afterSalesError('Produto ausente; estoque exige reconciliação');
     const colors = product.colors || [];
     const color = colors.find(value => value.id === item.color_id);
     if (!color) throw afterSalesError('Variação ausente; estoque exige reconciliação');
-    const prior = Number(color.stock?.[item.size] || 0);
-    color.stock ||= {};
-    color.stock[item.size] = prior + quantity;
+    const { previousStock: prior, newStock } = restoreVariantStock(product, color, item.size, quantity);
     await client.query(
         'UPDATE products SET colors = $1, sold_count = GREATEST(0, sold_count - $2), updated_date = now() WHERE id = $3',
         [JSON.stringify(colors), quantity, item.product_id]);
@@ -238,7 +237,7 @@ export async function restoreStock(client, order, item, quantity, source, return
          (product_id, order_id, type, quantity, color_id, size, previous_stock, new_stock, reason, admin_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [item.product_id, order.id, source === 'return' ? 'return' : 'cancel', quantity,
-            item.color_id, item.size, prior, prior + quantity, source, actorId]);
+            item.color_id, item.size, prior, newStock, source, actorId]);
     return true;
 }
 

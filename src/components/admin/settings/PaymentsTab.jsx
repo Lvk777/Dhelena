@@ -3,7 +3,6 @@ import { CreditCard, Loader2, Check, X, QrCode, Banknote } from "lucide-react";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminToggle from "@/components/admin/AdminToggle";
-import AdminSelect from "@/components/admin/AdminSelect";
 import { base44 } from "@/api/base44Client";
 
 export default function PaymentsTab({ data, onChange }) {
@@ -44,9 +43,9 @@ export default function PaymentsTab({ data, onChange }) {
         <div className="space-y-5">
             <AdminFormSection title="Mercado Pago" icon={CreditCard} description="Gateway de pagamento — Checkout Transparente via Orders API">
                 <div className="sm:col-span-2">
-                    <AdminToggle label="Ativar Mercado Pago" checked={data.mercado_pago_enabled} onChange={(v) => set("mercado_pago_enabled", v)} description="Processa pagamentos via Pix, cartão e boleto" />
+                    <p className="text-sm text-muted-foreground">O ambiente de pagamento é definido no servidor. Os métodos abaixo dependem da disponibilidade da conta Mercado Pago.</p>
                 </div>
-                <AdminSelect label="Ambiente" value={data.mercado_pago_mode} onChange={(v) => set("mercado_pago_mode", v)} options={[{ value: "sandbox", label: "Sandbox (teste)" }, { value: "production", label: "Produção" }]} />
+                <p className="text-sm">Ambiente detectado: {methodsInfo?.environment || "Não confirmado"}</p>
                 <div />
             </AdminFormSection>
 
@@ -55,14 +54,12 @@ export default function PaymentsTab({ data, onChange }) {
                     <AdminToggle label="Pix" icon={QrCode} checked={data.pix_enabled} onChange={(v) => set("pix_enabled", v)} description="Pagamento instantâneo com QR Code" />
                     <AdminToggle label="Cartão de crédito" checked={data.card_enabled} onChange={(v) => set("card_enabled", v)} description="Pagamento via cartão com parcelamento (Card Payment Brick)" />
                     <AdminToggle label="Cartão de débito" checked={data.debit_card_enabled} onChange={(v) => set("debit_card_enabled", v)} description="Somente se disponível na conta Mercado Pago" />
-                    <AdminToggle label="Boleto bancário" checked={data.boleto_enabled} onChange={(v) => set("boleto_enabled", v)} description="Pagamento via boleto (compensação em 1-2 dias)" />
                 </div>
             </AdminFormSection>
 
             <AdminFormSection title="Parcelamento">
-                <AdminInput label="Número máximo de parcelas" type="number" value={data.max_installments} onChange={(v) => set("max_installments", parseInt(v) || 1)} />
+                <AdminInput label="Número máximo de parcelas" type="number" min={1} max={12} value={data.max_installments} onChange={(v) => set("max_installments", Math.min(12, Math.max(1, parseInt(v) || 1)))} />
                 <AdminInput label="Parcelas sem juros" type="number" value={data.interest_free_installments} onChange={(v) => set("interest_free_installments", parseInt(v) || 0)} />
-                <AdminInput label="Desconto no Pix (%)" type="number" value={data.pix_discount} onChange={(v) => set("pix_discount", parseFloat(v) || 0)} description="Desconto adicional para pagamentos via Pix" />
                 <div />
             </AdminFormSection>
 

@@ -12,6 +12,7 @@ import { assertFulfillmentTransition } from '../lib/afterSalesPolicy.js';
 import { applyVerifiedOrderInTransaction, recordVerifiedNonApprovedOrderInTransaction } from '../lib/paymentReconciliation.js';
 import { createPaymentDiagnostic } from '../lib/paymentDiagnostics.js';
 import { assertExpectedTransactionId, loadPaymentReconciliationPreview } from '../lib/paymentPreview.js';
+import { validateCardPaymentChoice } from '../lib/paymentChoice.js';
 
 const router = Router();
 const COUPON_MUTABLE_FIELDS = new Set([
@@ -188,7 +189,7 @@ router.delete('/coupons/:id', auth, requireAdmin, async (req, res, next) => {
 router.post('/stock/adjust', auth, requireAdmin, async (req, res) => {
     try {
         const { product_id, color_id, size, new_stock, reason } = req.body;
-        const result = await adjustStock(pool, product_id, color_id, size, parseInt(new_stock), reason, req.user.id);
+        const result = await withTransaction(client => adjustStock(client, product_id, color_id, size, Number(new_stock), reason, req.user.id));
         await logAudit(req.user.id, 'stock.adjust', 'product', product_id, { color_id, size, ...result }, req.ip);
         res.json(result);
     } catch (err) {
@@ -221,17 +222,17 @@ router.get('/payments/methods', auth, async (req, res) => {
         const payConfig = settingRows[0]?.value || {};
         const pixEnabled = payConfig.pix_enabled !== false;
         const cardEnabled = payConfig.card_enabled !== false;
-        const boletoEnabled = payConfig.boleto_enabled === true;
 
         res.json({
             available: types,
             enabled: {
                 pix: pixEnabled && types.pix,
                 credit_card: cardEnabled && types.credit_card,
-                debit_card: cardEnabled && types.debit_card,
-                boleto: boletoEnabled && types.boleto,
+                debit_card: cardEnabled && payConfig.debit_card_enabled !== false && types.debit_card,
+                boleto: false,
             },
             methods,
+            max_installments: Math.min(12, Math.max(1, Number(payConfig.max_installments) || 6)),
             public_key: process.env.MERCADO_PAGO_PUBLIC_KEY || null,
             environment: mp.getMercadoPagoEnvironment(),
         });
@@ -282,6 +283,7 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
 
         const order = rows[0];
         diagnostic.setReference(order.order_number);
+        if (order.payment_method !== 'pix') return res.status(409).json({ error: 'Este pedido não aceita Pix' });
 
         // Idempotency: if already has MP order, return existing
         if (order.status === 'cancelado') return res.status(409).json({ error: 'Pedido cancelado' });
@@ -298,6 +300,8 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
         if (order.mercado_pago_order_id || order.payment_attempt_started_at || order.payment_status !== 'pending') {
             return res.status(409).json({ error: 'Pagamento existente ou em conciliação; não criar outra cobrança' });
         }
+        const { rows: pixSettings } = await pool.query("SELECT value FROM settings WHERE key = 'payments'");
+        if (pixSettings[0]?.value?.pix_enabled === false) return res.status(409).json({ error: 'Pix indisponível' });
         const { rows: reserved } = await pool.query(
             `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'pix'
              WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
@@ -419,6 +423,11 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
             || order.payment_attempt_started_at || order.payment_status !== 'pending') {
             return res.status(409).json({ error: 'Pagamento existente ou em conciliação; não criar outra cobrança' });
         }
+        const methods = await mp.getPaymentMethods();
+        const { rows: paymentSettings } = await pool.query("SELECT value FROM settings WHERE key = 'payments'");
+        const paymentConfig = paymentSettings[0]?.value || {};
+        const { paymentType, installments: requestedInstallments } = validateCardPaymentChoice(
+            order.payment_method, methods, payment_method_id, installments, paymentConfig);
         const { rows: reserved } = await pool.query(
             `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'card'
              WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
@@ -443,8 +452,9 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
             total: order.total,
             payer,
             cardToken: card_token,
-            installments: installments || 1,
+            installments: requestedInstallments,
             paymentMethodId: payment_method_id,
+            paymentType,
             issuerId,
             idempotencyKey,
         });
@@ -583,7 +593,7 @@ router.get('/orders/:id/events', auth, async (req, res) => {
 router.post('/shipping/quote', async (req, res) => {
     try {
         const { to_postal_code, items } = req.body;
-        if (!to_postal_code) return res.status(400).json({ error: 'CEP de destino é obrigatório' });
+        if (String(to_postal_code || '').replace(/\D/g, '').length !== 8) return res.status(400).json({ error: 'CEP de destino inválido' });
 
         // Get origin CEP from settings
         const { rows: addrRows } = await pool.query("SELECT value FROM settings WHERE key = 'address'");

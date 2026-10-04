@@ -1,10 +1,39 @@
 import { Router } from 'express';
-import { pool } from '../config/db.js';
+import { pool, withTransaction } from '../config/db.js';
 import { auth, requireAdmin } from '../middleware.js';
 import { logAudit } from '../services.js';
 import { searchLimiter } from '../middleware/rateLimiters.js';
 
 const router = Router();
+
+export function validateProductForPublication(product) {
+    if (product.status !== 'published') return;
+    if (!Number.isFinite(Number(product.price)) || Number(product.price) <= 0) {
+        throw Object.assign(new Error('Preço do produto deve ser maior que zero'), { status: 400 });
+    }
+    if (product.sale_price != null && product.sale_price !== ''
+        && (!Number.isFinite(Number(product.sale_price)) || Number(product.sale_price) <= 0
+            || Number(product.sale_price) >= Number(product.price))) {
+        throw Object.assign(new Error('Preço promocional deve ser maior que zero e menor que o preço normal'), { status: 400 });
+    }
+    if (['weight', 'package_height', 'package_width', 'package_length'].some(field =>
+        !Number.isFinite(Number(product[field])) || Number(product[field]) <= 0)) {
+        throw Object.assign(new Error('Informe peso e dimensões válidos para calcular o frete'), { status: 400 });
+    }
+    const sizes = product.sizes || [];
+    const colors = product.colors || [];
+    if (!Array.isArray(sizes) || !sizes.length || !Array.isArray(colors) || !colors.length) {
+        throw Object.assign(new Error('Informe cor e tamanho antes de publicar'), { status: 400 });
+    }
+    if (new Set(sizes).size !== sizes.length || sizes.some(size => typeof size !== 'string' || !size.trim())
+        || new Set(colors.map(color => color.id)).size !== colors.length
+        || colors.some(color => !color.id || !String(color.name || '').trim()
+        || sizes.some(size => !Object.hasOwn(color.stock || {}, size))
+        || Object.keys(color.stock || {}).some(size => !sizes.includes(size))
+        || Object.values(color.stock || {}).some(value => !Number.isSafeInteger(Number(value)) || Number(value) < 0))) {
+        throw Object.assign(new Error('Estoque e tamanhos das cores não correspondem'), { status: 400 });
+    }
+}
 
 // ─── Query-field allowlists ─────────────────────────────────────────
 // Values are parameterized below, but identifiers cannot be parameterized by
@@ -81,7 +110,7 @@ async function insertRow(table, data, dateField = 'updated_at') {
 }
 
 // ─── Helper: generic UPDATE ─────────────────────────────────────────
-async function updateRow(table, id, data, dateField = 'updated_at') {
+async function updateRow(table, id, data, dateField = 'updated_at', db = pool) {
     const reserved = ['id', 'created_date', 'updated_date', 'created_at', 'updated_at', 'created_by_id', 'is_sample'];
     const keys = Object.keys(data).filter(k => !reserved.includes(k));
     if (keys.length === 0) return null;
@@ -98,7 +127,7 @@ async function updateRow(table, id, data, dateField = 'updated_at') {
         return v;
     });
     values.push(id);
-    const { rows } = await pool.query(
+    const { rows } = await db.query(
         `UPDATE ${table} SET ${setParts.join(', ')}, ${dateField} = now() WHERE id = $${values.length} RETURNING *`,
         values
     );
@@ -141,6 +170,7 @@ router.get('/products/:id', async (req, res, next) => {
 
 router.post('/products', auth, requireAdmin, async (req, res, next) => {
     try {
+        validateProductForPublication(req.body);
         const product = await insertRow('products', req.body, 'updated_date');
         await logAudit(req.user.id, 'product.create', 'product', product.id, { name: req.body.name }, req.ip);
         res.status(201).json(product);
@@ -149,9 +179,18 @@ router.post('/products', auth, requireAdmin, async (req, res, next) => {
 
 router.patch('/products/:id', auth, requireAdmin, async (req, res, next) => {
     try {
-        const product = await updateRow('products', req.params.id, req.body, 'updated_date');
+        const { expected_updated_date: expectedUpdatedDate, ...changes } = req.body;
+        const product = await withTransaction(async client => {
+            const { rows: existing } = await client.query('SELECT status, price, sale_price, sizes, colors, weight, package_height, package_width, package_length, updated_date FROM products WHERE id = $1 FOR UPDATE', [req.params.id]);
+            if (!existing.length) return null;
+            if (expectedUpdatedDate && new Date(existing[0].updated_date).getTime() !== new Date(expectedUpdatedDate).getTime()) {
+                throw Object.assign(new Error('O produto mudou desde a abertura do formulário. Recarregue antes de salvar.'), { status: 409 });
+            }
+            validateProductForPublication({ ...existing[0], ...changes });
+            return updateRow('products', req.params.id, changes, 'updated_date', client);
+        });
         if (!product) return res.status(404).json({ error: 'Produto não encontrado' });
-        await logAudit(req.user.id, 'product.update', 'product', req.params.id, req.body, req.ip);
+        await logAudit(req.user.id, 'product.update', 'product', req.params.id, changes, req.ip);
         res.json(product);
     } catch (err) { next(err); }
 });

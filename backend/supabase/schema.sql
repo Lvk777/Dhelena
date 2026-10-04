@@ -439,8 +439,8 @@ ON CONFLICT (slug) DO NOTHING;
 -- Settings
 INSERT INTO settings (key, value, is_public) VALUES
     ('general', '{"store_name":"D''Helenas","trade_name":"","company_name":"","cnpj":"","email":"","phone":"","whatsapp":"","logo":"","logo_dark":"","favicon":"","currency":"BRL","timezone":"America/Sao_Paulo"}', true),
-    ('store', '{"top_bar_text":"Frete grátis acima de R$ 122 · Parcelamos em até 6x","free_shipping_threshold":499,"max_installments":6,"interest_free_installments":6,"allow_out_of_stock":false,"show_low_stock":true,"low_stock_threshold":3}', true),
-    ('shipping', '{"pickup_enabled":true,"pickup_name":"Retirada na boutique","pickup_instructions":"","pickup_time":"","free_shipping_enabled":true,"free_shipping_threshold":122,"melhor_envio_enabled":false,"melhor_envio_mode":"sandbox"}', true),
+    ('store', '{"top_bar_text":"Frete grátis a partir de R$ 499 · Parcelamos em até 6x","free_shipping_threshold":499,"max_installments":6,"interest_free_installments":6,"allow_out_of_stock":false,"show_low_stock":true,"low_stock_threshold":3}', true),
+    ('shipping', '{"pickup_enabled":true,"pickup_name":"Retirada na boutique","pickup_instructions":"","pickup_time":"","free_shipping_enabled":true,"free_shipping_threshold":499,"melhor_envio_enabled":false,"melhor_envio_mode":"sandbox"}', true),
     ('notifications', '{"email_enabled":true,"whatsapp_enabled":true,"recipients":[]}', false)
 ON CONFLICT (key) DO NOTHING;
 

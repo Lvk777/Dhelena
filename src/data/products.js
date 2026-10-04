@@ -41,10 +41,9 @@ export const installmentValue = (price, installments) =>
     (price || 0) / (installments || 1);
 
 export const totalStock = (product) =>
-    (product?.colors || []).reduce(
-        (sum, c) => sum + Object.values(c.stock || {}).reduce((a, b) => a + (b || 0), 0),
-        0
-    );
+    (product?.colors || []).reduce((sum, color) =>
+        sum + (product?.sizes?.length ? product.sizes : ['Único'])
+            .reduce((sizeTotal, size) => sizeTotal + stockFor(product, color.id, size), 0), 0);
 
 export const isLowStock = (product) => {
     const t = totalStock(product);
@@ -54,8 +53,17 @@ export const isLowStock = (product) => {
 export const isAvailable = (product) => totalStock(product) > 0;
 
 export const stockFor = (product, colorId, size) => {
+    const sizes = product?.sizes?.length ? product.sizes : ['Único'];
+    if (!sizes.includes(size)) return 0;
     const color = (product?.colors || []).find((c) => c.id === colorId);
-    return color?.stock?.[size] ?? 0;
+    const stock = color?.stock || {};
+    const keys = Object.keys(stock);
+    if (sizes.length === 1 && size === "Único"
+        && keys.some((key) => SIZES_LIST.includes(key))
+        && keys.every((key) => key === size || SIZES_LIST.includes(key))) {
+        return keys.reduce((sum, key) => sum + (Number(stock[key]) || 0), 0);
+    }
+    return Number(stock[size]) || 0;
 };
 
 // Order status labels and timeline

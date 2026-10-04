@@ -1,22 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Heart, Minus, Plus, Ruler, Truck, ChevronDown, Check } from "lucide-react";
 import SizeGuideModal from "@/components/SizeGuideModal";
 import { useStore } from "@/context/StoreContext";
 import { useCatalog } from "@/context/CatalogContext";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
-import { COLOR_SWATCHES, formatBRL, installmentValue } from "@/data/products";
+import { COLOR_SWATCHES, formatBRL, stockFor } from "@/data/products";
 import ProductCard from "@/components/ProductCard";
 import { track } from "@/lib/analytics";
 import PositionBanner from "@/components/PositionBanner";
 import useSEO from "@/lib/useSEO";
+import { base44 } from "@/api/base44Client";
 
 export default function ProductDetail() {
     const { id } = useParams();
     const { getProductById, getRelated, getCompleteLook, loading } = useCatalog();
     const product = getProductById(id);
     const { addToCart, toggleFavorite, isFavorite, setCartOpen } = useStore();
-    const { freeShippingThreshold } = usePublicSettings();
+    const { freeShippingThreshold, isFreeShipping } = usePublicSettings();
     const [activeImg, setActiveImg] = useState(0);
     const [color, setColor] = useState(product?.colors[0]?.id);
     const [size, setSize] = useState(null);
@@ -25,6 +26,9 @@ export default function ProductDetail() {
     const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
     const [cep, setCep] = useState("");
     const [frete, setFrete] = useState(null);
+    const [shippingLoading, setShippingLoading] = useState(false);
+    const quoteVersion = useRef(0);
+    useEffect(() => { quoteVersion.current += 1; setFrete(null); setShippingLoading(false); }, [product?.id]);
 
     // Dynamic SEO
     useSEO({
@@ -34,7 +38,14 @@ export default function ProductDetail() {
         url: `/produto/${id}`,
     });
 
-    useEffect(() => { if (product && !color) setColor(product.colors[0]?.id); }, [product, color]);
+    useEffect(() => { if (product && !product.colors.some((entry) => entry.id === color)) setColor(product.colors[0]?.id); }, [product, color]);
+    const sizeOptions = product?.sizes || [];
+    useEffect(() => {
+        if (!product) return;
+        const available = sizeOptions.filter((s) => stockFor(product, color, s) > 0);
+        setSize((old) => available.includes(old) ? old : available.length === 1 ? available[0] : null);
+        setQty(1);
+    }, [product?.id, color, product?.colors, product?.sizes]);
 
     // Track product view
     useEffect(() => { if (product) track('product_view', { product_id: product.id }); }, [product?.id]);
@@ -55,20 +66,29 @@ export default function ProductDetail() {
     const price = product.salePrice ?? product.price;
     const fav = isFavorite(product.id);
     const currentColor = product.colors.find((c) => c.id === color);
-    const sizeStock = size ? currentColor?.stock[size] : 0;
+    const sizeStock = size ? stockFor(product, color, size) : 0;
     const related = getRelated(product) || [];
     const look = getCompleteLook(product) || [];
 
     const handleAdd = () => {
-        if (!size) return;
+        if (!size || sizeStock <= 0) return;
         addToCart({ productId: product.id, colorId: color, size, qty }, sizeStock || undefined);
         setCartOpen(true);
     };
 
-    const calcFrete = (e) => {
+    const calcFrete = async (e) => {
         e.preventDefault();
-        if (cep.replace(/\D/g, "").length === 8) setFrete({ valor: 29.9, prazo: "5 a 7 dias úteis" });
-        else setFrete({ erro: "CEP inválido" });
+        if (cep.replace(/\D/g, "").length !== 8) { setFrete({ erro: "CEP inválido" }); return; }
+        setShippingLoading(true);
+        setFrete(null);
+        const version = ++quoteVersion.current;
+        try {
+            const result = await base44.functions.invoke("calculateShipping", { to_postal_code: cep.replace(/\D/g, ""), items: [{ productId: product.id, qty }] });
+            if (quoteVersion.current !== version) return;
+            const options = (result.options || []).filter((option) => option.id != null && Number.isFinite(Number(option.price)) && Number(option.price) >= 0);
+            setFrete(options.length ? { options } : { erro: "Nenhuma opção disponível para este CEP." });
+        } catch (error) { if (quoteVersion.current === version) setFrete({ erro: error.response?.data?.error || error.message || "Não foi possível calcular o frete." }); }
+        finally { if (quoteVersion.current === version) setShippingLoading(false); }
     };
 
     return (
@@ -128,7 +148,7 @@ export default function ProductDetail() {
                             ) : (
                                 <span className="font-heading text-3xl text-foreground">{formatBRL(product.price)}</span>
                             )}
-                            <p className="text-sm text-muted-foreground mt-1.5">ou {product.installments}x de {formatBRL(installmentValue(price, product.installments))} sem juros</p>
+                            <p className="text-sm text-muted-foreground mt-1.5">Condições de parcelamento disponíveis no checkout</p>
                         </div>
 
                         {/* color */}
@@ -156,8 +176,8 @@ export default function ProductDetail() {
                                 </button>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                                {product.sizes.map((s) => {
-                                    const st = currentColor?.stock[s] ?? 0;
+                                {sizeOptions.map((s) => {
+                                    const st = stockFor(product, color, s);
                                     const disabled = st === 0;
                                     return (
                                         <button
@@ -180,9 +200,9 @@ export default function ProductDetail() {
                         <div className="mt-6 flex items-center gap-4">
                             <p className="text-[11px] uppercase tracking-[0.2em]">Quantidade</p>
                             <div className="flex items-center border border-border">
-                                <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="px-3 py-2.5 hover:bg-bone" aria-label="Diminuir"><Minus className="w-3.5 h-3.5" strokeWidth={1.5} /></button>
+                                <button onClick={() => { quoteVersion.current += 1; setQty((q) => Math.max(1, q - 1)); setFrete(null); setShippingLoading(false); }} className="px-3 py-2.5 hover:bg-bone" aria-label="Diminuir"><Minus className="w-3.5 h-3.5" strokeWidth={1.5} /></button>
                                 <span className="px-4 text-sm">{qty}</span>
-                                <button onClick={() => setQty((q) => Math.min(q + 1, sizeStock > 0 ? sizeStock : 1))} disabled={sizeStock <= 0} className="px-3 py-2.5 hover:bg-bone disabled:opacity-30" aria-label="Aumentar"><Plus className="w-3.5 h-3.5" strokeWidth={1.5} /></button>
+                                <button onClick={() => { quoteVersion.current += 1; setQty((q) => Math.min(q + 1, sizeStock > 0 ? sizeStock : 1)); setFrete(null); setShippingLoading(false); }} disabled={sizeStock <= 0} className="px-3 py-2.5 hover:bg-bone disabled:opacity-30" aria-label="Aumentar"><Plus className="w-3.5 h-3.5" strokeWidth={1.5} /></button>
                             </div>
                         </div>
 
@@ -190,7 +210,7 @@ export default function ProductDetail() {
                         <div className="mt-7 space-y-3">
                             <button
                                 onClick={handleAdd}
-                                disabled={!size}
+                                disabled={!size || sizeStock <= 0}
                                 className="btn-gold w-full text-sm py-5 disabled:opacity-40"
                             >
                                 {size ? "Adicionar à sacola" : "Selecione um tamanho"}
@@ -209,15 +229,13 @@ export default function ProductDetail() {
                             <form onSubmit={calcFrete} className="flex gap-2">
                                 <input
                                     value={cep}
-                                    onChange={(e) => setCep(e.target.value)}
+                                    onChange={(e) => { quoteVersion.current += 1; setCep(e.target.value); setFrete(null); setShippingLoading(false); }}
                                     placeholder="Digite seu CEP"
                                     className="flex-1 border border-border px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))]"
                                 />
-                                <button type="submit" className="btn-outline px-6">Calcular</button>
+                                <button type="submit" disabled={shippingLoading} className="btn-outline px-6 disabled:opacity-50">{shippingLoading ? "Calculando..." : "Calcular"}</button>
                             </form>
-                            {frete && !frete.erro && (
-                                <p className="text-sm text-muted-foreground mt-3 flex items-center gap-2"><Check className="w-4 h-4 text-[hsl(var(--gold))]" strokeWidth={1.5} /> {formatBRL(frete.valor)} · {frete.prazo}</p>
-                            )}
+                            {frete?.options?.map((option) => <p key={option.id} className="text-sm text-muted-foreground mt-3 flex items-center gap-2"><Check className="w-4 h-4 text-[hsl(var(--gold))]" strokeWidth={1.5} /> {option.company} · {option.name} · {isFreeShipping(price * qty) ? "Grátis" : formatBRL(option.price)} · {option.delivery_time} dias úteis</p>)}
                             {frete?.erro && <p className="text-sm text-[hsl(var(--rose))] mt-3">{frete.erro}</p>}
                         </div>
                     </div>
@@ -229,7 +247,7 @@ export default function ProductDetail() {
                     <Accordion id="detalhes" title="Detalhes da peça" open={openAcc} setOpen={setOpenAcc}>{product.details}</Accordion>
                     <Accordion id="composicao" title="Composição" open={openAcc} setOpen={setOpenAcc}>{product.composition}</Accordion>
                     <Accordion id="cuidados" title="Cuidados" open={openAcc} setOpen={setOpenAcc}>{product.care}</Accordion>
-                    <Accordion id="entrega" title="Entrega" open={openAcc} setOpen={setOpenAcc}>{`Enviamos para todo o Brasil${freeShippingThreshold ? `. Frete grátis acima de ${formatBRL(freeShippingThreshold)}` : ""}. Prazo de 3 a 10 dias úteis conforme a região.`}</Accordion>
+                    <Accordion id="entrega" title="Entrega" open={openAcc} setOpen={setOpenAcc}>{`Enviamos para todo o Brasil${freeShippingThreshold ? `. Frete grátis a partir de ${formatBRL(freeShippingThreshold)} após descontos` : ""}. O prazo varia conforme a cotação para seu CEP.`}</Accordion>
                     <Accordion id="trocas" title="Trocas e devoluções" open={openAcc} setOpen={setOpenAcc}>Você tem até 30 dias para solicitar troca ou devolução. A primeira troca é por nossa conta.</Accordion>
                 </div>
 
@@ -260,9 +278,9 @@ export default function ProductDetail() {
             <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-background border-t border-border px-4 py-3 flex items-center gap-3">
                 <div className="flex-1">
                     <p className="text-sm font-medium">{formatBRL(price)}</p>
-                    <p className="text-[11px] text-muted-foreground">{product.installments}x sem juros</p>
+                    <p className="text-[11px] text-muted-foreground">Parcelamento no checkout</p>
                 </div>
-                <button onClick={handleAdd} disabled={!size} className="btn-gold flex-1 py-3.5 disabled:opacity-40">
+                <button onClick={handleAdd} disabled={!size || sizeStock <= 0} className="btn-gold flex-1 py-3.5 disabled:opacity-40">
                     {size ? "Adicionar" : "Escolha o tamanho"}
                 </button>
             </div>

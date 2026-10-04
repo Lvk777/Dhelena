@@ -33,6 +33,8 @@ export default function ProductForm() {
     const navigate = useNavigate();
     const { categories, collections, reload } = useCatalog();
     const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState("");
+    const [loadedUpdatedDate, setLoadedUpdatedDate] = useState(null);
     const [form, setForm] = useState({
         name: "", sku: "", category: "", subcategory: "", collection: "",
         description: "", short_description: "", details: "",
@@ -49,12 +51,20 @@ export default function ProductForm() {
     useEffect(() => {
         if (!id) return;
         base44.entities.Product.get(id).then((p) => {
+            setLoadedUpdatedDate(p.updated_date);
             setForm({
                 name: p.name || "", sku: p.sku || "", category: p.category || "", subcategory: p.subcategory || "",
                 collection: p.collection || "", description: p.description || "", short_description: p.short_description || "",
                 details: p.details || "", price: p.price || "", sale_price: p.sale_price || "", cost_price: p.cost_price || "",
-                installments: p.installments || 6, images: p.images || [], colors: p.colors || [],
-                sizes: (p.sizes && p.sizes.length) ? p.sizes : [...SIZES_LIST],
+                installments: p.installments || 6, images: p.images || [], colors: (p.colors || []).map((color) => {
+                    const keys = Object.keys(color.stock || {});
+                    const existingSize = p.sizes?.length ? p.sizes[0] : 'Único';
+                    const legacySingleSize = (!p.sizes?.length || p.sizes.length === 1) && existingSize === 'Único'
+                        && keys.some((key) => SIZES_LIST.includes(key))
+                        && keys.every((key) => key === existingSize || SIZES_LIST.includes(key));
+                    return legacySingleSize ? { ...color, stock: { [existingSize]: keys.reduce((sum, key) => sum + Number(color.stock[key] || 0), 0) } } : color;
+                }),
+                sizes: (p.sizes && p.sizes.length) ? p.sizes : ['Único'],
                 badges: p.badges || { novo: false, destaque: false, maisVendido: false, ultimas: false, promocao: false, exclusivo: false },
                 composition: p.composition || "", modeling: p.modeling || "", length: p.length || "",
                 lining: p.lining || "", transparency: p.transparency || "", elasticity: p.elasticity || "",
@@ -144,15 +154,27 @@ export default function ProductForm() {
         const errors = {};
         if (stepIndex === 0 && !form.name.trim()) errors.name = "Informe o nome do produto";
         if (stepIndex === 3 && !form.price) errors.price = "Informe o preço do produto";
+        if (stepIndex === WIZARD_STEPS.length - 1) {
+            if (!Number.isFinite(Number(form.price)) || Number(form.price) <= 0) errors.price = "Informe um preço maior que zero";
+            if (form.sale_price !== '' && form.sale_price != null
+                && (Number(form.sale_price) <= 0 || Number(form.sale_price) >= Number(form.price))) errors.salePrice = "Preço promocional deve ser maior que zero e menor que o preço normal";
+            if (!form.sizes.length || !form.colors.length) errors.variants = "Informe cor e tamanho para publicar";
+            else if (form.colors.some((color) => form.sizes.some((size) => !Object.hasOwn(color.stock || {}, size))
+                || Object.keys(color.stock || {}).some((size) => !form.sizes.includes(size)))) {
+                errors.variants = "Tamanhos e estoque das cores não correspondem";
+            }
+            setSaveError(Object.values(errors)[0] || "");
+        }
         return Object.keys(errors).length > 0 ? errors : null;
     };
 
     const save = async (status) => {
         if (!form.name.trim()) return;
+        setSaveError("");
         setSaving(true);
         try {
             if (id) {
-                await base44.entities.Product.update(id, buildPayload(status));
+                await base44.entities.Product.update(id, { ...buildPayload(status), expected_updated_date: loadedUpdatedDate });
                 await logAdminAction("product_update", "Product", id, form.name, `Produto atualizado (status: ${status})`);
             } else {
                 const newProduct = await base44.entities.Product.create(buildPayload(status));
@@ -162,6 +184,7 @@ export default function ProductForm() {
             navigate("/admin/produtos");
         } catch (e) {
             console.error("Erro ao salvar:", e);
+            setSaveError(e.response?.data?.error || e.message || "Não foi possível salvar o produto.");
         } finally {
             setSaving(false);
         }
@@ -311,6 +334,7 @@ export default function ProductForm() {
             case "review":
                 return (
                     <div className="max-w-3xl mx-auto space-y-6">
+                        {saveError && <p role="alert" className="p-3 border border-destructive text-destructive text-sm">{saveError}</p>}
                         <div className="bg-muted/30 rounded-lg border border-border p-6 space-y-2">
                             <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-accent mb-3">Resumo do Produto</h3>
                             <SummaryRow label="Nome" value={form.name || "—"} />
