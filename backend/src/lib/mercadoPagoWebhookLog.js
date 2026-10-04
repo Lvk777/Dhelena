@@ -17,6 +17,7 @@ export function createMercadoPagoWebhookLog(req, signature) {
         provider_resource_fetch: 'not_attempted',
         processing_result: 'not_started',
         deduplication_result: 'not_attempted',
+        refund_reconciliation: 'not_attempted',
         local_order_number: null,
     };
 }
@@ -34,6 +35,8 @@ export function logMercadoPagoWebhookDelivery(delivery, level = 'log') {
         provider_resource_fetch: delivery.provider_resource_fetch,
         processing_result: delivery.processing_result,
         deduplication_result: delivery.deduplication_result,
+        refund_reconciliation: ['not_attempted', 'none_pending', 'pending', 'processing', 'processed']
+            .includes(delivery.refund_reconciliation) ? delivery.refund_reconciliation : 'unknown',
         local_order_number: technicalId(delivery.local_order_number, 64),
     };
     console[level](JSON.stringify(record));

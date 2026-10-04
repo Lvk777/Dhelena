@@ -20,17 +20,15 @@ Usa a [Orders API oficial](https://www.mercadopago.com.br/developers/pt/referenc
 
 A migration `011_after_sales.sql` foi aplicada e validada no Supabase da D’Helenas em 2026-09-22. Em produção, não habilitar essas flags até homologação formal, política de devolução aprovada, permissões administrativas revisadas e reconciliação financeira ensaiada.
 
-## Homologação Mercado Pago TEST — bloqueio externo
+## Saldo restante TEST — DH-2026-000006
 
-**MP PANEL ACCESS:** BLOQUEADO — somente a titular/cliente possui acesso à conta Mercado Pago usada pela D’Helenas.
+A liberação temporária atual aceita apenas `kind=remaining` para a order `ORDTST01M3WY62VJNVEVXATHY3CRDVHW` e a transação `PAY01M3WY62W216W8V5J7XA7JD5JJ` em modo Mercado Pago `test`. Exige pagamento de R$ 50,00, exatamente um refund anterior de R$ 1,00 processado e conciliado, saldo de R$ 49,00, status local `partially_refunded`, estoque 7, nenhuma devolução e nenhuma reposição. O frontend não envia valor; a API rejeita campos adicionais e calcula 4.900 centavos no backend. A chave de requisição é `remaining-<order.id>` e a chave do POST Mercado Pago é derivada da reserva local, separada da primeira operação.
 
-**MANUAL CLIENT ACTION:** A cliente deve acessar Mercado Pago Developers → Suas integrações → aplicação da D’Helenas → Contas de teste e confirmar:
+A prévia administrativa usa GET oficial da Orders API e consultas locais `SELECT`. Ela mostra os dois ledgers, os IDs existentes e o saldo esperado após o refund. Enquanto `AFTER_SALES_REFUNDS_ENABLED=false`, `safe_to_refund_remaining=false`. Mesmo com a flag habilitada futuramente, qualquer divergência de pedido, ambiente, valor, ledger, estado físico ou refund pendente bloqueia o POST. Após um POST autorizado, a confirmação financeira exige novo GET oficial; webhook assinado pode conciliar uma reserva pendente, com deduplicação e sem reposição de estoque. O refund financeiro não cria devolução nem modifica estoque. A flag permanece desligada nesta implementação e nenhum refund de R$ 49,00 foi executado.
 
-1. vendedor TEST Brasil;
-2. comprador TEST Brasil;
-3. comprador distinto do vendedor.
+## Histórico da homologação Mercado Pago TEST
 
-Ela não deve compartilhar senha, access token, secret ou código de verificação. Até essa confirmação, o E2E Mercado Pago TEST permanece bloqueado e **não homologado**. Não tentar outro login, criar ou substituir contas, alterar credenciais, criar cupom TEST, criar pedido Pix ou executar reembolso para contornar o bloqueio. Trabalho independente permitido: revisão local/read-only do cálculo do checkout, testes automatizados e documentação, sem operações financeiras.
+O bloqueio anterior de acesso ao painel e criação das contas TEST foi superado pelo ensaio do primeiro refund de R$ 1,00. O saldo restante de R$ 49,00 ainda não foi reembolsado nem homologado. A próxima etapa financeira exige autorização explícita e conferência de uma prévia read-only recém-consultada.
 
 ## Logística reversa Melhor Envio — mapeamento, sem execução
 

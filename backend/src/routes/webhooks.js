@@ -117,7 +117,8 @@ router.post('/webhooks/mercado-pago', async (req, res) => {
 
         // Reconcile a reserved refund from a second official Orders API GET.
         // The notification carries no trusted amount or refund status.
-        await reconcileRefundFromWebhook(orderRef.id, verifiedPayment.mp_order_id);
+        const refundOutcome = await reconcileRefundFromWebhook(orderRef.id, verifiedPayment.mp_order_id);
+        delivery.refund_reconciliation = refundOutcome?.status || 'none_pending';
 
         const internalStatus = mapPaymentStatus(verifiedPayment.mp_status, verifiedPayment.mp_status_detail);
         const outcome = await withTransaction(async (client) => {

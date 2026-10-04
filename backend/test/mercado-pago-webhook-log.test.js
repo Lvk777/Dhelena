@@ -18,6 +18,7 @@ test('Mercado Pago delivery log contains correlation fields but never credential
     delivery.provider_resource_fetch = 'success';
     delivery.processing_result = 'manual_reconciliation_required';
     delivery.deduplication_result = 'processed';
+    delivery.refund_reconciliation = 'processed';
     delivery.local_order_number = 'DH-2026-000006';
     const captured = [];
     const original = console.log;
@@ -31,6 +32,7 @@ test('Mercado Pago delivery log contains correlation fields but never credential
     assert.equal(record.x_request_id, 'safe-request-123');
     assert.equal(record.signature_valid, true);
     assert.equal(record.provider_resource_fetch, 'success');
+    assert.equal(record.refund_reconciliation, 'processed');
     assert.equal(record.local_order_number, 'DH-2026-000006');
     for (const sensitive of [secret, accessToken, signature, authorization, 'pii@example.test']) {
         assert.equal(log.includes(sensitive), false);

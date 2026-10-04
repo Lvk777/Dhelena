@@ -75,8 +75,8 @@ router.post('/orders/:id/refunds', requireAdmin, async (req, res) => {
 
 router.get('/orders/:id/refunds/preview', requireAdmin, async (req, res) => {
     try {
-        const amount = Number(req.query.amount_cents);
-        const result = await loadRefundPreview(req.params.id, amount);
+        if (Object.keys(req.query).length) return res.status(400).json({ error: 'A prévia calcula o saldo no servidor' });
+        const result = await loadRefundPreview(req.params.id);
         res.json(result);
     } catch (error) {
         if (error.mpError) return res.status(502).json({ error: 'Prévia Mercado Pago indisponível' });

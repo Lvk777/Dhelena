@@ -2,13 +2,12 @@ import { pool, withTransaction } from './config/db.js';
 import * as mp from './services/mercadoPago.js';
 import {
     afterSalesError, assertRefundableOrder, canCancelAfterRefund,
-    findIdempotentRefund, moneyCents, nextReturnStatus, planRefund, requestedRefundCents,
+    findIdempotentRefund, moneyCents, nextReturnStatus, planRefund,
 } from './lib/afterSalesPolicy.js';
-import { isAuthorizedTestRefund } from './lib/testRefundScope.js';
+import { isAuthorizedTestOrder, isAuthorizedTestRefund } from './lib/testRefundScope.js';
+import { isRefundPhysicalBaseline, loadRefundPhysicalState } from './lib/refundPhysicalState.js';
 
 const queryOne = async (client, sql, values) => (await client.query(sql, values)).rows[0];
-const normalizedSelections = (items) => Array.isArray(items)
-    ? items.map(item => ({ order_item_id: item.order_item_id, quantity: item.quantity })) : [];
 const processedAmount = rows => rows.filter(row => row.status === 'processed')
     .reduce((sum, row) => sum + moneyCents(row.amount), 0);
 
@@ -16,7 +15,8 @@ function compareRefundLedger(provider, ledger) {
     const recorded = ledger.filter(row => row.status === 'processed');
     for (const row of recorded) {
         const match = provider.refunds.find(refund => refund.id === row.provider_refund_id);
-        if (!match || match.transaction_id !== row.provider_payment_id
+        if (!match || row.provider_order_id !== provider.id
+            || match.transaction_id !== row.provider_payment_id
             || moneyCents(match.amount) !== moneyCents(row.amount)
             || match.status !== 'processed') {
             throw afterSalesError('Reembolsos do provedor exigem conciliação manual');
@@ -106,26 +106,20 @@ export async function requestRefund(orderId, actorId, request, idempotencyKey, p
     if (!['full', 'partial', 'remaining'].includes(kind) || reason.length < 5 || reason.length > 500) {
         throw afterSalesError('Tipo ou motivo inválido', 400);
     }
-    const selected = kind === 'partial' ? normalizedSelections(request.items) : [];
-    const explicitCents = kind === 'partial' && request.amount_cents !== undefined
-        ? requestedRefundCents(request.amount_cents) : undefined;
-    if (explicitCents !== undefined && selected.length) {
-        throw afterSalesError('Informe valor parcial ou itens, não ambos', 400);
+    if (kind !== 'remaining' || Object.keys(request).some(key => !['kind', 'reason'].includes(key))) {
+        throw afterSalesError('Esta liberação TEST aceita somente saldo restante calculado no servidor', 409);
     }
-    const returnId = request?.return_id || null;
+    const selected = [];
+    const explicitCents = undefined;
+    const returnId = null;
     // This GET is read-only; it cannot trigger a refund.
     const localOrder = await queryOne(db, 'SELECT * FROM orders WHERE id = $1', [orderId]);
     if (!localOrder) throw afterSalesError('Pedido não encontrado', 404);
-    if (!isAuthorizedTestRefund(localOrder, explicitCents) || kind !== 'partial' || returnId) {
-        throw afterSalesError('Esta liberação TEST aceita somente R$ 1,00 no pedido autorizado', 409);
+    if (!isAuthorizedTestOrder(localOrder)) {
+        throw afterSalesError('Pedido fora da liberação TEST do saldo restante', 409);
     }
-    if (!localOrder.mercado_pago_order_id) throw afterSalesError('Pedido sem order Mercado Pago');
-
     const reservation = await transaction(async client => {
         const order = await queryOne(client, 'SELECT * FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
-        if (!isAuthorizedTestRefund(order, explicitCents)) {
-            throw afterSalesError('Pedido TEST divergiu antes da reserva');
-        }
         const ledger = (await client.query('SELECT * FROM order_refunds WHERE order_id = $1 ORDER BY created_at FOR UPDATE', [orderId])).rows;
         const previous = findIdempotentRefund(ledger, idempotencyKey, kind, reason, selected, returnId, explicitCents);
         if (previous) {
@@ -134,24 +128,16 @@ export async function requestRefund(orderId, actorId, request, idempotencyKey, p
         const providerOrder = await provider.getRefundableOrder(order.mercado_pago_order_id);
         assertRefundableOrder(order, providerOrder, processedAmount(ledger));
         compareRefundLedger(providerOrder, ledger);
-        if (returnId) {
-            const associatedReturn = await queryOne(client,
-                'SELECT * FROM order_returns WHERE id = $1 AND order_id = $2 FOR UPDATE', [returnId, orderId]);
-            if (!associatedReturn || associatedReturn.status !== 'recebida') {
-                throw afterSalesError('Devolução não recebida para este pedido');
-            }
-            if (kind === 'partial') {
-                const returned = (await client.query(
-                    'SELECT order_item_id, quantity FROM order_return_items WHERE return_id = $1', [returnId])).rows;
-                if (selected.some(entry => !returned.some(item => item.order_item_id === entry.order_item_id
-                    && entry.quantity <= item.quantity))) {
-                    throw afterSalesError('Itens do reembolso não correspondem à devolução recebida');
-                }
-            }
+        const paid = moneyCents(order.total);
+        const alreadyRefunded = processedAmount(ledger);
+        const remaining = paid - alreadyRefunded;
+        if (!isAuthorizedTestRefund(order, kind, paid, alreadyRefunded, remaining, ledger.length)) {
+            throw afterSalesError('Saldo ou histórico divergiu da liberação TEST', 409);
         }
-        const orderItems = kind === 'partial'
-            ? (await client.query('SELECT * FROM order_items WHERE order_id = $1', [orderId])).rows : [];
-        const amount = planRefund(order, providerOrder, ledger, kind, selected, orderItems, explicitCents);
+        if (!isRefundPhysicalBaseline(await loadRefundPhysicalState(client, orderId))) {
+            throw afterSalesError('Estado físico divergiu da liberação TEST', 409);
+        }
+        const amount = planRefund(order, providerOrder, ledger, kind, selected, [], explicitCents);
         const saved = await queryOne(client,
             `INSERT INTO order_refunds
              (order_id, idempotency_key, kind, amount, status, provider_order_id,
