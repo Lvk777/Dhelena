@@ -42,7 +42,11 @@ export async function placeOrder(userId, body, idempotencyKey) {
             'SELECT * FROM orders WHERE idempotency_key = $1 AND user_id = $2',
             [normalizedIdempotencyKey, userId]
         );
-        if (existing.length > 0) return assertMatchingIdempotencyRequest(existing[0], idempotencyFingerprint);
+        if (existing.length > 0) return { order: assertMatchingIdempotencyRequest(existing[0], idempotencyFingerprint), created: false };
+
+        // Serialize this customer's first-purchase checks, including checkouts
+        // with different coupons and idempotency keys.
+        await client.query('SELECT id FROM profiles WHERE id = $1 FOR UPDATE', [userId]);
 
         let subtotal = 0;
         const orderItems = [];
@@ -95,15 +99,15 @@ export async function placeOrder(userId, body, idempotencyKey) {
         let discount = 0;
         let couponId = null;
         if (coupon_code) {
-            const couponResult = await validateCoupon(coupon_code, userId, subtotal, items);
+            // The coupon row remains locked until COMMIT/ROLLBACK. Counts and
+            // the eventual usage insert therefore share one transaction.
+            const couponResult = await validateCoupon(coupon_code, userId, subtotal, items, { db: client, lock: true });
             if (!couponResult.valid) {
                 throw Object.assign(new Error(couponResult.error), { status: 400 });
             }
             discount = couponResult.discount;
 
-            // Get coupon ID for usage tracking
-            const { rows: couponRows } = await client.query('SELECT id FROM coupons WHERE code = $1', [coupon_code.toUpperCase().trim()]);
-            if (couponRows.length > 0) couponId = couponRows[0].id;
+            couponId = couponResult.couponId;
         }
 
         // ── Server-side promotion validation (highest priority active promo) ──
@@ -215,10 +219,15 @@ export async function placeOrder(userId, body, idempotencyKey) {
 
         const total = calculateServerOrderTotal(subtotal, discount, shippingCost);
 
+        // Serialize numbering across distinct customers and coupons as well.
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('checkout:order-number'))");
         // Generate order number
         const year = new Date().getFullYear();
-        const { rows: countRows } = await client.query('SELECT COUNT(*) as cnt FROM orders WHERE order_number LIKE $1', [`DH-${year}-%`]);
-        const orderNum = `DH-${year}-${String(parseInt(countRows[0].cnt) + 1).padStart(6, '0')}`;
+        const { rows: countRows } = await client.query(
+            "SELECT COALESCE(MAX(split_part(order_number, '-', 3)::bigint), 0) AS last_number FROM orders WHERE order_number ~ $1",
+            [`^DH-${year}-[0-9]+$`]
+        );
+        const orderNum = `DH-${year}-${String(Number(countRows[0].last_number) + 1).padStart(6, '0')}`;
 
         // Build snapshot
         const snapshot = {
@@ -277,10 +286,10 @@ export async function placeOrder(userId, body, idempotencyKey) {
             [order.id, JSON.stringify({ order_number: orderNum, total: Number(total.toFixed(2)) })]
         );
 
-        return order;
-    }).then(async (order) => {
+        return { order, created: true };
+    }).then(async ({ order, created }) => {
         // Fire notifications (async — don't block or fail the order)
-        sendOrderNotifications(order.id, 'order_created').catch(() => {});
+        if (created) sendOrderNotifications(order.id, 'order_created').catch(() => {});
         return order;
     });
 }

@@ -11,8 +11,8 @@ export async function logAudit(adminId, action, entityType, entityId, changes, i
 }
 
 // ─── Coupon Validation (server-side) ───────────────────────────────
-export async function validateCoupon(code, userId, cartSubtotal, items) {
-    const { rows } = await pool.query('SELECT * FROM coupons WHERE code = $1', [code.toUpperCase().trim()]);
+export async function validateCoupon(code, userId, cartSubtotal, items, { db = pool, lock = false } = {}) {
+    const { rows } = await db.query(`SELECT * FROM coupons WHERE code = $1${lock ? ' FOR UPDATE' : ''}`, [code.toUpperCase().trim()]);
     if (rows.length === 0) return { valid: false, error: 'Cupom não encontrado' };
 
     const c = rows[0];
@@ -26,18 +26,18 @@ export async function validateCoupon(code, userId, cartSubtotal, items) {
         return { valid: false, error: `Valor mínimo do pedido: R$ ${Number(c.min_order_value).toFixed(2)}` };
     }
 
-    if (c.max_uses) {
-        const { rows: usageCount } = await pool.query('SELECT COUNT(*) FROM coupon_usages WHERE coupon_id = $1', [c.id]);
+    if (c.max_uses != null) {
+        const { rows: usageCount } = await db.query('SELECT COUNT(*) FROM coupon_usages WHERE coupon_id = $1', [c.id]);
         if (parseInt(usageCount[0].count) >= c.max_uses) return { valid: false, error: 'Cupom esgotado' };
     }
 
-    if (c.max_uses_per_customer && userId) {
-        const { rows: userUsage } = await pool.query('SELECT COUNT(*) FROM coupon_usages WHERE coupon_id = $1 AND user_id = $2', [c.id, userId]);
+    if (c.max_uses_per_customer != null && userId) {
+        const { rows: userUsage } = await db.query('SELECT COUNT(*) FROM coupon_usages WHERE coupon_id = $1 AND user_id = $2', [c.id, userId]);
         if (parseInt(userUsage[0].count) >= c.max_uses_per_customer) return { valid: false, error: 'Você já usou este cupom' };
     }
 
     if (c.first_purchase_only && userId) {
-        const { rows: prevOrders } = await pool.query('SELECT COUNT(*) FROM orders WHERE user_id = $1 AND status != $2', [userId, 'cancelado']);
+        const { rows: prevOrders } = await db.query('SELECT COUNT(*) FROM orders WHERE user_id = $1 AND status != $2', [userId, 'cancelado']);
         if (parseInt(prevOrders[0].count) > 0) return { valid: false, error: 'Cupom válido apenas para primeira compra' };
     }
 
@@ -51,6 +51,7 @@ export async function validateCoupon(code, userId, cartSubtotal, items) {
 
     return {
         valid: true,
+        ...(lock ? { couponId: c.id } : {}),
         code: c.code,
         discount_type: c.discount_type,
         discount_value: Number(c.discount_value),
