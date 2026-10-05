@@ -1,63 +1,127 @@
-# Próxima homologação Pix TEST — pré-execução (2026-10-05)
+# Próxima homologação Pix TEST — plano de execução única (2026-10-05)
 
-**Estado:** planejamento somente leitura. Nenhum pedido, cupom, Order Pix, QR, cobrança, movimento de estoque ou webhook foi criado ou simulado nesta etapa. Manutenção publicada: ligada. O pedido `DH-2026-000006` está encerrado e não integra este teste. Branch de trabalho: `codex/production-hardening`; `main` e PR #3 não foram alterados.
+**Estado:** planejamento. Nesta atualização não foram criados cupom, pedido, Order Pix, QR, cobrança, movimento de estoque ou webhook. A manutenção estava ligada na última leitura publicada e deve ser reconfirmada. `DH-2026-000006` está encerrado: não reutilizar nem alterar. O próximo ensaio exige pedido TEST novo e dedicado.
+
+## Restrição operacional definitiva
+
+Não há acesso ao painel Mercado Pago da cliente. Não pedir senha, token ou secret; não tentar contornar o login. URL, tópico `Order (Mercado Pago)` e correspondência do secret na aplicação TEST ficam classificados como **UNVERIFIED EXTERNALLY**.
+
+| Campo | Estado |
+| --- | --- |
+| PANEL ACCESS AVAILABLE | NÃO |
+| PANEL WEBHOOK CONFIG VERIFIED | NÃO — UNVERIFIED EXTERNALLY |
+
+Essa limitação não bloqueia, por si só, o único ensaio Pix TEST quando os demais gates prévios estiverem verdes. A entrega real e válida do webhook é **resultado do ensaio**, não pré-requisito. Uma falha de entrega será bloqueio separado para go-live.
 
 ## Cenário controlado
 
-| Campo | Prévia |
+| Campo | Valor planejado e conferência obrigatória |
 | --- | --- |
 | PRODUCT | Blusa Serena, `e6dfe65b-f491-41e2-b54d-5c4499a69be7` |
-| VARIANT | Off-white (`off_white`), M |
-| STOCK BEFORE | 5 unidades no catálogo publicado em 2026-10-05 07:53 UTC; reler imediatamente antes do teste |
-| UNIT PRICE | R$ 189,90; `sale_price` ausente |
+| VARIANT | Off-white (`off_white`) / M |
 | QUANTITY | 1 |
-| DISCOUNT | R$ 139,90 planejados via cupom TEST temporário, ainda inexistente |
-| SHIPPING | Retirada na boutique, R$ 0,00; opção publicada como habilitada |
-| FINAL TOTAL | R$ 50,00 **projetados**: 189,90 − 139,90 + 0,00; confirmar cálculo do backend antes de criar a Order Pix |
-| CHECKOUT IDEMPOTENCY KEY | Nova chave exclusiva, gerada pela sessão de checkout e persistida no pedido; não gerar/reutilizar agora |
-| PIX IDEMPOTENCY KEY | `pix-{novo order.id}`, gerada somente após a criação do novo pedido; não existe agora |
-| MERCADO_PAGO_MODE | `test`, inferido da resposta publicada `environment: Teste`; reconfirmar no servidor antes do teste |
-| PIX ENABLED | Sim, resposta publicada `/api/payments/methods`: `enabled.pix=true` |
-| PIX READINESS | Configuração básica passa pela API publicada (`available.pix=true`, `pix_capability.reason=null`); entrega real do webhook ainda não comprovada |
-| WEBHOOK CONFIGURED | A API infere segredo presente; URL/tópico e correspondência do segredo no painel Mercado Pago TEST não foram verificados |
-| EXPECTED ORDER STATUS BEFORE PAYMENT | `recebido` após criar o pedido, antes do POST Pix |
-| EXPECTED PAYMENT STATUS BEFORE PAYMENT | `pending` |
-| EXPECTED STOCK MOVEMENT | Um movimento `sale` de −1 e variante M de 5 para 4, na transação de criação; retry com mesma chave não repete |
-| EXPECTED COUPON USAGE | Um registro em `coupon_usages` para o novo pedido; zero antes da criação |
+| STOCK | Última leitura: 5 unidades em 2026-10-05 07:53 UTC. Reler imediatamente antes do ensaio. |
+| UNIT PRICE | R$ 189,90, sem preço promocional; reler. |
+| SHIPPING | Retirada na boutique = R$ 0,00; reler. |
+| TEMP COUPON | Desconto fixo de R$ 139,90; `max_uses=1`, `max_uses_per_customer=1`, validade curta. |
+| FINAL EXPECTED TOTAL | R$ 50,00 = 189,90 − 139,90 + 0,00. O backend deve recalcular. |
+| PAYER | `test_user_br@testuser.com`; `first_name=APRO` no snapshot do cliente. |
+| CHECKOUT IDEMPOTENCY KEY | Nova chave exclusiva; retry deve devolver o mesmo pedido. |
+| PIX IDEMPOTENCY KEY | `pix-{novo order.id}`; somente um POST de criação. |
 
-Pagador TEST planejado: `payer.email=test_user_br@testuser.com`, `payer.first_name=APRO`; preencher `customer.name` começando por `APRO` e `customer.email` com o endereço indicado, pois a rota Pix deriva esses campos do snapshot do pedido. O cenário oficial do Mercado Pago especifica R$ 50,00 e esses campos, com resposta inicial `action_required` e atualização posterior automática. QR e copia-e-cola devem ser capturados da resposta real se estiverem presentes; aprovação imediata pode encurtar a janela de observação. Fonte: https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/integration-test/pix
+O [cenário oficial de Pix TEST da Orders API](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/integration-test/pix) usa esse e-mail, `APRO`, R$ 50,00 e verificação por `GET /v1/orders/{id}`. A aprovação pode ocorrer rapidamente, inclusive antes de observar o QR.
 
-## Preparação do cupom, sem criar agora
+## PRE-TEST READINESS
 
-Criar **somente na futura execução autorizada** um código novo e imprevisível com prefixo `TEST-PIX-20261005-`, desconto fixo de R$ 139,90, `min_order_value=189.90`, `max_uses=1`, `max_uses_per_customer=1`, `first_purchase_only=false`, validade curta e `active=false` inicialmente. Validar ausência de promoções ativas e preço R$ 189,90. Ativar apenas durante o único checkout controlado; desativar imediatamente após a criação do pedido, mantendo o registro e seu uso para auditoria. Não reutilizar o cupom de 01/10.
+Os itens abaixo devem ser relidos no ambiente publicado imediatamente antes da autorização final e da execução. Evidência histórica ou inferida não substitui a nova conferência. Verificação do painel e webhook real não integram esse gate.
 
-**Bloqueio de segurança:** o código atual valida contagem de usos por `pool.query` fora da transação do checkout e não bloqueia a linha do cupom; a restrição SQL é somente `(coupon_id, order_id)`. Duas requisições com chaves diferentes podem ultrapassar `max_uses=1`. Corrigir validação/consumo atômicos ou comprovar isolamento operacional efetivo antes de declarar `COUPON SAFETY=SIM`.
+| Gate | Critério para SIM | Evidência atual e limite |
+| --- | --- | --- |
+| MP TEST | `MERCADO_PAGO_MODE=test`, Access Token TEST configurado no backend e Pix habilitado | `/api/payments/methods` publicou `environment: Teste`, `enabled.pix=true` e `available.pix=true`. Isso indica token presente, mas não atesta seu tipo; reconfirmar sem expô-lo. |
+| Orders API em TEST | Integração e GET oficial com credencial TEST funcionais, sem POST adicional | Order histórica de 01/10 foi lida por GET oficial; reconfirmar conectividade read-only se disponível. |
+| Endpoint público | `/api/webhooks/mercado-pago` acessível por HTTPS | POST sem assinatura recebeu 401 na checagem anterior; reconfirmar. Isso não prova entrega assinada. |
+| BACKEND WEBHOOK HMAC READY | Secret presente e assinatura obrigatória antes de consultar provedor ou alterar pedido | Implementado e testado localmente; `available.pix=true` indica secret presente. Painel segue **UNVERIFIED EXTERNALLY**. |
+| CHECKOUT IDEMPOTENT | Chave por usuário, fingerprint, bloqueio e índice único; retry não duplica pedido ou baixa | Implementado e coberto por ensaio local. |
+| COUPON ATOMIC | Linha do cupom bloqueada na mesma transação que conta usos, cria pedido e grava `coupon_usages` | Correção publicada em `70937d0`; `backend/integration/couponConcurrency.mjs` confirmou um vencedor, um uso e rollback completo em PostgreSQL local. |
+| STOCK SAFE | Produto bloqueado; pedido, estoque e um movimento de −1 na mesma transação | Código e ensaio PostgreSQL local registrados; reconfirmar baseline. |
+| Backend recalcula total | Preço, promoção, cupom e retirada calculados pelo servidor; total persistido R$ 50,00 | Implementado; conferir o novo pedido antes do POST Pix. |
+| PIX IDEMPOTENT | `pix-{order.id}`, reserva de tentativa antes do POST, GET oficial e sem segunda cobrança em caso de incerteza | Implementado; confirmar ausência de tentativa anterior no novo pedido. |
+| Manutenção e baseline | Manutenção ligada; produto, estoque, preço, promoções, retirada e cupom conferidos | Última leitura: 5 unidades, R$ 189,90, sem `sale_price`, retirada ativa e manutenção ligada; reler. |
 
-## Contratos e observabilidade
+## Preparação e condições de parada
 
-- `placeOrder` lê produto e preço do banco com `FOR UPDATE`, valida estoque, calcula desconto e frete no backend, grava pedido, estoque e uso do cupom em uma transação. O corpo do frontend não contém total financeiro. A idempotência do checkout usa chave por usuário, advisory lock, fingerprint e índice único.
-- O POST Pix usa `order.total` persistido, `external_reference=order.order_number`, `X-Idempotency-Key=pix-{order.id}` e Orders API `/v1/orders`. Reserva `payment_attempt_started_at` antes da chamada. Após criação consulta `GET /v1/orders/{id}` e valida referência, total, valor da transação, BRL, uma transação e estados. O código não usa SQL de estoque/cupom nessa etapa.
-- O webhook exige HMAC válido antes de reservar evento ou consultar o provedor. Logs técnicos sanitizados incluem `data_id`, `x_request_id`, `signature_present`, `signature_valid`, `provider_resource_fetch`, `local_order_number`, `deduplication_result` e `processing_result`. Nenhuma entrega real do novo pedido existe ainda. Rejeições 401 de 01/10 impedem presumir que o painel e o segredo atual estão alinhados.
-- Um webhook válido deve buscar o recurso oficial, validar o novo pedido, deduplicar o evento e conciliar via bloqueio de linha. Conferir um único evento de aprovação e uma única entrada de auditoria apesar de retries; não enviar webhook simulado.
-- O checkout atual monta `PixPaymentScreen` imediatamente após criar o pedido; a tela dispara o POST Pix automaticamente. Portanto, **clicar em “Confirmar pedido” já inicia a etapa financeira**. Registrar toda a baseline antes desse clique.
-- Logs de pagamento e webhook usam campos técnicos delimitados e evitam credenciais, cabeçalhos completos, corpo do provedor e dados do pagador. Confirmar essa política no deployment antes do teste.
+1. Reler produto, variante, estoque, preço, promoções, retirada, manutenção, configuração TEST/Pix e implantação. Registrar horário, pedidos, movimentos de estoque, usos de cupom, auditoria e eventos para comparação.
+2. Preparar sessão autenticada TEST com `customer.name` começando por `APRO` e `customer.email=test_user_br@testuser.com`. Confirmar que o snapshot produzirá o pagador esperado. Usar o mesmo contrato do checkout normal.
+3. **Somente na execução futura autorizada:** criar cupom TEST novo e imprevisível, inicialmente `active=false`, desconto fixo R$ 139,90, `min_order_value=189.90`, `max_uses=1`, `max_uses_per_customer=1`, `first_purchase_only=false` e validade curta. Confirmar zero usos. Ativar imediatamente antes do checkout único; desativar logo após criar o pedido. Preservar cupom e uso para auditoria.
+4. Abortar **antes do Pix** se estoque diferir da baseline esperada, preço mudar, surgir promoção, retirada deixar de custar R$ 0,00, total diferir de R$ 50,00, MP não estiver em `test`, Pix não estiver habilitado, cupom já tiver uso, pedido duplicar, estoque cair mais de 1 ou qualquer valor financeiro divergir. Se a baseline não for mais 5, parar e reavaliar o cenário, sem presumir 5 → 4.
 
-## Gates antes de uma única execução futura
+## Sequência após autorização explícita
 
-1. Reconfirmar catálogo (produto publicado, Off-white/M, preço e estoque), retirada, zero promoções elegíveis e manutenção ligada; obter baseline administrativo de `stock_movements`, cupom, auditoria e timeline.
-2. Confirmar no ambiente publicado `MERCADO_PAGO_MODE=test`, credencial TEST, Pix habilitado e tipo textual da coluna `mercado_pago_payment_id`. Verificar URL `https://api.dhelenas.com/api/webhooks/mercado-pago`, tópico **order** e secret TEST correspondente no painel Mercado Pago, sem copiar o segredo para logs.
-3. Resolver a concorrência do limite do cupom; criar o cupom inativo e verificar zero usos. Preparar sessão TEST com `APRO` e `test_user_br@testuser.com`; assegurar que nenhuma outra sessão usa o cupom.
-4. Ativar o cupom apenas na janela controlada. Antes do único clique, conferir projeção de R$ 50,00, frete zero e chave de checkout nova. Após criar, conferir pedido novo, snapshot, total calculado, um movimento −1 e um uso. Se qualquer campo divergir, **não chamar POST Pix**.
-5. Só então observar uma criação de Order Pix, GET oficial, QR/copia-e-cola quando disponíveis, webhook real, conciliação, idempotência e contagens de estoque/cupom/auditoria. Se o checkout pela UI for usado, o passo 4 e o POST Pix acontecem em sequência automática; para uma parada entre eles, usar o fluxo autenticado de API com o mesmo contrato e validar a UI separadamente.
+1. Com gates verdes, ativar cupom e chamar **uma vez** o checkout autenticado de API com chave nova. A UI abre `PixPaymentScreen` após “Confirmar pedido” e dispara POST Pix automaticamente; para este ensaio, preferir a API autenticada com o mesmo contrato, permitindo a parada intermediária.
+2. Desativar cupom. **Antes de `POST /api/orders/:id/payment/pix`**, confirmar exatamente um pedido novo, `total=50.00`, `payment_status=pending`, exatamente um uso de cupom, um movimento `sale` de −1 e estoque 5 → 4 quando a baseline reconfirmada for 5. Conferir snapshot do pagador e ausência de tentativa Pix. Se algo divergir, parar sem criar Pix e preservar evidências.
+3. Executar **um único POST Pix**. Registrar ID e status retornados. Se a resposta falhar ou ficar incerta, consultar provedor e pedido local; não criar outra cobrança.
+4. Pelo `GET /v1/orders/{id}` oficial, confirmar `external_reference` igual ao novo número de pedido, `total_amount=50.00`, `currency_id=BRL`, exatamente uma transação de R$ 50,00 e estados coerentes. Conferir também, pela busca oficial por referência já implementada, que existe apenas uma Order do provedor para esse pedido. Registrar QR/copia-e-cola se retornados. Ausência de QR após aprovação imediata não é, isoladamente, falha do Pix.
+5. Observar webhook **real** e conferir logs técnicos, deduplicação, processamento, estado local e auditoria. Não simular webhook nem repetir pagamento para melhorar observação.
 
-**Decisão nesta etapa: SAFE TO EXECUTE ONE CONTROLLED PIX TEST = NÃO.** Pendências: cupom ainda não existe, limite concorrente não é atômico; entrega real do webhook TEST não comprovada; estado financeiro/configuração e baseline administrativo devem ser relidos imediatamente antes da futura execução. Nenhuma chamada mutável foi feita nesta preparação.
+## WEBHOOK HOMOLOGATION RESULT
 
-## Atualização pré-Pix — 2026-10-05, correção de concorrência
+Preencher somente depois do ensaio. **WEBHOOK REAL VALIDATED=SIM** exige entrega real com `signature_present=true`, `signature_valid=true`, `provider_resource_fetch=success`, pedido local encontrado, `external_reference` correta, total e transação de R$ 50,00 em BRL, deduplicação e processamento corretos. Conferir ausência de duplicação de pagamento, auditoria, cupom e estoque. Isso comprova empiricamente URL, tópico e secret funcionais **para esta aplicação TEST naquele momento**, embora `PANEL WEBHOOK CONFIG VERIFIED=NÃO` continue fiel ao fato de que o painel não foi inspecionado.
 
-O bloqueio de concorrência no código foi corrigido nesta branch: o checkout usa o mesmo cliente PostgreSQL e a mesma transação para `SELECT ... FOR UPDATE` da linha do cupom, contagens global e por usuário, reserva de estoque, criação do pedido, inserção em `coupon_usages` e gravação da chave de idempotência. Um segundo checkout disputa a linha e só reconta depois do commit ou rollback do primeiro. O perfil do cliente também fica bloqueado para serializar a regra de primeira compra, inclusive entre cupons diferentes. A numeração de pedidos ganhou bloqueio transacional global; retries com a mesma chave retornam o pedido persistido sem nova notificação de criação. O endpoint público de pré-validação continua apenas indicativo; o checkout recalcula desconto e disponibilidade.
+Se nenhum webhook real chegar após janela razoável (registrar início, fim e logs consultados), **não repetir pagamento, não criar segundo Pix e não simular evento**. Consultar `GET /v1/orders/{id}`, confirmar status no provedor e reconciliar, se necessário, apenas pelo mecanismo seguro existente após sua verificação. Registrar separadamente:
 
-**Evidência local isolada:** `backend/integration/couponConcurrency.mjs`, executado no PostgreSQL local `dhelenas_audit_coupon_20261005` com `TEST_DATABASE_URL` restrito a localhost e prefixo `dhelenas_audit_`. Dois checkouts com chaves e usuários diferentes disputaram o último uso (`max_uses=1`): exatamente um pedido, um uso, um movimento de estoque e uma rejeição `Cupom esgotado`; estoque de 2 para 1. Duas chamadas simultâneas com a mesma chave retornaram o mesmo pedido e um único uso. Uma exceção injetada no insert de uso reverteu pedido, movimento e estoque (2 para 2). Cupom já esgotado rejeitou nova tentativa sem segunda reserva. A regra de primeira compra também aceitou somente um checkout simultâneo do mesmo usuário. Nenhuma chamada ao Mercado Pago foi feita no script.
+| Resultado | Se criação e GET passam, mas não há webhook real |
+| --- | --- |
+| PIX CREATION | PASS |
+| PROVIDER STATUS | PASS, com status efetivo anotado |
+| WEBHOOK DELIVERY | FAIL/UNVERIFIED |
+| WEBHOOK REAL VALIDATED | NÃO |
+| GO-LIVE WEBHOOK | BLOCKED até resolver e validar a entrega |
 
-**Verificação publicada somente leitura:** `/health` retornou `ok` com banco conectado; `/api/payments/methods` retornou ambiente `Teste` e Pix disponível, o que implica token, modo explícito e secret do webhook presentes pela implementação atual. O endpoint público `/api/webhooks/mercado-pago` respondeu HTTP 401 a um POST `{}` sem assinatura, antes de consultar provedor ou alterar pedido. O catálogo publicado mostrou Blusa Serena Off-white/M com 5 unidades, preço R$ 189,90 sem preço promocional; retirada ativa; manutenção ligada. O total projetado permanece R$ 50,00 após o desconto futuro de R$ 139,90, sujeito ao recálculo do backend no futuro ensaio.
+Resposta de criação incerta ou GET divergente exige resultado próprio de **conciliação necessária**; não presumir `PIX CREATION=PASS`. O ensaio financeiro não é repetido automaticamente em nenhum ramo.
 
-**Gate de webhook ainda pendente:** o painel Mercado Pago solicitou login nesta sessão, e o responsável informou que não possui acesso à conta da cliente. Portanto URL, tópico `Order (Mercado Pago)` e correspondência do secret com a mesma aplicação TEST não foram confirmados no painel. A presença do secret no backend e o teste HMAC local não provam essa correspondência. Não exigir entrega real do novo Pix antes de criá-lo; essa entrega será validada durante o ensaio. Nenhum cupom TEST, pedido ou cobrança foi criado no ambiente publicado nesta rodada. A correção foi publicada no Railway após o commit `70937d0`; CI, status de deploy de `resourceful-joy` e `/health` passaram. Manter `SAFE TO EXECUTE ONE CONTROLLED PIX TEST = NÃO` até um operador autorizado confirmar a configuração no painel e reler a baseline imediatamente antes do ensaio.
+## Relatório de readiness nesta atualização
+
+| Campo | Estado em 2026-10-05 | Próxima conferência |
+| --- | --- | --- |
+| PANEL ACCESS AVAILABLE | NÃO | Restrição definitiva desta operação. |
+| PANEL WEBHOOK CONFIG VERIFIED | NÃO — UNVERIFIED EXTERNALLY | Não integra o gate pré-teste. |
+| PRE-TEST TECHNICAL GATES | NÃO, ainda sem revalidação imediata | SIM somente quando todos os gates prévios forem relidos e aprovados. |
+| COUPON ATOMIC | SIM no código publicado e ensaio local | Reconfirmar implantação. |
+| STOCK SAFE | SIM no código e ensaio local | Reconfirmar baseline. |
+| CHECKOUT IDEMPOTENT | SIM no código e testes locais | Confirmar chave nova. |
+| PIX IDEMPOTENT | SIM no código | Confirmar pedido sem tentativa anterior. |
+| MP TEST | NÃO comprovado integralmente nesta atualização | A última resposta publicada indica modo `test`, token presente e Pix habilitado; reconfirmar que o token configurado é TEST sem revelá-lo. |
+| BACKEND WEBHOOK HMAC READY | SIM no código/teste e secret indicado presente | Reconfirmar implantação, secret presente e rejeição sem assinatura. |
+| SAFE TO EXECUTE EXACTLY ONE CONTROLLED PIX TEST | **NÃO nesta atualização** | Pode ser SIM após pré-teste verde; painel e entrega prévia de webhook não são requisitos. SIM não autoriza a execução. |
+
+**NEXT EXACT ACTION:** reler com segurança os gates e a baseline no ambiente publicado e registrar o relatório atualizado. Se tudo passar, apresentar `SAFE TO EXECUTE EXACTLY ONE CONTROLLED PIX TEST=SIM` e **aguardar autorização explícita antes de criar cupom, pedido ou Pix**.
+
+## Pre-flight final somente leitura — 2026-10-05 22:49 UTC
+
+Esta leitura não criou cupom, pedido, Pix ou QR; não alterou estoque, settings, manutenção, Mercado Pago, Railway, Supabase, `main` ou PR #3. O plano local anterior foi preservado. A coluna `PANEL WEBHOOK CONFIG VERIFIED=NÃO — UNVERIFIED EXTERNALLY` permanece uma limitação conhecida, sem bloqueio automático do único ensaio TEST.
+
+| Campo | Baseline relida / evidência |
+| --- | --- |
+| PRODUCT / VARIANT | Blusa Serena `e6dfe65b-f491-41e2-b54d-5c4499a69be7`, Off-white (`off_white`) / M; produto `published`, variante disponível pelo estoque. Não existe flag própria de ativação da variante no catálogo. |
+| UNIT PRICE / SALE PRICE | R$ 189,90 / ausente (`null`) em `GET /api/products/:id` publicado. O backend usa `sale_price || price` da linha bloqueada. |
+| STOCK NOW / AVAILABLE | 5 / 5 em `colors[].stock.M`. Não há saldo reservado separado exposto; a criação do pedido baixa esse saldo na transação. |
+| AUTOMATIC PROMOTIONS | `GET /api/look-promotions` retornou zero regras ativas. Desconto automático aplicável observado: R$ 0,00. |
+| COUPONS / FIRST PURCHASE | A rota de listagem exige admin; cupons ativos não foram enumerados. Pelo código publicado, cupom e regra de primeira compra só entram quando `coupon_code` é enviado. A inexistência de cupom inesperado no banco não foi verificada. |
+| BASE PRICE USED BY BACKEND / UNEXPECTED DISCOUNT | R$ 189,90 no cenário sem cupom / nenhum desconto automático encontrado. Confirmar novamente imediatamente antes do ensaio. |
+| PICKUP ENABLED / PRICE | `settings.shipping.pickup_enabled=true`; `shipping_method='retirada'` é aceito no backend e fixa `shippingCost=0`. R$ 0,00. |
+| MP MODE / PIX ENABLED / PIX AVAILABLE | `environment=Teste`; `enabled.pix=true`; `available.pix=true` em `GET /api/payments/methods`. A rota deriva `Teste` de `MERCADO_PAGO_MODE=test`. |
+| PIX CAPABILITY SOURCE | `orders_api_configuration`, `reason=null`. Isso confirma configuração básica; não garante aceitação futura da Orders API. |
+| MP TOKEN / WEBHOOK SECRET | PRESENTE / PRESENTE, inferidos da implementação da capacidade Pix publicada; nenhum valor foi exibido. O tipo efetivo do token TEST não foi lido diretamente. |
+| PANEL ACCESS / PANEL WEBHOOK CONFIG | NÃO DISPONÍVEL / **UNVERIFIED EXTERNALLY**. Não é blocker automático. |
+| PAYMENT ID COLUMN / CHECKOUT IDEMPOTENCY | Migration `012` exige `orders.mercado_pago_payment_id=text`; migrations `001` e `010` definem índice único parcial `(user_id,idempotency_key)`. **Schema de produção não confirmado por SELECT nesta sessão.** |
+| COUPON / STOCK / ORDER TABLES | `coupon_usages`, `stock_movements` e `orders` constam das migrations locais; estrutura efetiva de produção não inspecionada. |
+| ATOMIC COUPON CODE DEPLOYED | Commit `70937d0` é ancestral do HEAD `a4edd5e`; status de deploy Railway `resourceful-joy` para esse HEAD: `success` em 2026-10-05 18:10 UTC, alvo `api.dhelenas.com`. O código contém `FOR UPDATE`, contagens, pedido, movimento, uso e idempotência na mesma transação. Teste PostgreSQL isolado documentado acima; sem nova concorrência em produção. O binário/runtime não expõe SHA para conferência independente. |
+| BACKEND PRICE / TOTAL AUTHORITY | Confirmado pelo fluxo `resolveCatalogLine` e `calculateServerOrderTotal` no commit publicado; nenhum total do navegador é aceito como autoridade. |
+| MAINTENANCE / REFUNDS FLAG / ME MODE | `maintenance_mode=true` na API pública / `AFTER_SALES_REFUNDS_ENABLED` não verificável nesta sessão / `settings.shipping.melhor_envio_mode=sandbox`; variável de ambiente `MELHOR_ENVIO_MODE` não verificável. |
+| ORDER COUNT BEFORE | Não aferido: requer SELECT no banco/admin. |
+| STOCK MOVEMENT COUNT FOR TEST PRODUCT | Não aferido: requer SELECT no banco/admin. |
+| COUPON USAGE BASELINE | Não aferido: requer SELECT no banco/admin. Nenhum cupom TEST foi criado nesta leitura. |
+| PAYMENT AUDIT BASELINE / WEBHOOK EVENT BASELINE | Não aferidos: requerem SELECT no banco/admin. |
+| TARGET TOTAL / REQUIRED TEST DISCOUNT | R$ 50,00 / R$ 139,90 fixos, projetados a partir do preço relido de R$ 189,90, quantidade 1 e retirada R$ 0,00. Nenhum cupom foi criado. |
+
+**PRE-TEST TECHNICAL GATES=INCOMPLETOS. SAFE TO EXECUTE EXACTLY ONE CONTROLLED PIX TEST=NÃO.** Bloqueios desta leitura: schema e índice efetivos não confirmados; contagens de auditoria não registradas; estado efetivo de cupons, tipo da credencial TEST e flags privadas não confirmado. O painel Mercado Pago não integra esta lista de bloqueios. A próxima ação exata é obter acesso read-only autorizado ao banco/admin do ambiente publicado, executar somente SELECTs para schema, índice, cupons e contagens, conferir as flags privadas e o tipo da credencial TEST sem expor valores e reler os campos voláteis antes de decidir. Mesmo se todos os gates passarem depois, parar e aguardar autorização explícita para qualquer cupom, pedido ou Pix.
