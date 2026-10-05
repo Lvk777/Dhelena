@@ -91,8 +91,8 @@ export async function getPaymentMethods() {
 }
 
 // ─── Get available payment types (pix, credit_card, debit_card, etc) ───
-export async function getAvailablePaymentTypes() {
-    const methods = await getPaymentMethods();
+export async function getAvailablePaymentTypes(methods = null) {
+    methods ||= await getPaymentMethods();
     const types = new Set(methods.map(m => m.payment_type_id));
     return {
         pix: types.has('bank_transfer') || methods.some(m => m.id === 'pix'),

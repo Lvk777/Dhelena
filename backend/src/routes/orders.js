@@ -13,6 +13,7 @@ import { applyVerifiedOrderInTransaction, recordVerifiedNonApprovedOrderInTransa
 import { createPaymentDiagnostic } from '../lib/paymentDiagnostics.js';
 import { assertExpectedTransactionId, loadPaymentReconciliationPreview } from '../lib/paymentPreview.js';
 import { validateCardPaymentChoice } from '../lib/paymentChoice.js';
+import { getPixCapability } from '../lib/pixAvailability.js';
 
 const router = Router();
 const COUPON_MUTABLE_FIELDS = new Set([
@@ -211,22 +212,31 @@ router.get('/stock-movements', auth, requireAdmin, async (req, res, next) => {
 
 // ─── PAYMENTS ──────────────────────────────────────────────────────
 
-// GET /api/payments/methods — list available payment methods from MP
+// GET /api/payments/methods — Orders API Pix readiness plus optional card listing
 router.get('/payments/methods', auth, async (req, res) => {
     try {
-        const methods = await mp.getPaymentMethods();
-        const types = await mp.getAvailablePaymentTypes();
-
+        let methods = [];
+        let methodListingStatus = 'available';
+        try {
+            methods = await mp.getPaymentMethods();
+        } catch {
+            // This auxiliary listing is not an Orders API Pix capability check.
+            // Keep cards disabled until their current methods can be listed.
+            methodListingStatus = 'unavailable';
+        }
+        const types = await mp.getAvailablePaymentTypes(methods);
         // Check admin settings for enabled methods
         const { rows: settingRows } = await pool.query("SELECT value FROM settings WHERE key = 'payments'");
         const payConfig = settingRows[0]?.value || {};
-        const pixEnabled = payConfig.pix_enabled !== false;
         const cardEnabled = payConfig.card_enabled !== false;
+        const pix = getPixCapability(payConfig, mp.getMercadoPagoReadiness());
 
         res.json({
-            available: types,
+            available: { ...types, pix: pix.available },
+            pix_capability: { source: pix.source, reason: pix.reason, listed_by_payment_methods: types.pix },
+            method_listing_status: methodListingStatus,
             enabled: {
-                pix: pixEnabled && types.pix,
+                pix: pix.enabled,
                 credit_card: cardEnabled && types.credit_card,
                 debit_card: cardEnabled && payConfig.debit_card_enabled !== false && types.debit_card,
                 boleto: false,
@@ -237,7 +247,7 @@ router.get('/payments/methods', auth, async (req, res) => {
             environment: mp.getMercadoPagoEnvironment(),
         });
     } catch (err) {
-        res.status(err.status || 500).json({ error: err.message });
+        res.status(503).json({ error: 'Não foi possível consultar as formas de pagamento no momento.' });
     }
 });
 
@@ -301,7 +311,9 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
             return res.status(409).json({ error: 'Pagamento existente ou em conciliação; não criar outra cobrança' });
         }
         const { rows: pixSettings } = await pool.query("SELECT value FROM settings WHERE key = 'payments'");
-        if (pixSettings[0]?.value?.pix_enabled === false) return res.status(409).json({ error: 'Pix indisponível' });
+        if (!getPixCapability(pixSettings[0]?.value || {}, mp.getMercadoPagoReadiness()).enabled) {
+            return res.status(409).json({ error: 'Pix indisponível no momento. Escolha outra forma de pagamento.' });
+        }
         const { rows: reserved } = await pool.query(
             `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'pix'
              WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'

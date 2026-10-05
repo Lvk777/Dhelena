@@ -5,11 +5,9 @@
 
 import { supabase } from './supabaseClient.js';
 import { buildPlaceOrderRequest } from './orderRequest.js';
+import { resolveApiBase, apiUrl } from './apiBase.js';
 
-const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? null : '/api');
-if (!API_BASE) {
-    throw new Error('VITE_API_URL é obrigatória em produção; a API não pode usar o fallback /api do SPA.');
-}
+const API_BASE = resolveApiBase(import.meta.env.VITE_API_URL, import.meta.env.PROD);
 const TOKEN_KEY = 'dhelena_access_token';
 const USER_KEY = 'dhelena_auth_user';
 
@@ -41,7 +39,7 @@ async function apiFetch(path, options = {}) {
     const headers = { 'Content-Type': 'application/json', ...options.headers };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    const res = await fetch(apiUrl(API_BASE, path), { ...options, headers });
 
     if (res.status === 401) {
         setToken(null);
@@ -353,7 +351,7 @@ const integrations = {
             formData.append('file', file);
             formData.append('folder', folder);
 
-            const res = await fetch(`${API_BASE}/upload`, {
+            const res = await fetch(apiUrl(API_BASE, '/upload'), {
                 method: 'POST',
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {},
                 body: formData,

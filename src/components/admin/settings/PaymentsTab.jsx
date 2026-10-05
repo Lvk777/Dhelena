@@ -63,7 +63,7 @@ export default function PaymentsTab({ data, onChange }) {
                 <div />
             </AdminFormSection>
 
-            <AdminFormSection title="Métodos disponíveis no Mercado Pago" description="Métodos que a conta MP oferece — combine com os toggles acima">
+            <AdminFormSection title="Métodos de pagamento no checkout" description="Pix usa a configuração da Orders API; cartões usam a lista de métodos do Mercado Pago.">
                 <div className="sm:col-span-2">
                     {methodsLoading && <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Verificando...</div>}
                     {methodsInfo?.error && <p className="text-xs text-red-600">{methodsInfo.error}</p>}
@@ -78,9 +78,10 @@ export default function PaymentsTab({ data, onChange }) {
                                 <MethodBadge icon={CreditCard} label="Cartão" available={methodsInfo.available?.credit_card} enabled={methodsInfo.enabled?.credit_card} />
                                 <MethodBadge icon={Banknote} label="Débito" available={methodsInfo.available?.debit_card} enabled={methodsInfo.enabled?.debit_card} />
                             </div>
-                            {methodsInfo.available && !methodsInfo.available.pix && (
-                                <p className="text-xs text-amber-600 mt-2">⚠ Pix indisponível nesta conta Mercado Pago. Verifique se a chave Pix está cadastrada e o ambiente é correto.</p>
-                            )}
+                            <p className="text-xs text-muted-foreground mt-2">Pix: capacidade configurada no backend para a Orders API. A lista /v1/payment_methods não confirma a disponibilidade desse fluxo; cada tentativa é validada pelo Mercado Pago.</p>
+                            {methodsInfo.method_listing_status === 'unavailable' && <p className="text-xs text-amber-600">A lista de cartões não respondeu. Os cartões ficam indisponíveis até a consulta voltar.</p>}
+                            {methodsInfo.pix_capability?.reason === 'integration_not_configured' && <p className="text-xs text-amber-600">Configure o modo e o Access Token da integração no servidor.</p>}
+                            {methodsInfo.pix_capability?.reason === 'webhook_not_configured' && <p className="text-xs text-amber-600">Configure o segredo do webhook para confirmar pagamentos Pix.</p>}
                         </div>
                     )}
                 </div>

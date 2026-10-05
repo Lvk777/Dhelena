@@ -334,9 +334,9 @@ export default function Checkout() {
                                 </div>
                             ) : paymentMethods ? (
                                 <div className="space-y-3" role="radiogroup" aria-label="Forma de pagamento">
-                                    <PayOption selected={paymentMethod === "pix"} disabled={!paymentMethods.enabled?.pix} onClick={() => setPaymentMethod("pix")} icon={QrCode} title="Pix" desc="Pagamento instantâneo com QR Code" />
                                     <PayOption selected={paymentMethod === "credito"} disabled={!paymentMethods.enabled?.credit_card} onClick={() => setPaymentMethod("credito")} icon={CreditCard} title="Cartão de crédito" desc={`Parcele em até ${paymentMethods?.max_installments || 6}x, conforme as opções disponíveis no cartão`} />
                                     <PayOption selected={paymentMethod === "debito"} disabled={!paymentMethods.enabled?.debit_card} onClick={() => setPaymentMethod("debito")} icon={Banknote} title="Cartão de débito" desc="Pagamento à vista" />
+                                    <PayOption selected={paymentMethod === "pix"} disabled={!paymentMethods.enabled?.pix} onClick={() => setPaymentMethod("pix")} icon={QrCode} title="Pix" desc="À vista. QR Code ou código copia e cola após a criação válida do pagamento; confirmação pelo Mercado Pago." />
                                     {!paymentMethods.enabled?.pix && !paymentMethods.enabled?.credit_card && !paymentMethods.enabled?.debit_card && (
                                         <div className="p-4 border border-amber-500/30 bg-amber-500/5 text-sm text-amber-700">
                                             Nenhum método de pagamento disponível. Verifique a configuração do Mercado Pago no admin.

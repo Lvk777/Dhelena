@@ -8,6 +8,7 @@ import {
     createPixPayment,
     findTestOrdersByReference,
     getOrderStatus,
+    getAvailablePaymentTypes,
     inspectWebhookSignature,
     mapPaymentStatus,
     validateWebhookSignature,
@@ -33,8 +34,37 @@ import { adjustStock, validateCoupon } from '../src/services.js';
 import { pool } from '../src/config/db.js';
 import { stockFor } from '../../src/data/products.js';
 import { reserveVariantStock, restoreVariantStock, stockForSize } from '../src/lib/variantStock.js';
+import { getPixCapability } from '../src/lib/pixAvailability.js';
+import { resolveApiBase, apiUrl } from '../../src/api/apiBase.js';
 import { selectedDelivery, selectedDeliveryCost, shippingContextKey } from '../../src/lib/shippingSelection.js';
 import { validateCardPaymentChoice } from '../src/lib/paymentChoice.js';
+
+test('Pix Orders API capability follows configuration and store toggle, not method listing or old orders', async () => {
+    const methods = [{ id: 'visa', payment_type_id: 'credit_card' }, { id: 'debvisa', payment_type_id: 'debit_card' }];
+    assert.deepEqual(await getAvailablePaymentTypes(methods), {
+        pix: false, credit_card: true, debit_card: true, boleto: false,
+    });
+    const ready = { configured: true, webhook_configured: true };
+    assert.deepEqual(getPixCapability({ pix_enabled: true }, ready), {
+        available: true, enabled: true, source: 'orders_api_configuration', reason: null,
+    });
+    assert.equal(getPixCapability({ pix_enabled: false }, ready).enabled, false);
+    assert.equal(getPixCapability({ pix_enabled: true }, { ...ready, webhook_configured: false }).available, false);
+    assert.equal(getPixCapability({ pix_enabled: true }, { ...ready, configured: false }).available, false);
+});
+
+test('every HTTP client route joins one /api prefix for origin or /api base', () => {
+    const routes = ['/auth/me', '/products?limit=2', '/cart', '/shipping/quote', '/orders',
+        '/orders/1/payment/pix', '/admin/dashboard', '/settings', '/integrations/status',
+        '/payments/methods', '/upload'];
+    for (const configured of ['https://api.dhelenas.com', 'https://api.dhelenas.com/api', 'https://api.dhelenas.com/api/']) {
+        const base = resolveApiBase(configured, true);
+        for (const route of routes) assert.equal(apiUrl(base, route), `https://api.dhelenas.com/api${route}`);
+    }
+    assert.equal(resolveApiBase('', false), '/api');
+    assert.throws(() => resolveApiBase('', true), /obrigatória/);
+    assert.throws(() => apiUrl('https://api.dhelenas.com/api', '/api/products'), /inválida/);
+});
 
 test('birth date accepts only real dates with a four-digit, non-future year', () => {
     assert.equal(normalizeBirthDate('12/03/1990'), '1990-03-12');

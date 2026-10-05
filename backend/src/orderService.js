@@ -7,6 +7,8 @@ import { buildShippingPackages, getCheckoutShippingInput, selectShippingQuote } 
 import { assertMatchingIdempotencyRequest, createOrderRequestFingerprint, normalizeIdempotencyKey } from './lib/idempotency.js';
 import { calculateCheckoutShippingCost, calculateServerOrderTotal, resolveCatalogLine } from './lib/orderPricing.js';
 import { reserveVariantStock } from './lib/variantStock.js';
+import { getPixCapability } from './lib/pixAvailability.js';
+import { getMercadoPagoReadiness } from './services/mercadoPago.js';
 
 // ─── placeOrder: atomic order creation ──────────────────────────────
 export async function placeOrder(userId, body, idempotencyKey) {
@@ -29,6 +31,9 @@ export async function placeOrder(userId, body, idempotencyKey) {
             || (payment_method !== 'pix' && paymentConfig.card_enabled === false)
             || (payment_method === 'debito' && paymentConfig.debit_card_enabled === false)) {
             throw Object.assign(new Error('Forma de pagamento indisponível'), { status: 409 });
+        }
+        if (payment_method === 'pix' && !getPixCapability(paymentConfig, getMercadoPagoReadiness()).enabled) {
+            throw Object.assign(new Error('Pix indisponível no momento. Escolha outra forma de pagamento.'), { status: 409 });
         }
         // Serialize retries for this user/key before checking or applying stock
         // changes. The unique index is the final database-level safeguard.
