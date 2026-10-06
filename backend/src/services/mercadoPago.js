@@ -36,7 +36,7 @@ export function getMercadoPagoEnvironment() {
 async function mpFetch(path, options = {}) {
     const token = getAccessToken();
     const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
-    const { idempotencyKey, ...fetchOptions } = options;
+    const { idempotencyKey, onResponse, ...fetchOptions } = options;
     const method = (fetchOptions.method || 'GET').toUpperCase();
     const idempotencyHeaders = method === 'GET' ? {} : { 'X-Idempotency-Key': idempotencyKey || crypto.randomUUID() };
     const res = await fetch(url, {
@@ -48,6 +48,7 @@ async function mpFetch(path, options = {}) {
             ...(fetchOptions.headers || {}),
         },
     });
+    onResponse?.(res.status);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
         const msg = data.message || data.error || `Mercado Pago API error (${res.status})`;
@@ -198,6 +199,20 @@ export async function createCardPayment({ orderId, orderNumber, total, payer, ca
 
 // Admin-only TEST diagnosis: read provider orders by their store reference.
 // The response excludes payer data and credentials.
+function parseProviderNonNegativeInteger(value) {
+    if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? value : null;
+    if (typeof value !== 'string' || !/^[0-9]+$/.test(value)) return null;
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+const ORDERS_LOOKUP_PAGE_SIZE = 10;
+const ORDERS_LOOKUP_MAX_PAGES = 50;
+
+function inconclusiveOrdersLookup(code = 'provider_pagination_inconclusive') {
+    return Object.assign(new Error('Consulta de Orders inconclusiva; exige conciliação'), { status: 409, code });
+}
+
 export async function findTestOrdersByReference(externalReference, createdAt) {
     if (getMercadoPagoMode() !== 'test') {
         throw Object.assign(new Error('Diagnóstico disponível somente no modo TEST'), { status: 409 });
@@ -212,17 +227,87 @@ export async function findTestOrdersByReference(externalReference, createdAt) {
         external_reference: externalReference,
         type: 'online',
         page: '1',
-        page_size: '10',
+        page_size: String(ORDERS_LOOKUP_PAGE_SIZE),
     });
-    const result = await mpFetch(`/v1/orders?${params}`, { signal: AbortSignal.timeout(10000) });
-    // A full first page or an unexpected response cannot prove absence.
-    if (!Array.isArray(result.data) || !Number.isSafeInteger(result.paging?.total)
-        || result.paging.total !== result.data.length || result.data.length >= 10
-        || result.data.some(order => order.external_reference !== externalReference)) {
-        throw Object.assign(new Error('Consulta de Orders inconclusiva; exige conciliação'), { status: 409 });
+    const orders = [];
+    const seenIds = new Set();
+    let expectedTotal = null;
+    let expectedTotalPages = null;
+    for (let page = 1; page <= ORDERS_LOOKUP_MAX_PAGES; page++) {
+        params.set('page', String(page));
+        let httpStatus = null;
+        let parsedTotal = null;
+        let parsedTotalPages = null;
+        let returnedCount = null;
+        let matchingReferenceCount = null;
+        let paginationComplete = false;
+        try {
+            const result = await mpFetch(`/v1/orders?${params}`, {
+                signal: AbortSignal.timeout(10000),
+                onResponse: status => { httpStatus = status; },
+            });
+            if (httpStatus !== 200) throw inconclusiveOrdersLookup('provider_request_inconclusive');
+            if (!Array.isArray(result?.data) || !result.paging || typeof result.paging !== 'object'
+                || Array.isArray(result.paging)) throw inconclusiveOrdersLookup();
+
+            parsedTotal = parseProviderNonNegativeInteger(result.paging.total);
+            parsedTotalPages = result.paging.total_pages === undefined ? null
+                : parseProviderNonNegativeInteger(result.paging.total_pages);
+            const offset = result.paging.offset === undefined ? null
+                : parseProviderNonNegativeInteger(result.paging.offset);
+            const limit = result.paging.limit === undefined ? null
+                : parseProviderNonNegativeInteger(result.paging.limit);
+            returnedCount = result.data.length;
+            matchingReferenceCount = result.data.filter(order => order?.external_reference === externalReference).length;
+            const calculatedPages = parsedTotal === null ? null
+                : Math.ceil(parsedTotal / ORDERS_LOOKUP_PAGE_SIZE);
+            const pagesToRead = calculatedPages === null ? null : Math.max(1, calculatedPages);
+            if (parsedTotal === null || (result.paging.total_pages !== undefined && parsedTotalPages === null)
+                || (result.paging.offset !== undefined && offset === null)
+                || (result.paging.limit !== undefined && limit === null)
+                || (limit !== null && limit !== ORDERS_LOOKUP_PAGE_SIZE)
+                || (offset !== null && offset !== (page - 1) * ORDERS_LOOKUP_PAGE_SIZE)
+                || (parsedTotalPages !== null && parsedTotalPages !== calculatedPages
+                    && !(parsedTotal === 0 && parsedTotalPages === 1))
+                || pagesToRead > ORDERS_LOOKUP_MAX_PAGES
+                || (expectedTotal !== null && parsedTotal !== expectedTotal)
+                || (expectedTotalPages !== null && parsedTotalPages !== null && parsedTotalPages !== expectedTotalPages)
+                || returnedCount > ORDERS_LOOKUP_PAGE_SIZE
+                || orders.length + returnedCount > parsedTotal
+                || matchingReferenceCount !== returnedCount) {
+                throw inconclusiveOrdersLookup(matchingReferenceCount !== returnedCount
+                    ? 'provider_filter_inconclusive' : 'provider_pagination_inconclusive');
+            }
+            expectedTotal = parsedTotal;
+            expectedTotalPages = calculatedPages;
+            if (page < pagesToRead && returnedCount !== ORDERS_LOOKUP_PAGE_SIZE) {
+                throw inconclusiveOrdersLookup();
+            }
+            for (const order of result.data) {
+                if ((typeof order.id !== 'string' && typeof order.id !== 'number')
+                    || !String(order.id) || seenIds.has(String(order.id))) throw inconclusiveOrdersLookup();
+                seenIds.add(String(order.id));
+                orders.push(order);
+            }
+            if (page === pagesToRead) {
+                if (orders.length !== parsedTotal) throw inconclusiveOrdersLookup();
+                paginationComplete = true;
+            }
+        } catch (error) {
+            if (error.status === 409 && typeof error.code === 'string' && error.code.startsWith('provider_')) throw error;
+            throw Object.assign(inconclusiveOrdersLookup('provider_request_inconclusive'), { cause: error });
+        } finally {
+            console.info(JSON.stringify({
+                http_status: httpStatus, page, page_size: ORDERS_LOOKUP_PAGE_SIZE,
+                parsed_total: parsedTotal, parsed_total_pages: parsedTotalPages,
+                returned_count: returnedCount, matching_reference_count: matchingReferenceCount,
+                pagination_complete: paginationComplete,
+            }));
+        }
+        if (paginationComplete) break;
     }
     const safeCode = (value) => typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,80}$/.test(value) ? value : null;
-    return result.data
+    return orders
         .filter((order) => order.external_reference === externalReference)
         .map((order) => ({
             id: order.id,

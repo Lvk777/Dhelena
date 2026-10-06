@@ -163,11 +163,11 @@ test('Orders API search fails closed on incomplete pages, 5xx and timeout', asyn
             { paging: { total: 1 }, data: [{ external_reference: 'OTHER' }] },
             { paging: { total: 10 }, data: Array.from({ length: 10 }, () => ({ external_reference: 'DH-TEST-1' })) },
         ]) {
-            global.fetch = async () => ({ ok: true, json: async () => result });
+            global.fetch = async () => ({ ok: true, status: 200, json: async () => result });
             await assert.rejects(findTestOrdersByReference('DH-TEST-1', '2026-01-01'), { status: 409 });
         }
         global.fetch = async () => ({ ok: false, status: 503, json: async () => ({}) });
-        await assert.rejects(findTestOrdersByReference('DH-TEST-1', '2026-01-01'), { status: 503 });
+        await assert.rejects(findTestOrdersByReference('DH-TEST-1', '2026-01-01'), { status: 409, code: 'provider_request_inconclusive' });
         global.fetch = async () => { throw Object.assign(new Error('timeout'), { name: 'TimeoutError' }); };
         await assert.rejects(findTestOrdersByReference('DH-TEST-1', '2026-01-01'));
     } finally {
