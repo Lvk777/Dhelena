@@ -5,6 +5,7 @@
  */
 
 import crypto from 'crypto';
+import { normalizePayer, omitEmptyOptional } from '../lib/paymentPayer.js';
 
 const BASE_URL = 'https://api.mercadopago.com';
 
@@ -105,6 +106,7 @@ export async function getAvailablePaymentTypes(methods = null) {
 // ─── Create Pix payment via Orders API ─────────────────────────
 export async function createPixPayment({ orderId, orderNumber, total, payer, idempotencyKey, onStage = () => {} }) {
     onStage('build_payload');
+    const safePayer = normalizePayer(payer);
     const body = {
         type: 'online',
         processing_mode: 'automatic',
@@ -119,12 +121,7 @@ export async function createPixPayment({ orderId, orderNumber, total, payer, ide
                 },
             }],
         },
-        payer: {
-            email: payer.email,
-            first_name: payer.first_name,
-            last_name: payer.last_name,
-            identification: payer.identification,
-        },
+        payer: safePayer,
         description: `Pedido ${orderNumber}`,
     };
 
@@ -159,6 +156,7 @@ export async function createPixPayment({ orderId, orderNumber, total, payer, ide
 
 // ─── Create card payment via Orders API ───────────────────────
 export async function createCardPayment({ orderId, orderNumber, total, payer, cardToken, installments, paymentMethodId, paymentType, issuerId, idempotencyKey }) {
+    const safePayer = normalizePayer(payer);
     const body = {
         type: 'online',
         processing_mode: 'automatic',
@@ -167,21 +165,16 @@ export async function createCardPayment({ orderId, orderNumber, total, payer, ca
         transactions: {
             payments: [{
                 amount: String(Number(total).toFixed(2)),
-                payment_method: {
+                payment_method: omitEmptyOptional({
                     id: paymentMethodId,
                     type: paymentType,
                     token: cardToken,
                     installments: parseInt(installments) || 1,
                     issuer_id: issuerId ? String(issuerId) : undefined,
-                },
+                }),
             }],
         },
-        payer: {
-            email: payer.email,
-            first_name: payer.first_name,
-            last_name: payer.last_name,
-            identification: payer.identification,
-        },
+        payer: safePayer,
         description: `Pedido ${orderNumber}`,
     };
 

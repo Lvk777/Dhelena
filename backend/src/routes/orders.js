@@ -14,6 +14,7 @@ import { createPaymentDiagnostic } from '../lib/paymentDiagnostics.js';
 import { assertExpectedTransactionId, loadPaymentReconciliationPreview } from '../lib/paymentPreview.js';
 import { validateCardPaymentChoice } from '../lib/paymentChoice.js';
 import { getPixCapability } from '../lib/pixAvailability.js';
+import { payerFromOrder } from '../lib/paymentPayer.js';
 
 const router = Router();
 const COUPON_MUTABLE_FIELDS = new Set([
@@ -314,6 +315,8 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
         if (!getPixCapability(pixSettings[0]?.value || {}, mp.getMercadoPagoReadiness()).enabled) {
             return res.status(409).json({ error: 'Pix indisponível no momento. Escolha outra forma de pagamento.' });
         }
+        // Validate locally before reserving the financial attempt.
+        const payer = payerFromOrder(order, req.user);
         const { rows: reserved } = await pool.query(
             `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'pix'
              WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
@@ -321,17 +324,7 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
             [order.id]);
         if (!reserved.length) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
 
-        // Get payer info from snapshot
         diagnostic.setStage('build_payload');
-        const snapshot = order.snapshot || {};
-        const customer = snapshot.customer || {};
-        const payer = {
-            email: customer.email || req.user.email,
-            first_name: (customer.name || req.user.full_name || '').split(' ')[0],
-            last_name: (customer.name || req.user.full_name || '').split(' ').slice(1).join(' ') || 'Cliente',
-            identification: { type: 'CPF', number: (customer.cpf || '').replace(/\D/g, '') },
-        };
-
         const idempotencyKey = `pix-${order.id}`;
         const result = await mp.createPixPayment({
             orderId: order.id,
@@ -440,22 +433,13 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
         const paymentConfig = paymentSettings[0]?.value || {};
         const { paymentType, installments: requestedInstallments } = validateCardPaymentChoice(
             order.payment_method, methods, payment_method_id, installments, paymentConfig);
+        const payer = payerFromOrder(order, req.user);
         const { rows: reserved } = await pool.query(
             `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'card'
              WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
                AND mercado_pago_order_id IS NULL AND payment_attempt_started_at IS NULL RETURNING id`,
             [order.id]);
         if (!reserved.length) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
-
-        // Get payer info
-        const snapshot = order.snapshot || {};
-        const customer = snapshot.customer || {};
-        const payer = {
-            email: customer.email || req.user.email,
-            first_name: (customer.name || req.user.full_name || '').split(' ')[0],
-            last_name: (customer.name || req.user.full_name || '').split(' ').slice(1).join(' ') || 'Cliente',
-            identification: { type: 'CPF', number: (customer.cpf || '').replace(/\D/g, '') },
-        };
 
         const idempotencyKey = `card-${order.id}`;
         const result = await mp.createCardPayment({
