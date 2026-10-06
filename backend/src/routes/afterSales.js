@@ -5,6 +5,7 @@ import {
     advanceReturn, cancelPaidOrder, cancelPendingProviderOrder, createReturn, reconcileRefund, requestRefund,
 } from '../afterSalesService.js';
 import { loadRefundPreview } from '../lib/refundPreview.js';
+import { resolveFailedPixAttempt } from '../failedPixResolution.js';
 
 const router = Router();
 router.use('/orders', auth, (req, res, next) => {
@@ -143,6 +144,15 @@ router.post('/orders/:id/cancel-after-refund', requireAdmin, async (req, res) =>
 router.post('/orders/:id/cancel-pending-payment', requireAdmin, async (req, res) => {
     try { res.json(await cancelPendingProviderOrder(req.params.id, req.user.id)); }
     catch (error) { replyError(res, error); }
+});
+
+router.post('/admin/orders/:id/resolve-failed-payment-attempt', auth, requireAdmin, async (req, res) => {
+    try { res.json(await resolveFailedPixAttempt(req.params.id, req.user.id)); }
+    catch (error) {
+        res.status(error.mpError ? 502 : (error.status || 503)).json({
+            error: error.status === 404 || error.status === 409 ? error.message : 'Consulta ao provedor inconclusiva; nenhuma alteração realizada',
+        });
+    }
 });
 
 export default router;

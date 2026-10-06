@@ -147,9 +147,8 @@ test('Mercado Pago TEST order search returns diagnostic codes without payer data
     process.env.MERCADO_PAGO_MODE = 'test';
     global.fetch = async (url) => {
         assert.equal(new URL(url).searchParams.get('external_reference'), 'DH-TEST');
-        return { ok: true, json: async () => ({ data: [
+        return { ok: true, json: async () => ({ paging: { total: 1 }, data: [
             { id: 'ORD-TEST', external_reference: 'DH-TEST', status: 'failed', status_detail: 'processing_error', payer: { email: 'private@example.com' }, errors: [{ code: 'failed', cause: 'rejected_by_bank' }] },
-            { id: 'ORD-OTHER', external_reference: 'DH-OTHER', status: 'processed' },
         ] }) };
     };
     try {

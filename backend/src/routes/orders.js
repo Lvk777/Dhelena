@@ -15,6 +15,7 @@ import { assertExpectedTransactionId, loadPaymentReconciliationPreview } from '.
 import { validateCardPaymentChoice } from '../lib/paymentChoice.js';
 import { getPixCapability } from '../lib/pixAvailability.js';
 import { payerFromOrder } from '../lib/paymentPayer.js';
+import { orderAttemptLockSql } from '../lib/orderAttemptLock.js';
 
 const router = Router();
 const COUPON_MUTABLE_FIELDS = new Set([
@@ -279,6 +280,7 @@ router.get('/payments/test-orders/:orderNumber', auth, requireAdmin, async (req,
 // POST /api/orders/:id/payment/pix — create Pix payment
 router.post('/orders/:id/payment/pix', auth, async (req, res) => {
     const diagnostic = createPaymentDiagnostic(req);
+    let attemptLock = null;
     try {
         // Fetch order and verify ownership
         let query, params;
@@ -317,6 +319,8 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
         }
         // Validate locally before reserving the financial attempt.
         const payer = payerFromOrder(order, req.user);
+        attemptLock = await pool.connect();
+        await attemptLock.query(`SELECT pg_advisory_lock(${orderAttemptLockSql})`, [order.id]);
         const { rows: reserved } = await pool.query(
             `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'pix'
              WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
@@ -390,6 +394,13 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
     } catch (err) {
         diagnostic.logError(err);
         res.status(err.status || 500).json({ error: 'Não foi possível confirmar o pagamento; solicite conciliação' });
+    } finally {
+        if (attemptLock) {
+            let unlockError;
+            try { await attemptLock.query(`SELECT pg_advisory_unlock(${orderAttemptLockSql})`, [req.params.id]); }
+            catch (error) { unlockError = error; diagnostic.logError(error); }
+            finally { attemptLock.release(unlockError); }
+        }
     }
 });
 

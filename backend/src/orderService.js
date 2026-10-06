@@ -295,43 +295,49 @@ export async function placeOrder(userId, body, idempotencyKey) {
 }
 
 // ─── cancelOrder: idempotent cancellation with stock restoration ────
+export async function cancelOrderInTransaction(client, order, userId = null, resolvedFailedPixAttempt = false) {
+    if (order.status === 'cancelado') return order;
+    const orderId = order.id;
+    if (resolvedFailedPixAttempt) {
+        const { rows: evidence } = await client.query(
+            `SELECT 1 FROM order_events WHERE order_id = $1 AND event = 'payment_attempt_resolved' LIMIT 1`,
+            [orderId]);
+        if (!order.payment_attempt_started_at || order.payment_attempt_method !== 'pix'
+            || order.payment_status !== 'pending' || order.paid_at || !evidence.length) {
+            throw Object.assign(new Error('Resolução Pix sem evidência válida'), { status: 409 });
+        }
+    }
+    const cancellable = resolvedFailedPixAttempt
+        ? canCancelWithoutRefund({ ...order, payment_attempt_started_at: null })
+        : canCancelWithoutRefund(order);
+    if (!cancellable) {
+        throw Object.assign(new Error('Pedido com pagamento no provedor exige conciliação antes do cancelamento'), { status: 409 });
+    }
+    const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id = $1', [orderId]);
+    for (const item of items) await restoreStock(client, order, item, item.quantity, 'cancellation', null, userId);
+
+    const { rows: updated } = await client.query(
+        "UPDATE orders SET status = 'cancelado', updated_at = now() WHERE id = $1 RETURNING *",
+        [orderId]
+    );
+    await client.query(
+        `INSERT INTO order_events (order_id, event, description)
+         VALUES ($1, 'order_cancelled', 'Pedido cancelado; estoque devolvido')`,
+        [orderId]
+    );
+    await client.query(
+        `INSERT INTO audit_logs (admin_id, action, entity_type, entity_id, changes) VALUES ($1, 'order.cancel', 'order', $2, $3)`,
+        [userId, orderId, JSON.stringify({ previous_status: order.status })]
+    );
+    return updated[0];
+}
+
 export async function cancelOrder(orderId, userId, isAdmin = false) {
     return withTransaction(async (client) => {
         const query = isAdmin ? 'SELECT * FROM orders WHERE id = $1 FOR UPDATE' : 'SELECT * FROM orders WHERE id = $1 AND user_id = $2 FOR UPDATE';
         const params = isAdmin ? [orderId] : [orderId, userId];
-
         const { rows: orderRows } = await client.query(query, params);
         if (orderRows.length === 0) throw Object.assign(new Error('Pedido não encontrado'), { status: 404 });
-
-        const order = orderRows[0];
-        if (order.status === 'cancelado') return order; // Idempotent — already cancelled
-        if (!canCancelWithoutRefund(order)) {
-            throw Object.assign(new Error('Pedido com pagamento no provedor exige conciliação antes do cancelamento'), { status: 409 });
-        }
-
-        // Get order items
-        const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id = $1', [orderId]);
-
-        for (const item of items) await restoreStock(client, order, item, item.quantity, 'cancellation', null, isAdmin ? userId : null);
-
-        // Update order status
-        const { rows: updated } = await client.query(
-            "UPDATE orders SET status = 'cancelado', updated_at = now() WHERE id = $1 RETURNING *",
-            [orderId]
-        );
-
-        await client.query(
-            `INSERT INTO order_events (order_id, event, description)
-             VALUES ($1, 'order_cancelled', 'Pedido cancelado; estoque devolvido')`,
-            [orderId]
-        );
-
-        // Audit log
-        await client.query(
-            `INSERT INTO audit_logs (action, entity_type, entity_id, changes) VALUES ('order.cancel', 'order', $1, $2)`,
-            [orderId, JSON.stringify({ previous_status: order.status })]
-        );
-
-        return updated[0];
+        return cancelOrderInTransaction(client, orderRows[0], isAdmin ? userId : null);
     });
 }

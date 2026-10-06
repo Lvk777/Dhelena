@@ -214,9 +214,15 @@ export async function findTestOrdersByReference(externalReference, createdAt) {
         page: '1',
         page_size: '10',
     });
-    const result = await mpFetch(`/v1/orders?${params}`);
+    const result = await mpFetch(`/v1/orders?${params}`, { signal: AbortSignal.timeout(10000) });
+    // A full first page or an unexpected response cannot prove absence.
+    if (!Array.isArray(result.data) || !Number.isSafeInteger(result.paging?.total)
+        || result.paging.total !== result.data.length || result.data.length >= 10
+        || result.data.some(order => order.external_reference !== externalReference)) {
+        throw Object.assign(new Error('Consulta de Orders inconclusiva; exige conciliação'), { status: 409 });
+    }
     const safeCode = (value) => typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,80}$/.test(value) ? value : null;
-    return (Array.isArray(result.data) ? result.data : [])
+    return result.data
         .filter((order) => order.external_reference === externalReference)
         .map((order) => ({
             id: order.id,
