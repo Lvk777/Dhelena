@@ -111,9 +111,9 @@ export default function AdminOrderDetail() {
                 </div>
             </div>
 
-            <div className="grid lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 {/* left: items + summary + timeline */}
-                <div className="lg:col-span-2 space-y-5">
+                <div className="min-w-0 [overflow-wrap:anywhere] lg:col-span-2 space-y-5">
                     {/* Products */}
                     <div className="bg-background p-5">
                         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Produtos</h2>
@@ -219,13 +219,13 @@ export default function AdminOrderDetail() {
                     {/* Timeline */}
                     {events.length > 0 && (
                         <div className="bg-background p-5">
-                            <OrderTimeline events={events} />
+                        <OrderTimeline events={events} paymentStatus={order.payment_status} />
                         </div>
                     )}
                 </div>
 
                 {/* right: customer + address */}
-                <div className="space-y-5">
+                <div className="min-w-0 [overflow-wrap:anywhere] space-y-5">
                     <div className="bg-background p-5">
                         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-3">Cliente</h2>
                         <div className="space-y-1.5 text-sm">

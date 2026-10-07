@@ -72,7 +72,7 @@ export default function OrderDetail() {
             {/* Timeline from events */}
             {events.length > 0 ? (
                 <div className="mb-10">
-                    <OrderTimeline events={events} />
+                    <OrderTimeline events={events} paymentStatus={order.payment_status} />
                 </div>
             ) : !isCancelled && (
                 <div className="mb-10">

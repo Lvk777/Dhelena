@@ -145,7 +145,7 @@ export async function sendOrderNotifications(orderId, event) {
             }
         }
     } catch (err) {
-        console.error('[Notifications] Error:', err.message);
+        console.error('[Notifications] Dispatch failed');
     }
 }
 
@@ -178,7 +178,7 @@ async function tryNotify(orderId, event, channel, recipient, sender) {
              WHERE order_id = $1 AND event = $3 AND channel = $4 AND recipient = $5`,
             [orderId, err.message, event, channel, recipient]
         ).catch(() => {});
-        console.error(`[Notify] ${channel} to ${recipient} failed:`, err.message);
+        console.error(`[Notify] ${channel} delivery failed`);
     }
 }
 
