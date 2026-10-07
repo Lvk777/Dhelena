@@ -104,9 +104,9 @@ export default function ProductDetail() {
             </div>
 
             <div className="container-boutique pb-28 lg:pb-16">
-                <div className="grid lg:grid-cols-2 gap-10 lg:gap-16">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16">
                     {/* gallery */}
-                    <div className="flex flex-col-reverse lg:flex-row gap-4">
+                    <div className="min-w-0 flex flex-col-reverse lg:flex-row gap-4">
                         {/* thumbs */}
                         <div className="flex lg:flex-col gap-3 lg:max-h-[560px] overflow-x-auto lg:overflow-y-auto no-scrollbar">
                             {product.images.concat(product.images).slice(0, 4).map((src, i) => (
@@ -134,7 +134,7 @@ export default function ProductDetail() {
                     </div>
 
                     {/* info */}
-                    <div className="lg:py-2">
+                    <div className="min-w-0 lg:py-2">
                         <p className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground">{product.collection}</p>
                         <h1 className="mt-2 font-heading text-4xl sm:text-5xl tracking-[0.02em]">{product.name}</h1>
                         <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Código {product.sku}</p>
