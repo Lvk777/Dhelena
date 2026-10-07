@@ -16,6 +16,7 @@ import { validateCardPaymentChoice } from '../lib/paymentChoice.js';
 import { getPixCapability } from '../lib/pixAvailability.js';
 import { payerFromOrder } from '../lib/paymentPayer.js';
 import { orderAttemptLockSql } from '../lib/orderAttemptLock.js';
+import { logSafeError } from '../lib/safeErrorLog.js';
 
 const router = Router();
 const COUPON_MUTABLE_FIELDS = new Set([
@@ -669,7 +670,7 @@ router.post('/shipping/quote', async (req, res) => {
 
         res.json({ options });
     } catch (err) {
-        console.error('[Shipping Quote] Error:', err.message);
+        logSafeError('shipping_quote_failed', err);
         res.status(err.status || 500).json({ error: err.message });
     }
 });
@@ -811,7 +812,7 @@ router.post('/orders/:id/shipping/label', auth, requireAdmin, async (req, res) =
             print_url: printed.print_url,
         });
     } catch (err) {
-        console.error('[Shipping Label] Error:', err.message);
+        logSafeError('shipping_label_failed', err);
         res.status(err.status || 500).json({ error: err.message });
     } finally {
         if (client) {

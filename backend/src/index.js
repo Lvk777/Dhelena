@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import fs from 'fs';
 import { auth, errorHandler } from './middleware.js';
 import { pool } from './config/db.js';
+import { logSafeError } from './lib/safeErrorLog.js';
 import { globalLimiter } from './middleware/rateLimiters.js';
 import authRoutes from './routes/auth.js';
 import catalogRoutes from './routes/catalog.js';
@@ -150,7 +151,7 @@ async function ensureInitialized() {
         initialized = true;
         console.log('[API] Database initialized');
     } catch (err) {
-        console.error('[API] Init error:', err.message);
+        logSafeError('database_initialization_failed', err);
         initialized = true;
     }
 }

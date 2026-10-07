@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { pool } from './config/db.js';
+import { logSafeError } from './lib/safeErrorLog.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -101,7 +102,7 @@ export function requireSupabaseAdmin(req, res, next) {
 
 // ─── Error handler ─────────────────────────────────────────────────
 export function errorHandler(err, req, res, next) {
-    console.error('[API Error]', err.message);
+    logSafeError('api_request_failed', err);
     const status = err.status || 500;
     res.status(status).json({ error: err.message || 'Erro interno do servidor' });
 }

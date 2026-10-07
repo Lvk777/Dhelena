@@ -1,4 +1,5 @@
 import { pool } from '../config/db.js';
+import { logSafeError } from '../lib/safeErrorLog.js';
 
 // ─── Security event logging ──────────────────────────────────────
 // Stores security-relevant events in audit_logs for admin visibility.
@@ -27,7 +28,7 @@ export async function logSecurityEvent(req, eventName, metadata = {}) {
             ]
         );
     } catch (err) {
-        console.error('[SecurityLog] Failed to log event:', err.message);
+        logSafeError('security_event_persistence_failed', err);
     }
 }
 

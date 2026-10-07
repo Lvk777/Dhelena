@@ -12,6 +12,7 @@ import { getVerifiedPaymentForOrder, isVerifiedPaymentForOrder } from '../lib/pa
 import { applyVerifiedOrderInTransaction, recordVerifiedNonApprovedOrderInTransaction } from '../lib/paymentReconciliation.js';
 import { createMercadoPagoWebhookLog, logMercadoPagoWebhookDelivery } from '../lib/mercadoPagoWebhookLog.js';
 import { reconcileRefundFromWebhook } from '../afterSalesService.js';
+import { logSafeError } from '../lib/safeErrorLog.js';
 
 const router = Router();
 
@@ -173,7 +174,7 @@ router.post('/webhooks/melhor-envio', async (req, res) => {
         );
         if (inserted.rowCount === 0) return res.status(200).json({ status: 'already_processed' });
     } catch (err) {
-        console.error('[Webhook ME] Could not reserve event:', err.message);
+        logSafeError('me_webhook_reservation_failed', err);
         return res.status(503).json({ error: 'Serviço temporariamente indisponível' });
     }
 
@@ -190,7 +191,7 @@ router.post('/webhooks/melhor-envio', async (req, res) => {
         }
 
         if (!orderRef) {
-            console.warn('[Webhook ME] Order not found for shipment:', shipmentId);
+            console.warn(JSON.stringify({ event: 'me_webhook_order_not_found', shipment_id_present: !!shipmentId }));
             await markWebhookProcessed('melhor_envio', eventId);
             return res.status(200).json({ status: 'order_not_found' });
         }
@@ -201,7 +202,7 @@ router.post('/webhooks/melhor-envio', async (req, res) => {
             try {
                 trackingInfo = await getTracking(shipmentId);
             } catch (e) {
-                console.warn('[Webhook ME] Could not fetch tracking:', e.message);
+                logSafeError('me_tracking_fetch_failed', e, 'warn');
             }
         }
 
@@ -246,11 +247,14 @@ router.post('/webhooks/melhor-envio', async (req, res) => {
             );
         });
 
-        console.log(`[Webhook ME] Order ${orderRef.order_number} → shipping_status: ${status}`);
+        console.log(JSON.stringify({ event: 'me_webhook_processed',
+            order_number: /^DH-\d{4}-\d{6}$/.test(orderRef.order_number) ? orderRef.order_number : null,
+            shipping_status: ['posted', 'enviado', 'in_transit', 'em_transito', 'out_for_delivery',
+                'saiu_entrega', 'delivered', 'entregue'].includes(status) ? status : 'unknown' }));
         res.status(200).json({ status: 'ok', shipping_status: status });
 
     } catch (err) {
-        console.error('[Webhook ME] Error:', err.message);
+        logSafeError('me_webhook_processing_failed', err);
         await releaseWebhookForRetry('melhor_envio', eventId);
         res.status(503).json({ error: 'Serviço temporariamente indisponível' });
     }
