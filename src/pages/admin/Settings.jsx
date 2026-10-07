@@ -141,7 +141,7 @@ export default function Settings() {
         <div>
             <h1 className="font-heading text-2xl tracking-[0.03em] mb-6">Configurações</h1>
 
-            <div className="flex gap-6">
+            <div className="flex flex-col lg:flex-row gap-6">
                 {/* Desktop sidebar */}
                 <aside className="hidden lg:flex w-56 flex-col bg-background border border-border rounded-lg shrink-0 self-start sticky top-2 max-h-[calc(100vh-6rem)]">
                     <Sidebar />
