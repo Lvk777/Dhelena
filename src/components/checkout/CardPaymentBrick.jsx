@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Loader2, CreditCard, AlertCircle, Check } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { formatBRL, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
+import { formatBRL } from "@/data/products";
 
 // Loads Mercado Pago SDK v2 from CDN
 function loadMPSdk(publicKey) {
     return new Promise((resolve, reject) => {
-        if (window.MercadoPago) {
-            resolve(new window.MercadoPago(publicKey));
+        const MercadoPago = /** @type {any} */ (window).MercadoPago;
+        if (MercadoPago) {
+            resolve(new MercadoPago(publicKey));
             return;
         }
         const script = document.createElement("script");
         script.src = "https://sdk.mercadopago.com/js/v2";
         script.onload = () => {
-            if (window.MercadoPago) {
-                resolve(new window.MercadoPago(publicKey));
+            const LoadedMercadoPago = /** @type {any} */ (window).MercadoPago;
+            if (LoadedMercadoPago) {
+                resolve(new LoadedMercadoPago(publicKey));
             } else {
                 reject(new Error("Falha ao carregar SDK do Mercado Pago"));
             }
@@ -24,7 +26,7 @@ function loadMPSdk(publicKey) {
     });
 }
 
-export default function CardPaymentBrick({ order, publicKey, amount, maxInstallments, onApproved, onRejected }) {
+export default function CardPaymentBrick({ order, publicKey, amount, maxInstallments, isDebit, onApproved, onRejected }) {
     const containerRef = useRef(null);
     const brickRef = useRef(null);
     const [loading, setLoading] = useState(true);
@@ -50,8 +52,9 @@ export default function CardPaymentBrick({ order, publicKey, amount, maxInstallm
                 },
                 customization: {
                     paymentMethods: {
-                        creditCard: { maxInstallments: maxInstallments || 12 },
-                        debitCard: { maxInstallments: 1 },
+                        types: { excluded: isDebit ? ["credit_card", "prepaid_card"] : ["debit_card", "prepaid_card"] },
+                        minInstallments: 1,
+                        maxInstallments: isDebit ? 1 : (maxInstallments || 12),
                     },
                     visual: {
                         style: { theme: "default" },
@@ -59,8 +62,8 @@ export default function CardPaymentBrick({ order, publicKey, amount, maxInstallm
                 },
                 callbacks: {
                     onReady: () => setLoading(false),
-                    onError: (e) => {
-                        console.error("[Card Brick] Error:", e);
+                    onError: () => {
+                        setError("Não foi possível carregar o formulário de cartão. Atualize a página para tentar novamente.");
                         setLoading(false);
                     },
                     onSubmit: async (formData) => {
@@ -80,7 +83,9 @@ export default function CardPaymentBrick({ order, publicKey, amount, maxInstallm
                                 onApproved?.(res);
                             } else if (res.payment_status === "rejected") {
                                 onRejected?.(res);
-                                setError("Cartão recusado. Verifique os dados ou tente outro cartão.");
+                                setError("Pagamento não aprovado. Consulte o pedido antes de tentar uma nova cobrança.");
+                            } else {
+                                setError("Pagamento em análise. Acompanhe o status em Meus pedidos.");
                             }
                             return res;
                         } catch (e) {
@@ -128,7 +133,7 @@ export default function CardPaymentBrick({ order, publicKey, amount, maxInstallm
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" strokeWidth={1.5} />
                     <div>
                         <p>{error}</p>
-                        <p className="text-xs mt-1">Você pode revisar os dados do cartão e tentar novamente.</p>
+                        <p className="text-xs mt-1">Acompanhe o pedido em sua conta antes de fazer outra tentativa.</p>
                     </div>
                 </div>
             )}

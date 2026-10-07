@@ -142,7 +142,7 @@ export default function AdminLayout() {
             )}
 
             {/* content */}
-            <main className="flex-1 lg:ml-60 pt-14 lg:pt-0 min-h-screen">
+            <main className="flex-1 min-w-0 lg:ml-60 pt-14 lg:pt-0 min-h-screen">
                 <div className="hidden lg:flex items-center justify-end h-12 px-8 border-b border-border bg-background">
                     <button onClick={toggleTheme} className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors" aria-label="Alternar tema">
                         {theme === "dark" ? <><Sun className="w-4 h-4" strokeWidth={1.5} /> Claro</> : <><Moon className="w-4 h-4" strokeWidth={1.5} /> Escuro</>}

@@ -17,10 +17,10 @@ import LoginHistoryTab from "@/components/admin/settings/LoginHistoryTab";
 
 const DEFAULTS = {
     general: { store_name: "D'Helenas", trade_name: "", company_name: "", cnpj: "", email: "", phone: "", whatsapp: "", logo: "", logo_dark: "", favicon: "", currency: "BRL", timezone: "America/Sao_Paulo" },
-    store: { top_bar_text: "Frete grátis acima de R$ 499 · Parcelamos em até 6x", free_shipping_threshold: 499, max_installments: 6, interest_free_installments: 6, allow_out_of_stock: false, show_low_stock: true, low_stock_threshold: 3 },
+    store: { top_bar_text: "Frete grátis a partir de R$ 499 · Parcelamos em até 6x", free_shipping_threshold: 499, max_installments: 6, interest_free_installments: 6, allow_out_of_stock: false, show_low_stock: true, low_stock_threshold: 3 },
     address: { cep: "", street: "", number: "", complement: "", district: "", city: "", state: "SP" },
     shipping: { pickup_enabled: true, pickup_name: "Retirada no estoque", pickup_instructions: "", pickup_time: "", free_shipping_enabled: true, free_shipping_threshold: 499, melhor_envio_enabled: false, melhor_envio_mode: "sandbox" },
-    payments: { mercado_pago_enabled: false, mercado_pago_mode: "sandbox", pix_enabled: true, card_enabled: true, boleto_enabled: false, max_installments: 6, interest_free_installments: 6, pix_discount: 5 },
+    payments: { mercado_pago_enabled: false, mercado_pago_mode: "sandbox", pix_enabled: true, card_enabled: true, debit_card_enabled: true, boleto_enabled: false, max_installments: 6, interest_free_installments: 6, pix_discount: 5 },
     emails: { sender_name: "D'Helenas", sender_email: "", reply_to: "", order_received: true, payment_approved: true, order_separation: true, order_shipped: true, order_delivered: true, order_cancelled: true },
     social: { instagram: "", facebook: "", tiktok: "", whatsapp: "" },
     seo: { default_title: "D'Helenas — Boutique Digital", default_description: "", sharing_image: "", ga_id: "", meta_pixel_id: "" },
@@ -141,7 +141,7 @@ export default function Settings() {
         <div>
             <h1 className="font-heading text-2xl tracking-[0.03em] mb-6">Configurações</h1>
 
-            <div className="flex gap-6">
+            <div className="flex flex-col lg:flex-row gap-6">
                 {/* Desktop sidebar */}
                 <aside className="hidden lg:flex w-56 flex-col bg-background border border-border rounded-lg shrink-0 self-start sticky top-2 max-h-[calc(100vh-6rem)]">
                     <Sidebar />

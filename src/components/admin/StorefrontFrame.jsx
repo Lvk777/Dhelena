@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Search, Heart, ShoppingBag, Menu, Monitor, Smartphone, ArrowRight, Truck, Star, ChevronDown, Minus, Plus, Ruler, Check, X } from "lucide-react";
+import { Search, Heart, ShoppingBag, Menu, Monitor, Smartphone } from "lucide-react";
 
 /**
  * StorefrontFrame — shared storefront chrome (announcement bar + header + footer)
@@ -40,7 +40,7 @@ export default function StorefrontFrame({ device = "desktop", children, classNam
         <div className={`mx-auto bg-background border border-border rounded-lg overflow-hidden shadow-lg ${isMobile ? "max-w-[375px]" : "max-w-full"} ${className}`}>
             {/* Top announcement bar */}
             <div className="bg-[hsl(var(--rose))] text-white text-[8px] tracking-[0.25em] uppercase text-center py-1.5 px-4">
-                Frete grátis acima de R$ 499
+                Frete grátis a partir de R$ 499
             </div>
 
             {/* Header */}

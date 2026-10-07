@@ -1,19 +1,65 @@
 import { Router } from 'express';
-import { pool } from '../config/db.js';
+import { pool, withTransaction } from '../config/db.js';
 import { auth, requireAdmin } from '../middleware.js';
 import { logAudit } from '../services.js';
 import { searchLimiter } from '../middleware/rateLimiters.js';
 
 const router = Router();
 
+export function validateProductForPublication(product) {
+    if (product.status !== 'published') return;
+    if (!Number.isFinite(Number(product.price)) || Number(product.price) <= 0) {
+        throw Object.assign(new Error('Preço do produto deve ser maior que zero'), { status: 400 });
+    }
+    if (product.sale_price != null && product.sale_price !== ''
+        && (!Number.isFinite(Number(product.sale_price)) || Number(product.sale_price) <= 0
+            || Number(product.sale_price) >= Number(product.price))) {
+        throw Object.assign(new Error('Preço promocional deve ser maior que zero e menor que o preço normal'), { status: 400 });
+    }
+    if (['weight', 'package_height', 'package_width', 'package_length'].some(field =>
+        !Number.isFinite(Number(product[field])) || Number(product[field]) <= 0)) {
+        throw Object.assign(new Error('Informe peso e dimensões válidos para calcular o frete'), { status: 400 });
+    }
+    const sizes = product.sizes || [];
+    const colors = product.colors || [];
+    if (!Array.isArray(sizes) || !sizes.length || !Array.isArray(colors) || !colors.length) {
+        throw Object.assign(new Error('Informe cor e tamanho antes de publicar'), { status: 400 });
+    }
+    if (new Set(sizes).size !== sizes.length || sizes.some(size => typeof size !== 'string' || !size.trim())
+        || new Set(colors.map(color => color.id)).size !== colors.length
+        || colors.some(color => !color.id || !String(color.name || '').trim()
+        || sizes.some(size => !Object.hasOwn(color.stock || {}, size))
+        || Object.keys(color.stock || {}).some(size => !sizes.includes(size))
+        || Object.values(color.stock || {}).some(value => !Number.isSafeInteger(Number(value)) || Number(value) < 0))) {
+        throw Object.assign(new Error('Estoque e tamanhos das cores não correspondem'), { status: 400 });
+    }
+}
+
+// ─── Query-field allowlists ─────────────────────────────────────────
+// Values are parameterized below, but identifiers cannot be parameterized by
+// PostgreSQL.  Never interpolate a client-provided field name into SQL.
+export const CATALOG_FILTER_FIELDS = {
+    products: new Set(['category', 'subcategory', 'collection', 'status']),
+    categories: new Set(['slug', 'parent_id']),
+    collections: new Set(['slug']),
+    banners: new Set(['active', 'position']),
+};
+
+export const CATALOG_SORT_FIELDS = {
+    products: new Set(['created_date', 'updated_date', 'name', 'price', 'sale_price', 'sold_count', 'rating', 'status']),
+    categories: new Set(['sort_order', 'name', 'slug', 'created_at', 'updated_at']),
+    collections: new Set(['sort_order', 'name', 'slug', 'created_at', 'updated_at']),
+    banners: new Set(['sort_order', 'priority', 'start_date', 'end_date', 'created_at', 'updated_at']),
+};
+
 // ─── Helper: build WHERE clause from query params ──────────────────
-function buildFilter(req, extraConditions = []) {
+export function buildFilter(req, allowedFields, extraConditions = []) {
     const conditions = [...extraConditions];
     const params = [];
     let idx = extraConditions.length + 1;
 
     for (const [key, value] of Object.entries(req.query)) {
-        if (['sort', 'limit', 'page'].includes(key)) continue;
+        if (['sort', 'limit', 'page'].includes(key) || !allowedFields.has(key)) continue;
 
         if (value === 'true' || value === 'false') {
             conditions.push(`${key} = $${idx++}`);
@@ -34,12 +80,11 @@ function buildFilter(req, extraConditions = []) {
     return { conditions, params };
 }
 
-function buildSort(req, defaultField, defaultDir = 'ASC') {
+export function buildSort(req, allowedFields, defaultField, defaultDir = 'ASC') {
     const sortField = req.query.sort || defaultField;
     const desc = sortField.startsWith('-');
     const field = desc ? sortField.slice(1) : sortField;
-    // Whitelist field names to prevent SQL injection
-    const safe = field.replace(/[^a-zA-Z_]/g, '');
+    const safe = allowedFields.has(field) ? field : defaultField;
     return `ORDER BY ${safe} ${desc ? 'DESC' : defaultDir === 'DESC' && !desc ? 'DESC' : 'ASC'}`;
 }
 
@@ -65,7 +110,7 @@ async function insertRow(table, data, dateField = 'updated_at') {
 }
 
 // ─── Helper: generic UPDATE ─────────────────────────────────────────
-async function updateRow(table, id, data, dateField = 'updated_at') {
+async function updateRow(table, id, data, dateField = 'updated_at', db = pool) {
     const reserved = ['id', 'created_date', 'updated_date', 'created_at', 'updated_at', 'created_by_id', 'is_sample'];
     const keys = Object.keys(data).filter(k => !reserved.includes(k));
     if (keys.length === 0) return null;
@@ -82,7 +127,7 @@ async function updateRow(table, id, data, dateField = 'updated_at') {
         return v;
     });
     values.push(id);
-    const { rows } = await pool.query(
+    const { rows } = await db.query(
         `UPDATE ${table} SET ${setParts.join(', ')}, ${dateField} = now() WHERE id = $${values.length} RETURNING *`,
         values
     );
@@ -95,12 +140,12 @@ router.get('/products', searchLimiter, async (req, res, next) => {
         const isAdmin = req.user?.role === 'admin';
         const extra = isAdmin ? [] : ['status = $1'];
         const extraParams = isAdmin ? [] : ['published'];
-        const { conditions, params } = buildFilter(req, extra);
+        const { conditions, params } = buildFilter(req, CATALOG_FILTER_FIELDS.products, extra);
         const allParams = [...extraParams, ...params];
 
         let query = 'SELECT * FROM products';
         if (conditions.length > 0) query += ' WHERE ' + conditions.join(' AND ');
-        query += ' ' + buildSort(req, 'created_date', 'DESC');
+        query += ' ' + buildSort(req, CATALOG_SORT_FIELDS.products, 'created_date', 'DESC');
         // Cap page size to prevent unlimited queries
         const maxLimit = isAdmin ? 200 : 60;
         const limit = Math.min(parseInt(req.query.limit) || maxLimit, maxLimit);
@@ -125,6 +170,7 @@ router.get('/products/:id', async (req, res, next) => {
 
 router.post('/products', auth, requireAdmin, async (req, res, next) => {
     try {
+        validateProductForPublication(req.body);
         const product = await insertRow('products', req.body, 'updated_date');
         await logAudit(req.user.id, 'product.create', 'product', product.id, { name: req.body.name }, req.ip);
         res.status(201).json(product);
@@ -133,9 +179,18 @@ router.post('/products', auth, requireAdmin, async (req, res, next) => {
 
 router.patch('/products/:id', auth, requireAdmin, async (req, res, next) => {
     try {
-        const product = await updateRow('products', req.params.id, req.body, 'updated_date');
+        const { expected_updated_date: expectedUpdatedDate, ...changes } = req.body;
+        const product = await withTransaction(async client => {
+            const { rows: existing } = await client.query('SELECT status, price, sale_price, sizes, colors, weight, package_height, package_width, package_length, updated_date FROM products WHERE id = $1 FOR UPDATE', [req.params.id]);
+            if (!existing.length) return null;
+            if (expectedUpdatedDate && new Date(existing[0].updated_date).getTime() !== new Date(expectedUpdatedDate).getTime()) {
+                throw Object.assign(new Error('O produto mudou desde a abertura do formulário. Recarregue antes de salvar.'), { status: 409 });
+            }
+            validateProductForPublication({ ...existing[0], ...changes });
+            return updateRow('products', req.params.id, changes, 'updated_date', client);
+        });
         if (!product) return res.status(404).json({ error: 'Produto não encontrado' });
-        await logAudit(req.user.id, 'product.update', 'product', req.params.id, req.body, req.ip);
+        await logAudit(req.user.id, 'product.update', 'product', req.params.id, changes, req.ip);
         res.json(product);
     } catch (err) { next(err); }
 });
@@ -151,10 +206,10 @@ router.delete('/products/:id', auth, requireAdmin, async (req, res, next) => {
 // ─── CATEGORIES ────────────────────────────────────────────────────
 router.get('/categories', async (req, res, next) => {
     try {
-        const { conditions, params } = buildFilter(req);
+        const { conditions, params } = buildFilter(req, CATALOG_FILTER_FIELDS.categories);
         let query = 'SELECT *, created_at as created_date, updated_at as updated_date FROM categories';
         if (conditions.length > 0) query += ' WHERE ' + conditions.join(' AND ');
-        query += ' ' + buildSort(req, 'sort_order', 'ASC');
+        query += ' ' + buildSort(req, CATALOG_SORT_FIELDS.categories, 'sort_order', 'ASC');
         if (req.query.limit) query += ` LIMIT ${parseInt(req.query.limit)}`;
         const { rows } = await pool.query(query, params);
         res.json(rows);
@@ -184,10 +239,10 @@ router.delete('/categories/:id', auth, requireAdmin, async (req, res, next) => {
 // ─── COLLECTIONS ───────────────────────────────────────────────────
 router.get('/collections', async (req, res, next) => {
     try {
-        const { conditions, params } = buildFilter(req);
+        const { conditions, params } = buildFilter(req, CATALOG_FILTER_FIELDS.collections);
         let query = 'SELECT *, created_at as created_date, updated_at as updated_date FROM collections';
         if (conditions.length > 0) query += ' WHERE ' + conditions.join(' AND ');
-        query += ' ' + buildSort(req, 'sort_order', 'ASC');
+        query += ' ' + buildSort(req, CATALOG_SORT_FIELDS.collections, 'sort_order', 'ASC');
         if (req.query.limit) query += ` LIMIT ${parseInt(req.query.limit)}`;
         const { rows } = await pool.query(query, params);
         res.json(rows);
@@ -220,7 +275,7 @@ router.get('/banners', async (req, res, next) => {
         const isAdmin = req.user?.role === 'admin';
         const extra = isAdmin ? [] : ['active = $1'];
         const extraParams = isAdmin ? [] : [true];
-        const { conditions, params } = buildFilter(req, extra);
+        const { conditions, params } = buildFilter(req, CATALOG_FILTER_FIELDS.banners, extra);
         const allParams = [...extraParams, ...params];
 
         let query = 'SELECT *, created_at as created_date, updated_at as updated_date FROM banners';
@@ -235,7 +290,7 @@ router.get('/banners', async (req, res, next) => {
             allParams.push(new Date());
         }
 
-        query += ' ' + buildSort(req, isAdmin ? 'sort_order' : 'priority', isAdmin ? 'ASC' : 'DESC');
+        query += ' ' + buildSort(req, CATALOG_SORT_FIELDS.banners, isAdmin ? 'sort_order' : 'priority', isAdmin ? 'ASC' : 'DESC');
         if (req.query.limit) query += ` LIMIT ${parseInt(req.query.limit)}`;
         const { rows } = await pool.query(query, allParams);
         res.json(rows);
@@ -265,13 +320,13 @@ router.delete('/banners/:id', auth, requireAdmin, async (req, res, next) => {
 // ─── SETTINGS ──────────────────────────────────────────────────────
 // Server-side allowlist: only these setting keys may be created/updated via POST.
 // Keys not in this list (e.g. "notifications", "look_promotion") are internal and protected.
-const ALLOWED_SETTING_KEYS = new Set([
+export const ALLOWED_SETTING_KEYS = new Set([
     'general', 'store', 'address', 'shipping', 'payments',
-    'emails', 'social', 'seo', 'policies', 'maintenance',
+    'emails', 'social', 'seo', 'policies', 'maintenance', 'shipping_sender',
 ]);
 
 // Server-side public-keys list: is_public is determined HERE, never trusted from the client.
-const PUBLIC_SETTING_KEYS = new Set([
+export const PUBLIC_SETTING_KEYS = new Set([
     'general', 'store', 'shipping', 'social', 'seo', 'policies', 'maintenance',
 ]);
 
@@ -314,9 +369,25 @@ router.post('/settings', auth, requireAdmin, async (req, res, next) => {
 
 router.patch('/settings/:id', auth, requireAdmin, async (req, res, next) => {
     try {
-        const row = await updateRow('settings', req.params.id, req.body);
-        if (!row) return res.status(404).json({ error: 'Não encontrado' });
-        await logAudit(req.user.id, 'setting.update', 'setting', req.params.id, req.body, req.ip);
+        // Do not use generic updateRow here.  It would let an admin PATCH an
+        // arbitrary key/is_public field and bypass the settings allowlist.
+        if (!Object.prototype.hasOwnProperty.call(req.body, 'value')) {
+            return res.status(400).json({ error: 'value é obrigatório' });
+        }
+        const { rows: existing } = await pool.query('SELECT key FROM settings WHERE id = $1', [req.params.id]);
+        if (existing.length === 0) return res.status(404).json({ error: 'Não encontrado' });
+        const key = existing[0].key;
+        if (!ALLOWED_SETTING_KEYS.has(key)) {
+            return res.status(403).json({ error: 'Esta configuração não pode ser alterada por esta rota' });
+        }
+        const is_public = PUBLIC_SETTING_KEYS.has(key);
+        const { rows } = await pool.query(
+            `UPDATE settings SET value = $1, is_public = $2, updated_by = $3, updated_at = now()
+             WHERE id = $4 RETURNING *, created_at as created_date, updated_at as updated_date`,
+            [JSON.stringify(req.body.value), is_public, req.user.id, req.params.id]
+        );
+        const row = rows[0];
+        await logAudit(req.user.id, 'setting.update', 'setting', req.params.id, { key, is_public }, req.ip);
         res.json(row);
     } catch (err) { next(err); }
 });

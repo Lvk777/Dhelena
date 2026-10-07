@@ -62,6 +62,7 @@ export function StoreProvider({ children }) {
     }, []);
 
     const addToCart = useCallback((item, maxQty) => {
+        if (maxQty != null && maxQty <= 0) return;
         setCart((prev) => {
             const idx = prev.findIndex((i) => i.productId === item.productId && i.colorId === item.colorId && i.size === item.size);
             if (idx >= 0) {
@@ -83,6 +84,7 @@ export function StoreProvider({ children }) {
 
     const updateQty = useCallback((key, qty, maxQty) => {
         if (qty <= 0) return removeFromCart(key);
+        if (maxQty != null && maxQty <= 0) return removeFromCart(key);
         const capped = maxQty != null ? Math.min(qty, maxQty) : qty;
         setCart((prev) => prev.map((i) =>
             (i.productId === key.productId && i.colorId === key.colorId && i.size === key.size) ? { ...i, qty: capped } : i

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell, Legend } from "recharts";
+import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell, Legend } from "recharts";
+import { BarChart3 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { formatBRL } from "@/data/products";
+import { formatBRL, toCurrencyAmount } from "@/data/products";
 
 export default function Reports() {
     const [orders, setOrders] = useState([]);
@@ -19,7 +20,7 @@ export default function Reports() {
                 <h1 className="font-heading text-2xl tracking-[0.03em] mb-6">Relatórios</h1>
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                     <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                        <BarChart className="w-8 h-8 text-muted-foreground" strokeWidth={1.5} />
+                        <BarChart3 className="w-8 h-8 text-muted-foreground" strokeWidth={1.5} />
                     </div>
                     <p className="text-sm font-medium text-foreground">Nenhum pedido encontrado</p>
                     <p className="text-xs text-muted-foreground mt-1">Os relatórios aparecerão aqui quando houver pedidos.</p>
@@ -28,7 +29,7 @@ export default function Reports() {
         );
     }
 
-    const revenue = orders.reduce((s, o) => s + (o.total || 0), 0);
+    const revenue = orders.reduce((sum, order) => sum + toCurrencyAmount(order.total), 0);
     const avg = orders.length ? revenue / orders.length : 0;
 
     // monthly revenue
@@ -36,7 +37,7 @@ export default function Reports() {
     orders.forEach((o) => {
         const m = (o.created_date || "").slice(0, 7);
         if (!m) return;
-        months[m] = (months[m] || 0) + (o.total || 0);
+        months[m] = (months[m] || 0) + toCurrencyAmount(o.total);
     });
     const monthData = Object.entries(months).sort().slice(-6).map(([m, v]) => ({ month: m.slice(5) + "/" + m.slice(2, 4), vendas: v }));
 
@@ -50,7 +51,7 @@ export default function Reports() {
     const productSales = {};
     orders.forEach((o) => {
         (o.items || []).forEach((i) => {
-            productSales[i.product_name] = (productSales[i.product_name] || 0) + (i.price * i.qty);
+            productSales[i.product_name] = (productSales[i.product_name] || 0) + (toCurrencyAmount(i.price) * Number(i.qty || 0));
         });
     });
     const topProducts = Object.entries(productSales).sort((a, b) => b[1] - a[1]).slice(0, 5);
@@ -69,7 +70,7 @@ export default function Reports() {
                 <div className="bg-background p-6">
                     <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Receita por mês</h2>
                     <ResponsiveContainer width="100%" height={250}>
-                        <BarChart data={monthData}><XAxis dataKey="month" tick={{ fontSize: 11, fill: "#999" }} axisLine={false} tickLine={false} /><YAxis tick={{ fontSize: 11, fill: "#999" }} axisLine={false} tickLine={false} tickFormatter={(v) => `R$${v}`} /><Tooltip formatter={(v) => formatBRL(v)} /><Bar dataKey="vendas" fill="hsl(44 69% 54%)" radius={[4, 4, 0, 0]} /></BarChart>
+                        <RechartsBarChart data={monthData}><XAxis dataKey="month" tick={{ fontSize: 11, fill: "#999" }} axisLine={false} tickLine={false} /><YAxis tick={{ fontSize: 11, fill: "#999" }} axisLine={false} tickLine={false} tickFormatter={formatBRL} /><Tooltip formatter={(v) => formatBRL(v)} /><Bar dataKey="vendas" fill="hsl(44 69% 54%)" radius={[4, 4, 0, 0]} /></RechartsBarChart>
                     </ResponsiveContainer>
                 </div>
                 <div className="bg-background p-6">

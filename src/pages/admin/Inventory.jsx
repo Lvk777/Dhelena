@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Search, SlidersHorizontal, X, ChevronDown, ChevronRight, Package, AlertTriangle, Boxes, Layers, History, Settings2, Loader2, ArrowUpDown } from "lucide-react";
+import { Search, SlidersHorizontal, X, ChevronDown, ChevronRight, Package, AlertTriangle, Boxes, History, ArrowUpDown } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { totalStock } from "@/data/products";
-import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import AdjustStockModal from "@/components/admin/inventory/AdjustStockModal";
 import StockMovementHistory from "@/components/admin/inventory/StockMovementHistory";
 

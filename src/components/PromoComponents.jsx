@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Sparkles, Tag, Truck, ArrowRight, Check } from "lucide-react";
+import { Sparkles, Truck, ArrowRight, Check } from "lucide-react";
 
 export function useActivePromotions() {
     const [promos, setPromos] = useState([]);

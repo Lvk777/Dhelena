@@ -1,11 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Truck, Check, Loader2, Copy, FileText, Printer, MapPin, QrCode, CreditCard, Banknote } from "lucide-react";
+import { ArrowLeft, Truck, Loader2, Copy, FileText, Printer, MapPin, QrCode, CreditCard, Banknote } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL, ORDER_STATUS, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
 import OrderTimeline from "@/components/checkout/OrderTimeline";
+import AdminAfterSales from "@/components/admin/AdminAfterSales";
+import PaymentReconciliationPreview from "@/components/admin/PaymentReconciliationPreview";
 
-const STATUS_OPTIONS = Object.entries(ORDER_STATUS).map(([key, v]) => ({ value: key, label: v.label }));
+const STATUS_OPTIONS = Object.entries(ORDER_STATUS)
+    .filter(([key]) => ['em_separacao', 'enviado', 'em_transporte', 'saiu_entrega', 'entregue'].includes(key))
+    .map(([key, v]) => ({ value: key, label: v.label }));
+const NEXT_STATUS = {
+    pagamento_aprovado: ['em_separacao'], em_separacao: ['enviado'],
+    enviado: ['em_transporte', 'entregue'], em_transporte: ['saiu_entrega', 'entregue'],
+    saiu_entrega: ['entregue'],
+};
 
 export default function AdminOrderDetail() {
     const { id } = useParams();
@@ -94,15 +103,17 @@ export default function AdminOrderDetail() {
                     <p className="text-sm text-muted-foreground mt-1">{new Date(order.created_date).toLocaleString("pt-BR")}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <select value={order.status} onChange={(e) => changeStatus(e.target.value)} disabled={saving} className="border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" >
-                        {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    <select value={order.status} onChange={(e) => changeStatus(e.target.value)} disabled={saving || !isPaid || order.status === 'cancelado'} className="border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" >
+                        {!STATUS_OPTIONS.some(s => s.value === order.status) && <option value={order.status}>{ORDER_STATUS[order.status]?.label || order.status}</option>}
+                        {STATUS_OPTIONS.filter(s => s.value === order.status || NEXT_STATUS[order.status]?.includes(s.value))
+                            .map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                     </select>
                 </div>
             </div>
 
-            <div className="grid lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 {/* left: items + summary + timeline */}
-                <div className="lg:col-span-2 space-y-5">
+                <div className="min-w-0 [overflow-wrap:anywhere] lg:col-span-2 space-y-5">
                     {/* Products */}
                     <div className="bg-background p-5">
                         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Produtos</h2>
@@ -140,6 +151,10 @@ export default function AdminOrderDetail() {
                             <InfoRow label="Data pagamento" value={order.paid_at ? new Date(order.paid_at).toLocaleString("pt-BR") : "—"} />
                         </div>
                     </div>
+
+                    <PaymentReconciliationPreview key={order.id} order={order} />
+
+                    <AdminAfterSales order={order} onChanged={load} />
 
                     {/* Delivery / Shipping */}
                     <div className="bg-background p-5">
@@ -204,13 +219,13 @@ export default function AdminOrderDetail() {
                     {/* Timeline */}
                     {events.length > 0 && (
                         <div className="bg-background p-5">
-                            <OrderTimeline events={events} />
+                        <OrderTimeline events={events} paymentStatus={order.payment_status} />
                         </div>
                     )}
                 </div>
 
                 {/* right: customer + address */}
-                <div className="space-y-5">
+                <div className="min-w-0 [overflow-wrap:anywhere] space-y-5">
                     <div className="bg-background p-5">
                         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-3">Cliente</h2>
                         <div className="space-y-1.5 text-sm">

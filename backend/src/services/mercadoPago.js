@@ -5,6 +5,8 @@
  */
 
 import crypto from 'crypto';
+import { normalizePayer, omitEmptyOptional } from '../lib/paymentPayer.js';
+import { safeApplicationId } from '../lib/mercadoPagoWebhookLog.js';
 
 const BASE_URL = 'https://api.mercadopago.com';
 
@@ -14,25 +16,41 @@ function getAccessToken() {
     return token;
 }
 
-function isTestEnvironment() {
-    const token = process.env.MERCADO_PAGO_ACCESS_TOKEN || '';
-    // Test tokens start with TEST-
-    return token.startsWith('TEST-');
+export function getMercadoPagoMode() {
+    const mode = process.env.MERCADO_PAGO_MODE;
+    return mode === 'test' || mode === 'production' ? mode : 'INDETERMINADO';
+}
+
+export function getMercadoPagoReadiness() {
+    return {
+        mode: getMercadoPagoMode(),
+        configured: !!process.env.MERCADO_PAGO_ACCESS_TOKEN && getMercadoPagoMode() !== 'INDETERMINADO',
+        public_key_configured: !!process.env.MERCADO_PAGO_PUBLIC_KEY,
+        webhook_configured: !!process.env.MERCADO_PAGO_WEBHOOK_SECRET,
+    };
+}
+
+export function getMercadoPagoEnvironment() {
+    return { test: 'Teste', production: 'Produção' }[getMercadoPagoMode()] || 'INDETERMINADO';
 }
 
 async function mpFetch(path, options = {}) {
     const token = getAccessToken();
     const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
+    const { idempotencyKey, onResponse, ...fetchOptions } = options;
+    const method = (fetchOptions.method || 'GET').toUpperCase();
+    const idempotencyHeaders = method === 'GET' ? {} : { 'X-Idempotency-Key': idempotencyKey || crypto.randomUUID() };
     const res = await fetch(url, {
-        ...options,
+        ...fetchOptions,
         headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
-            'X-Idempotency-Key': options.idempotencyKey || crypto.randomUUID(),
-            ...(options.headers || {}),
+            ...idempotencyHeaders,
+            ...(fetchOptions.headers || {}),
         },
     });
-    const data = await res.json();
+    onResponse?.(res.status);
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
         const msg = data.message || data.error || `Mercado Pago API error (${res.status})`;
         throw Object.assign(new Error(msg), { status: res.status, mpError: data });
@@ -49,7 +67,7 @@ export async function testConnection() {
         const data = await mpFetch('/users/me');
         return {
             connected: true,
-            environment: isTestEnvironment() ? 'Teste' : 'Produção',
+            environment: getMercadoPagoEnvironment(),
             user_id: data.id,
             country: data.country_id,
         };
@@ -76,8 +94,8 @@ export async function getPaymentMethods() {
 }
 
 // ─── Get available payment types (pix, credit_card, debit_card, etc) ───
-export async function getAvailablePaymentTypes() {
-    const methods = await getPaymentMethods();
+export async function getAvailablePaymentTypes(methods = null) {
+    methods ||= await getPaymentMethods();
     const types = new Set(methods.map(m => m.payment_type_id));
     return {
         pix: types.has('bank_transfer') || methods.some(m => m.id === 'pix'),
@@ -88,9 +106,12 @@ export async function getAvailablePaymentTypes() {
 }
 
 // ─── Create Pix payment via Orders API ─────────────────────────
-export async function createPixPayment({ orderId, orderNumber, total, payer, idempotencyKey }) {
+export async function createPixPayment({ orderId, orderNumber, total, payer, idempotencyKey, onStage = () => {} }) {
+    onStage('build_payload');
+    const safePayer = normalizePayer(payer);
     const body = {
         type: 'online',
+        processing_mode: 'automatic',
         external_reference: orderNumber,
         total_amount: String(Number(total).toFixed(2)),
         transactions: {
@@ -102,24 +123,25 @@ export async function createPixPayment({ orderId, orderNumber, total, payer, ide
                 },
             }],
         },
-        payer: {
-            email: payer.email,
-            first_name: payer.first_name,
-            last_name: payer.last_name,
-            identification: payer.identification,
-        },
+        payer: safePayer,
         description: `Pedido ${orderNumber}`,
     };
 
+    onStage('mp_request');
     const data = await mpFetch('/v1/orders', {
         method: 'POST',
         body: JSON.stringify(body),
         idempotencyKey: idempotencyKey || `pix-${orderNumber}`,
     });
 
-    // Extract Pix data from response
+    onStage('mp_response_received', data.id);
+    // A processed/accredited TEST order may have no QR code.
+    onStage('extract_order', data.id);
+    const resource = orderResource(data);
+    onStage('extract_transaction', data.id);
     const payment = data.transactions?.payments?.[0] || {};
-    const pixData = payment.point_of_interaction?.transaction_data || {};
+    onStage('extract_qr', data.id);
+    const pixData = payment.payment_method || payment.point_of_interaction?.transaction_data || {};
 
     return {
         mp_order_id: data.id,
@@ -130,33 +152,31 @@ export async function createPixPayment({ orderId, orderNumber, total, payer, ide
         pix_qr_code: pixData.qr_code || null,
         pix_qr_code_base64: pixData.qr_code_base64 || null,
         pix_expiration_at: pixData.expiration_date || null,
+        provider_resource: resource,
     };
 }
 
 // ─── Create card payment via Orders API ───────────────────────
-export async function createCardPayment({ orderId, orderNumber, total, payer, cardToken, installments, paymentMethodId, issuerId, idempotencyKey }) {
+export async function createCardPayment({ orderId, orderNumber, total, payer, cardToken, installments, paymentMethodId, paymentType, issuerId, idempotencyKey }) {
+    const safePayer = normalizePayer(payer);
     const body = {
         type: 'online',
+        processing_mode: 'automatic',
         external_reference: orderNumber,
         total_amount: String(Number(total).toFixed(2)),
         transactions: {
             payments: [{
                 amount: String(Number(total).toFixed(2)),
-                payment_method: {
+                payment_method: omitEmptyOptional({
                     id: paymentMethodId,
-                    type: 'credit_card',
+                    type: paymentType,
                     token: cardToken,
                     installments: parseInt(installments) || 1,
                     issuer_id: issuerId ? String(issuerId) : undefined,
-                },
+                }),
             }],
         },
-        payer: {
-            email: payer.email,
-            first_name: payer.first_name,
-            last_name: payer.last_name,
-            identification: payer.identification,
-        },
+        payer: safePayer,
         description: `Pedido ${orderNumber}`,
     };
 
@@ -178,76 +198,288 @@ export async function createCardPayment({ orderId, orderNumber, total, payer, ca
     };
 }
 
+// Admin-only TEST diagnosis: read provider orders by their store reference.
+// The response excludes payer data and credentials.
+function parseProviderNonNegativeInteger(value) {
+    if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? value : null;
+    if (typeof value !== 'string' || !/^[0-9]+$/.test(value)) return null;
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+const ORDERS_LOOKUP_PAGE_SIZE = 10;
+const ORDERS_LOOKUP_MAX_PAGES = 50;
+
+function inconclusiveOrdersLookup(code = 'provider_pagination_inconclusive') {
+    return Object.assign(new Error('Consulta de Orders inconclusiva; exige conciliação'), { status: 409, code });
+}
+
+export async function findTestOrdersByReference(externalReference, createdAt) {
+    if (getMercadoPagoMode() !== 'test') {
+        throw Object.assign(new Error('Diagnóstico disponível somente no modo TEST'), { status: 409 });
+    }
+    const created = new Date(createdAt).getTime();
+    if (!Number.isFinite(created)) {
+        throw Object.assign(new Error('Data do pedido inválida'), { status: 400 });
+    }
+    const params = new URLSearchParams({
+        begin_date: new Date(created - 24 * 60 * 60 * 1000).toISOString(),
+        end_date: new Date().toISOString(),
+        external_reference: externalReference,
+        type: 'online',
+        page: '1',
+        page_size: String(ORDERS_LOOKUP_PAGE_SIZE),
+    });
+    const orders = [];
+    const seenIds = new Set();
+    let expectedTotal = null;
+    let expectedTotalPages = null;
+    for (let page = 1; page <= ORDERS_LOOKUP_MAX_PAGES; page++) {
+        params.set('page', String(page));
+        let httpStatus = null;
+        let parsedTotal = null;
+        let parsedTotalPages = null;
+        let returnedCount = null;
+        let matchingReferenceCount = null;
+        let paginationComplete = false;
+        try {
+            const result = await mpFetch(`/v1/orders?${params}`, {
+                signal: AbortSignal.timeout(10000),
+                onResponse: status => { httpStatus = status; },
+            });
+            if (httpStatus !== 200) throw inconclusiveOrdersLookup('provider_request_inconclusive');
+            if (!Array.isArray(result?.data) || !result.paging || typeof result.paging !== 'object'
+                || Array.isArray(result.paging)) throw inconclusiveOrdersLookup();
+
+            parsedTotal = parseProviderNonNegativeInteger(result.paging.total);
+            parsedTotalPages = result.paging.total_pages === undefined ? null
+                : parseProviderNonNegativeInteger(result.paging.total_pages);
+            const offset = result.paging.offset === undefined ? null
+                : parseProviderNonNegativeInteger(result.paging.offset);
+            const limit = result.paging.limit === undefined ? null
+                : parseProviderNonNegativeInteger(result.paging.limit);
+            returnedCount = result.data.length;
+            matchingReferenceCount = result.data.filter(order => order?.external_reference === externalReference).length;
+            const calculatedPages = parsedTotal === null ? null
+                : Math.ceil(parsedTotal / ORDERS_LOOKUP_PAGE_SIZE);
+            const pagesToRead = calculatedPages === null ? null : Math.max(1, calculatedPages);
+            if (parsedTotal === null || (result.paging.total_pages !== undefined && parsedTotalPages === null)
+                || (result.paging.offset !== undefined && offset === null)
+                || (result.paging.limit !== undefined && limit === null)
+                || (limit !== null && limit !== ORDERS_LOOKUP_PAGE_SIZE)
+                || (offset !== null && offset !== (page - 1) * ORDERS_LOOKUP_PAGE_SIZE)
+                || (parsedTotalPages !== null && parsedTotalPages !== calculatedPages
+                    && !(parsedTotal === 0 && parsedTotalPages === 1))
+                || pagesToRead > ORDERS_LOOKUP_MAX_PAGES
+                || (expectedTotal !== null && parsedTotal !== expectedTotal)
+                || (expectedTotalPages !== null && parsedTotalPages !== null && parsedTotalPages !== expectedTotalPages)
+                || returnedCount > ORDERS_LOOKUP_PAGE_SIZE
+                || orders.length + returnedCount > parsedTotal
+                || matchingReferenceCount !== returnedCount) {
+                throw inconclusiveOrdersLookup(matchingReferenceCount !== returnedCount
+                    ? 'provider_filter_inconclusive' : 'provider_pagination_inconclusive');
+            }
+            expectedTotal = parsedTotal;
+            expectedTotalPages = calculatedPages;
+            if (page < pagesToRead && returnedCount !== ORDERS_LOOKUP_PAGE_SIZE) {
+                throw inconclusiveOrdersLookup();
+            }
+            for (const order of result.data) {
+                if ((typeof order.id !== 'string' && typeof order.id !== 'number')
+                    || !String(order.id) || seenIds.has(String(order.id))) throw inconclusiveOrdersLookup();
+                seenIds.add(String(order.id));
+                orders.push(order);
+            }
+            if (page === pagesToRead) {
+                if (orders.length !== parsedTotal) throw inconclusiveOrdersLookup();
+                paginationComplete = true;
+            }
+        } catch (error) {
+            if (error.status === 409 && typeof error.code === 'string' && error.code.startsWith('provider_')) throw error;
+            throw Object.assign(inconclusiveOrdersLookup('provider_request_inconclusive'), { cause: error });
+        } finally {
+            console.info(JSON.stringify({
+                http_status: httpStatus, page, page_size: ORDERS_LOOKUP_PAGE_SIZE,
+                parsed_total: parsedTotal, parsed_total_pages: parsedTotalPages,
+                returned_count: returnedCount, matching_reference_count: matchingReferenceCount,
+                pagination_complete: paginationComplete,
+            }));
+        }
+        if (paginationComplete) break;
+    }
+    const safeCode = (value) => typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,80}$/.test(value) ? value : null;
+    return orders
+        .filter((order) => order.external_reference === externalReference)
+        .map((order) => ({
+            id: order.id,
+            status: safeCode(order.status),
+            status_detail: safeCode(order.status_detail),
+            processing_mode: safeCode(order.processing_mode),
+            transactions: (order.transactions?.payments || []).map((payment) => ({
+                status: safeCode(payment.status),
+                status_detail: safeCode(payment.status_detail),
+                errors: (Array.isArray(payment.errors) ? payment.errors : []).map((error) => ({
+                    code: safeCode(error.code),
+                    cause: safeCode(error.cause),
+                })),
+            })),
+            errors: (Array.isArray(order.errors) ? order.errors : []).map((error) => ({
+                code: safeCode(error.code),
+                cause: safeCode(error.cause),
+            })),
+        }));
+}
+
 // ─── Get payment/order status from MP ─────────────────────────
-export async function getOrderStatus(mpOrderId) {
-    const data = await mpFetch(`/v1/orders/${mpOrderId}`);
-    const payment = data.transactions?.payments?.[0] || {};
+function orderResource(data) {
+    const payments = data.transactions?.payments || [];
+    const payment = payments[0] || {};
     return {
+        mp_order_id: data.id,
+        order_status: data.status,
+        order_status_detail: data.status_detail,
         mp_status: payment.status,
         mp_status_detail: payment.status_detail,
         mp_payment_id: payment.id,
+        payment_count: payments.length,
+        transaction_amount: payment.amount,
+        transaction_status: payment.status,
+        transaction_status_detail: payment.status_detail,
         total_amount: data.total_amount,
+        currency_id: data.currency_id || data.currency,
+        transaction_currency_id: payment.currency_id || payment.currency || null,
         external_reference: data.external_reference,
+        application_id: safeApplicationId(data.integration_data?.application_id),
     };
 }
 
-export async function getPaymentStatus(mpPaymentId) {
-    const data = await mpFetch(`/v1/payments/${mpPaymentId}`);
-    return {
-        mp_status: data.status,
-        mp_status_detail: data.status_detail,
-        mp_payment_id: data.id,
-        external_reference: data.external_reference,
-        transaction_amount: data.transaction_amount,
-    };
+export async function getOrderStatus(mpOrderId) {
+    const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}`);
+    return orderResource(data);
 }
 
 // ─── Validate webhook signature ───────────────────────────────
-export function validateWebhookSignature(req) {
-    const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
-    if (!secret) return false;
+function normaliseWebhookValue(value) {
+    const first = Array.isArray(value) ? value[0] : value;
+    if (first === undefined || first === null) return undefined;
+    try {
+        const trimmed = String(first).trim();
+        return trimmed || undefined;
+    } catch {
+        return undefined;
+    }
+}
 
-    // Mercado Pago sends x-signature header: "ts=...,v1=..."
-    const signature = req.headers['x-signature'] || req.headers['x-signature'];
-    const requestId = req.headers['x-request-id'];
-
-    if (!signature) return false;
-
-    // Parse the signature header
-    const parts = signature.split(',').reduce((acc, part) => {
-        const [key, value] = part.split('=');
-        acc[key.trim()] = value.trim();
-        return acc;
-    }, {});
-
+export function inspectWebhookSignature(req, secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET) {
+    const signature = normaliseWebhookValue(req?.headers?.['x-signature']);
+    const requestId = normaliseWebhookValue(req?.headers?.['x-request-id']);
+    // Only the query value is signed. Never substitute body.data.id.
+    const dataId = normaliseWebhookValue(req?.query?.['data.id']);
+    const presence = {
+        has_signature: typeof signature === 'string' && signature.length > 0,
+        has_request_id: typeof requestId === 'string' && requestId.length > 0,
+        has_query_data_id: typeof dataId === 'string' && dataId.length > 0,
+        has_timestamp: false,
+        secret_configured: typeof secret === 'string' && secret.length > 0,
+    };
+    const parts = Object.create(null);
+    for (const part of (signature || '').split(',')) {
+        const separator = part.indexOf('=');
+        if (separator < 0) continue;
+        const key = part.slice(0, separator).trim().toLowerCase();
+        const value = part.slice(separator + 1).trim();
+        if (value && (key === 'ts' || /^v\d+$/.test(key))) parts[key] = value;
+    }
     const ts = parts.ts;
     const v1 = parts.v1;
+    presence.has_timestamp = ts !== undefined;
+    const reject = (reason) => ({ valid: false, reason, ...presence });
+    if (!presence.secret_configured) return reject('secret_not_configured');
+    if (!presence.has_signature) return reject('signature_missing');
+    if (!ts) return reject('timestamp_missing');
+    if (!/^\d+$/.test(ts)) return reject('timestamp_malformed');
+    if (!/^[a-fA-F0-9]{64}$/.test(v1 || '')) return reject('signature_malformed');
 
-    if (!ts || !v1) return false;
+    // SDK 3.6.1 trims inputs, preserves data.id case and requires a timestamp.
+    // Signed, delayed deliveries are handled by deduplication and a fresh GET.
+    const manifest = [
+        presence.has_query_data_id && `id:${dataId};`,
+        presence.has_request_id && `request-id:${requestId};`,
+        `ts:${ts};`,
+    ].filter(Boolean).join('');
+    // Compare the UTF-8 hex strings, as the SDK does; uppercase v1 is not equivalent.
+    const expected = Buffer.from(crypto.createHmac('sha256', secret).update(manifest).digest('hex'));
+    const received = Buffer.from(v1);
+    return crypto.timingSafeEqual(expected, received)
+        ? { valid: true, reason: 'valid', ...presence }
+        : reject('signature_mismatch');
+}
 
-    // Validate timestamp (reject if older than 5 minutes)
-    const now = Math.floor(Date.now() / 1000);
-    if (Math.abs(now - parseInt(ts)) > 300) return false;
+export function validateWebhookSignature(req) {
+    return inspectWebhookSignature(req).valid;
+}
 
-    // The manifest to hash depends on the notification type
-    // For Orders API webhooks, the body contains data.id
-    const dataId = req.body?.data?.id || '';
-    const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
+// After-sales uses Orders API only. Return a limited shape without payer or credentials.
+export async function getRefundableOrder(mpOrderId) {
+    const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}`);
+    const payments = data.transactions?.payments || [];
+    return {
+        id: data.id,
+        external_reference: data.external_reference,
+        total_amount: data.total_amount,
+        currency: data.currency_id || data.currency || payments[0]?.currency_id,
+        status: data.status,
+        status_detail: data.status_detail,
+        payment: payments.length === 1 ? {
+            id: payments[0].id, status: payments[0].status, amount: payments[0].amount,
+        } : null,
+        refunds: (data.transactions?.refunds || []).map(refund => ({
+            id: refund.id,
+            transaction_id: refund.transaction_id,
+            amount: refund.amount,
+            status: refund.status,
+        })),
+    };
+}
 
-    // Use Node's crypto to validate
-    const hmac = crypto.createHmac('sha256', secret);
-    hmac.update(manifest);
-    const computed = hmac.digest('hex');
+export async function refundOrder({ mpOrderId, mpPaymentId, amount, full, idempotencyKey }) {
+    if (!idempotencyKey || !/^[a-zA-Z0-9_-]{1,128}$/.test(idempotencyKey)) {
+        throw Object.assign(new Error('Chave de idempotência inválida'), { status: 400 });
+    }
+    const body = full ? undefined : JSON.stringify({
+        transactions: [{ id: mpPaymentId, amount: (amount / 100).toFixed(2) }],
+    });
+    const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}/refund`, {
+        method: 'POST', idempotencyKey, ...(body ? { body } : {}),
+    });
+    return {
+        id: data.id,
+        status: data.status,
+        status_detail: data.status_detail,
+        refunds: (data.transactions?.refunds || []).map(refund => ({
+            id: refund.id,
+            transaction_id: refund.transaction_id,
+            amount: refund.amount,
+            status: refund.status,
+        })),
+    };
+}
 
-    return computed === v1;
+export async function cancelPendingOrder(mpOrderId, idempotencyKey) {
+    const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}/cancel`, {
+        method: 'POST', idempotencyKey,
+    });
+    return { id: data.id, status: data.status, external_reference: data.external_reference };
 }
 
 // ─── Map MP status to internal payment status ─────────────────
-export function mapPaymentStatus(mpStatus) {
+export function mapPaymentStatus(mpStatus, statusDetail = null) {
+    if (mpStatus === 'processed' && statusDetail === 'accredited') return 'approved';
     const map = {
         'pending': 'pending',
         'in_process': 'pending',
         'approved': 'approved',
+        'partially_refunded': 'partially_refunded',
         'rejected': 'rejected',
         'cancelled': 'rejected',
         'refunded': 'refunded',

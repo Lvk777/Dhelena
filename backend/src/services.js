@@ -1,4 +1,5 @@
 import { pool } from './config/db.js';
+import { effectiveSizes, stockForSize } from './lib/variantStock.js';
 
 // ─── Audit Log ─────────────────────────────────────────────────────
 export async function logAudit(adminId, action, entityType, entityId, changes, ip) {
@@ -10,8 +11,30 @@ export async function logAudit(adminId, action, entityType, entityId, changes, i
 }
 
 // ─── Coupon Validation (server-side) ───────────────────────────────
-export async function validateCoupon(code, userId, cartSubtotal, items) {
-    const { rows } = await pool.query('SELECT * FROM coupons WHERE code = $1', [code.toUpperCase().trim()]);
+export async function couponPreviewSubtotal(items, db = pool) {
+    const invalid = () => Object.assign(new Error('Carrinho inválido'), { status: 400 });
+    if (!Array.isArray(items) || !items.length || items.length > 100) throw invalid();
+    for (const item of items) {
+        if (!item || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.productId)
+            || !Number.isSafeInteger(item.qty) || item.qty <= 0) throw invalid();
+    }
+    const { rows } = await db.query('SELECT id, price, sale_price FROM products WHERE id = ANY($1::uuid[])',
+        [[...new Set(items.map(item => item.productId))]]);
+    const products = new Map(rows.map(product => [product.id.toLowerCase(), product]));
+    let subtotal = 0;
+    for (const item of items) {
+        const product = products.get(item.productId.toLowerCase());
+        if (!product) throw Object.assign(new Error('Produto não encontrado'), { status: 404 });
+        const price = Number(product.sale_price || product.price);
+        if (!Number.isFinite(price) || price < 0) throw Object.assign(new Error('Preço de catálogo inválido'), { status: 500 });
+        subtotal += price * item.qty;
+    }
+    if (!Number.isFinite(subtotal) || subtotal > Number.MAX_SAFE_INTEGER / 100) throw invalid();
+    return Number(subtotal.toFixed(2));
+}
+
+export async function validateCoupon(code, userId, cartSubtotal, items, { db = pool, lock = false } = {}) {
+    const { rows } = await db.query(`SELECT * FROM coupons WHERE code = $1${lock ? ' FOR UPDATE' : ''}`, [code.toUpperCase().trim()]);
     if (rows.length === 0) return { valid: false, error: 'Cupom não encontrado' };
 
     const c = rows[0];
@@ -25,18 +48,18 @@ export async function validateCoupon(code, userId, cartSubtotal, items) {
         return { valid: false, error: `Valor mínimo do pedido: R$ ${Number(c.min_order_value).toFixed(2)}` };
     }
 
-    if (c.max_uses) {
-        const { rows: usageCount } = await pool.query('SELECT COUNT(*) FROM coupon_usages WHERE coupon_id = $1', [c.id]);
+    if (c.max_uses != null) {
+        const { rows: usageCount } = await db.query('SELECT COUNT(*) FROM coupon_usages WHERE coupon_id = $1', [c.id]);
         if (parseInt(usageCount[0].count) >= c.max_uses) return { valid: false, error: 'Cupom esgotado' };
     }
 
-    if (c.max_uses_per_customer && userId) {
-        const { rows: userUsage } = await pool.query('SELECT COUNT(*) FROM coupon_usages WHERE coupon_id = $1 AND user_id = $2', [c.id, userId]);
+    if (c.max_uses_per_customer != null && userId) {
+        const { rows: userUsage } = await db.query('SELECT COUNT(*) FROM coupon_usages WHERE coupon_id = $1 AND user_id = $2', [c.id, userId]);
         if (parseInt(userUsage[0].count) >= c.max_uses_per_customer) return { valid: false, error: 'Você já usou este cupom' };
     }
 
     if (c.first_purchase_only && userId) {
-        const { rows: prevOrders } = await pool.query('SELECT COUNT(*) FROM orders WHERE user_id = $1 AND status != $2', [userId, 'cancelado']);
+        const { rows: prevOrders } = await db.query('SELECT COUNT(*) FROM orders WHERE user_id = $1 AND status != $2', [userId, 'cancelado']);
         if (parseInt(prevOrders[0].count) > 0) return { valid: false, error: 'Cupom válido apenas para primeira compra' };
     }
 
@@ -50,6 +73,7 @@ export async function validateCoupon(code, userId, cartSubtotal, items) {
 
     return {
         valid: true,
+        ...(lock ? { couponId: c.id } : {}),
         code: c.code,
         discount_type: c.discount_type,
         discount_value: Number(c.discount_value),
@@ -59,18 +83,24 @@ export async function validateCoupon(code, userId, cartSubtotal, items) {
 
 // ─── Stock Adjust (admin manual) ───────────────────────────────────
 export async function adjustStock(client, productId, colorId, size, newStock, reason, adminId, orderId = null, type = 'adjust') {
-    const { rows: prodRows } = await client.query('SELECT colors FROM products WHERE id = $1 FOR UPDATE', [productId]);
+    const { rows: prodRows } = await client.query('SELECT colors, sizes FROM products WHERE id = $1 FOR UPDATE', [productId]);
     if (prodRows.length === 0) throw Object.assign(new Error('Produto não encontrado'), { status: 404 });
 
     const colors = prodRows[0].colors || [];
     const colorIdx = colors.findIndex(c => c.id === colorId);
     if (colorIdx === -1) throw Object.assign(new Error('Cor não encontrada'), { status: 404 });
 
-    const previousStock = colors[colorIdx].stock?.[size] ?? 0;
+    const product = prodRows[0];
+    if (!effectiveSizes(product).includes(size)
+        || !Number.isSafeInteger(newStock) || newStock < 0) {
+        throw Object.assign(new Error('Tamanho ou quantidade de estoque inválidos'), { status: 400 });
+    }
+    const previousStock = stockForSize(product, colors[colorIdx], size);
     const delta = newStock - previousStock;
 
     if (!colors[colorIdx].stock) colors[colorIdx].stock = {};
-    colors[colorIdx].stock[size] = newStock;
+    if (effectiveSizes(product).length === 1) colors[colorIdx].stock = { [size]: newStock };
+    else colors[colorIdx].stock[size] = newStock;
 
     await client.query('UPDATE products SET colors = $1, updated_date = now() WHERE id = $2', [JSON.stringify(colors), productId]);
 
@@ -115,7 +145,7 @@ export async function sendOrderNotifications(orderId, event) {
             }
         }
     } catch (err) {
-        console.error('[Notifications] Error:', err.message);
+        console.error('[Notifications] Dispatch failed');
     }
 }
 
@@ -148,7 +178,7 @@ async function tryNotify(orderId, event, channel, recipient, sender) {
              WHERE order_id = $1 AND event = $3 AND channel = $4 AND recipient = $5`,
             [orderId, err.message, event, channel, recipient]
         ).catch(() => {});
-        console.error(`[Notify] ${channel} to ${recipient} failed:`, err.message);
+        console.error(`[Notify] ${channel} delivery failed`);
     }
 }
 

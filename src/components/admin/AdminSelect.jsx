@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function AdminSelect({ label, value, onChange, options, placeholder, description, error, required, disabled, full, children }) {
+export default function AdminSelect({ label, value, onChange, options = undefined, placeholder = "", description = "", error = "", required = false, disabled = false, full = false, children = undefined }) {
     return (
         <div className={full ? "sm:col-span-2" : ""}>
             {label && (

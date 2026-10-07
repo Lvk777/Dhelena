@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { CreditCard, AlertCircle, Loader2, Check, X, QrCode, Banknote } from "lucide-react";
+import { CreditCard, Loader2, Check, X, QrCode, Banknote } from "lucide-react";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminToggle from "@/components/admin/AdminToggle";
-import AdminSelect from "@/components/admin/AdminSelect";
 import { base44 } from "@/api/base44Client";
 
 export default function PaymentsTab({ data, onChange }) {
@@ -44,9 +43,9 @@ export default function PaymentsTab({ data, onChange }) {
         <div className="space-y-5">
             <AdminFormSection title="Mercado Pago" icon={CreditCard} description="Gateway de pagamento — Checkout Transparente via Orders API">
                 <div className="sm:col-span-2">
-                    <AdminToggle label="Ativar Mercado Pago" checked={data.mercado_pago_enabled} onChange={(v) => set("mercado_pago_enabled", v)} description="Processa pagamentos via Pix, cartão e boleto" />
+                    <p className="text-sm text-muted-foreground">O ambiente de pagamento é definido no servidor. Os métodos abaixo dependem da disponibilidade da conta Mercado Pago.</p>
                 </div>
-                <AdminSelect label="Ambiente" value={data.mercado_pago_mode} onChange={(v) => set("mercado_pago_mode", v)} options={[{ value: "sandbox", label: "Sandbox (teste)" }, { value: "production", label: "Produção" }]} />
+                <p className="text-sm">Ambiente detectado: {methodsInfo?.environment || "Não confirmado"}</p>
                 <div />
             </AdminFormSection>
 
@@ -55,18 +54,16 @@ export default function PaymentsTab({ data, onChange }) {
                     <AdminToggle label="Pix" icon={QrCode} checked={data.pix_enabled} onChange={(v) => set("pix_enabled", v)} description="Pagamento instantâneo com QR Code" />
                     <AdminToggle label="Cartão de crédito" checked={data.card_enabled} onChange={(v) => set("card_enabled", v)} description="Pagamento via cartão com parcelamento (Card Payment Brick)" />
                     <AdminToggle label="Cartão de débito" checked={data.debit_card_enabled} onChange={(v) => set("debit_card_enabled", v)} description="Somente se disponível na conta Mercado Pago" />
-                    <AdminToggle label="Boleto bancário" checked={data.boleto_enabled} onChange={(v) => set("boleto_enabled", v)} description="Pagamento via boleto (compensação em 1-2 dias)" />
                 </div>
             </AdminFormSection>
 
             <AdminFormSection title="Parcelamento">
-                <AdminInput label="Número máximo de parcelas" type="number" value={data.max_installments} onChange={(v) => set("max_installments", parseInt(v) || 1)} />
+                <AdminInput label="Número máximo de parcelas" type="number" min={1} max={12} value={data.max_installments} onChange={(v) => set("max_installments", Math.min(12, Math.max(1, parseInt(v) || 1)))} />
                 <AdminInput label="Parcelas sem juros" type="number" value={data.interest_free_installments} onChange={(v) => set("interest_free_installments", parseInt(v) || 0)} />
-                <AdminInput label="Desconto no Pix (%)" type="number" value={data.pix_discount} onChange={(v) => set("pix_discount", parseFloat(v) || 0)} description="Desconto adicional para pagamentos via Pix" />
                 <div />
             </AdminFormSection>
 
-            <AdminFormSection title="Métodos disponíveis no Mercado Pago" description="Métodos que a conta MP oferece — combine com os toggles acima">
+            <AdminFormSection title="Métodos de pagamento no checkout" description="Pix usa a configuração da Orders API; cartões usam a lista de métodos do Mercado Pago.">
                 <div className="sm:col-span-2">
                     {methodsLoading && <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Verificando...</div>}
                     {methodsInfo?.error && <p className="text-xs text-red-600">{methodsInfo.error}</p>}
@@ -81,9 +78,10 @@ export default function PaymentsTab({ data, onChange }) {
                                 <MethodBadge icon={CreditCard} label="Cartão" available={methodsInfo.available?.credit_card} enabled={methodsInfo.enabled?.credit_card} />
                                 <MethodBadge icon={Banknote} label="Débito" available={methodsInfo.available?.debit_card} enabled={methodsInfo.enabled?.debit_card} />
                             </div>
-                            {methodsInfo.available && !methodsInfo.available.pix && (
-                                <p className="text-xs text-amber-600 mt-2">⚠ Pix indisponível nesta conta Mercado Pago. Verifique se a chave Pix está cadastrada e o ambiente é correto.</p>
-                            )}
+                            <p className="text-xs text-muted-foreground mt-2">Pix: capacidade configurada no backend para a Orders API. A lista /v1/payment_methods não confirma a disponibilidade desse fluxo; cada tentativa é validada pelo Mercado Pago.</p>
+                            {methodsInfo.method_listing_status === 'unavailable' && <p className="text-xs text-amber-600">A lista de cartões não respondeu. Os cartões ficam indisponíveis até a consulta voltar.</p>}
+                            {methodsInfo.pix_capability?.reason === 'integration_not_configured' && <p className="text-xs text-amber-600">Configure o modo e o Access Token da integração no servidor.</p>}
+                            {methodsInfo.pix_capability?.reason === 'webhook_not_configured' && <p className="text-xs text-amber-600">Configure o segredo do webhook para confirmar pagamentos Pix.</p>}
                         </div>
                     )}
                 </div>

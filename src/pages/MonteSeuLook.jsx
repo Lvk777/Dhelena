@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
 import { X, Plus, Trash2, ShoppingBag, Check, Sparkles, Shirt } from "lucide-react";
 import { useCatalog } from "@/context/CatalogContext";
 import { useStore } from "@/context/StoreContext";
