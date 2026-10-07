@@ -21,9 +21,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      - run: npm run typecheck
       - run: npm run build
         env:
-          VITE_API_URL: https://api.example.invalid
+          VITE_API_URL: https://api.dhelenas.com
 
   backend:
     name: Backend tests

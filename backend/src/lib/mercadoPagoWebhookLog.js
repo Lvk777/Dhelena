@@ -3,6 +3,18 @@ const technicalId = (value, limit = 128) => typeof value === 'string'
     && value.length > 0 && value.length <= limit && /^[A-Za-z0-9._:-]+$/.test(value)
     ? value : null;
 
+export function safeApplicationId(value) {
+    if (typeof value === 'number' && (!Number.isSafeInteger(value) || value < 0)) return null;
+    if (typeof value !== 'string' && typeof value !== 'number') return null;
+    const id = String(value);
+    return /^[0-9]{1,32}$/.test(id) ? id : null;
+}
+
+function retryNumber(value) {
+    if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? value : null;
+    return typeof value === 'string' && /^[0-9]{1,6}$/.test(value) ? Number(value) : null;
+}
+
 export function createMercadoPagoWebhookLog(req, signature) {
     const dataId = req.query?.['data.id'];
     const rawType = req.body?.type || req.body?.event;
@@ -10,10 +22,15 @@ export function createMercadoPagoWebhookLog(req, signature) {
         event: 'mp_webhook_delivery',
         webhook_type: technicalId(rawType, 40) || 'unknown',
         data_id: typeof dataId === 'string' && /^ORD[A-Za-z0-9]{10,60}$/.test(dataId) ? dataId : null,
+        data_id_present: signature.has_query_data_id === true,
         x_request_id_present: signature.has_request_id,
         x_request_id: technicalId(req.headers?.['x-request-id']),
         signature_present: signature.has_signature,
         signature_valid: signature.valid,
+        ts_present: signature.has_timestamp === true,
+        live_mode: typeof req.body?.live_mode === 'boolean' ? req.body.live_mode : null,
+        application_id: safeApplicationId(req.body?.application_id),
+        x_retry: retryNumber(req.headers?.['x-retry']),
         provider_resource_fetch: 'not_attempted',
         processing_result: 'not_started',
         deduplication_result: 'not_attempted',
@@ -28,10 +45,15 @@ export function logMercadoPagoWebhookDelivery(delivery, level = 'log') {
         event: delivery.event,
         webhook_type: delivery.webhook_type,
         data_id: delivery.data_id,
+        data_id_present: delivery.data_id_present === true,
         x_request_id_present: delivery.x_request_id_present,
         x_request_id: delivery.x_request_id,
         signature_present: delivery.signature_present,
         signature_valid: delivery.signature_valid,
+        ts_present: delivery.ts_present === true,
+        live_mode: typeof delivery.live_mode === 'boolean' ? delivery.live_mode : null,
+        application_id: safeApplicationId(delivery.application_id),
+        x_retry: retryNumber(delivery.x_retry),
         provider_resource_fetch: delivery.provider_resource_fetch,
         processing_result: delivery.processing_result,
         deduplication_result: delivery.deduplication_result,

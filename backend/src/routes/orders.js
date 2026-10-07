@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { pool, withTransaction } from '../config/db.js';
 import { auth, requireAdmin, requireSupabaseAdmin } from '../middleware.js';
 import { placeOrder, cancelOrder } from '../orderService.js';
-import { validateCoupon, adjustStock, logAudit } from '../services.js';
+import { validateCoupon, couponPreviewSubtotal, adjustStock, logAudit } from '../services.js';
 import { orderLimiter, couponLimiter } from '../middleware/rateLimiters.js';
 import * as mp from '../services/mercadoPago.js';
 import * as me from '../services/melhorEnvio.js';
@@ -130,7 +130,10 @@ router.patch('/orders/:id/status', auth, requireAdmin, async (req, res, next) =>
 router.post('/coupons/validate', couponLimiter, async (req, res, next) => {
     try {
         const { code, items } = req.body;
-        const subtotal = (items || []).reduce((sum, i) => sum + (Number(i.price || 0) * (i.qty || 1)), 0);
+        if (typeof code !== 'string' || !code.trim() || code.length > 100) {
+            return res.status(400).json({ error: 'Cupom inválido' });
+        }
+        const subtotal = await couponPreviewSubtotal(items);
         const userId = req.user?.id || null;
         const result = await validateCoupon(code, userId, subtotal, items);
         res.json(result);

@@ -27,6 +27,7 @@
     "resend": "^4.0.0"
   },
   "devDependencies": {
+    "mercadopago": "3.6.1",
     "nodemon": "^3.1.7"
   },
   "overrides": {

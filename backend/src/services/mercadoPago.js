@@ -6,6 +6,7 @@
 
 import crypto from 'crypto';
 import { normalizePayer, omitEmptyOptional } from '../lib/paymentPayer.js';
+import { safeApplicationId } from '../lib/mercadoPagoWebhookLog.js';
 
 const BASE_URL = 'https://api.mercadopago.com';
 
@@ -348,6 +349,7 @@ function orderResource(data) {
         currency_id: data.currency_id || data.currency,
         transaction_currency_id: payment.currency_id || payment.currency || null,
         external_reference: data.external_reference,
+        application_id: safeApplicationId(data.integration_data?.application_id),
     };
 }
 
@@ -357,44 +359,57 @@ export async function getOrderStatus(mpOrderId) {
 }
 
 // ─── Validate webhook signature ───────────────────────────────
-export function inspectWebhookSignature(req) {
-    const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
-    const signature = req.headers?.['x-signature'];
-    const requestId = req.headers?.['x-request-id'];
+function normaliseWebhookValue(value) {
+    const first = Array.isArray(value) ? value[0] : value;
+    if (first === undefined || first === null) return undefined;
+    try {
+        const trimmed = String(first).trim();
+        return trimmed || undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+export function inspectWebhookSignature(req, secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET) {
+    const signature = normaliseWebhookValue(req?.headers?.['x-signature']);
+    const requestId = normaliseWebhookValue(req?.headers?.['x-request-id']);
     // Only the query value is signed. Never substitute body.data.id.
-    const dataId = req.query?.['data.id'];
+    const dataId = normaliseWebhookValue(req?.query?.['data.id']);
     const presence = {
         has_signature: typeof signature === 'string' && signature.length > 0,
         has_request_id: typeof requestId === 'string' && requestId.length > 0,
         has_query_data_id: typeof dataId === 'string' && dataId.length > 0,
+        has_timestamp: false,
         secret_configured: typeof secret === 'string' && secret.length > 0,
     };
-    const reject = (reason) => ({ valid: false, reason, ...presence });
-    if (!presence.secret_configured) return reject('secret_not_configured');
-    if (!presence.has_signature) return reject('signature_missing');
-
     const parts = Object.create(null);
-    for (const part of signature.split(',')) {
+    for (const part of (signature || '').split(',')) {
         const separator = part.indexOf('=');
-        if (separator <= 0) return reject('signature_malformed');
-        const key = part.slice(0, separator).trim();
-        if (parts[key] !== undefined) return reject('signature_malformed');
-        parts[key] = part.slice(separator + 1).trim();
+        if (separator < 0) continue;
+        const key = part.slice(0, separator).trim().toLowerCase();
+        const value = part.slice(separator + 1).trim();
+        if (value && (key === 'ts' || /^v\d+$/.test(key))) parts[key] = value;
     }
     const ts = parts.ts;
     const v1 = parts.v1;
+    presence.has_timestamp = ts !== undefined;
+    const reject = (reason) => ({ valid: false, reason, ...presence });
+    if (!presence.secret_configured) return reject('secret_not_configured');
+    if (!presence.has_signature) return reject('signature_missing');
+    if (!ts) return reject('timestamp_missing');
+    if (!/^\d+$/.test(ts)) return reject('timestamp_malformed');
     if (!/^[a-fA-F0-9]{64}$/.test(v1 || '')) return reject('signature_malformed');
-    if (ts !== undefined && !/^\d+$/.test(ts)) return reject('timestamp_malformed');
 
-    // Official HMAC manifest: omit only genuinely absent pairs and keep case.
+    // SDK 3.6.1 trims inputs, preserves data.id case and requires a timestamp.
     // Signed, delayed deliveries are handled by deduplication and a fresh GET.
     const manifest = [
         presence.has_query_data_id && `id:${dataId};`,
         presence.has_request_id && `request-id:${requestId};`,
-        ts !== undefined && `ts:${ts};`,
+        `ts:${ts};`,
     ].filter(Boolean).join('');
-    const expected = crypto.createHmac('sha256', secret).update(manifest).digest();
-    const received = Buffer.from(v1, 'hex');
+    // Compare the UTF-8 hex strings, as the SDK does; uppercase v1 is not equivalent.
+    const expected = Buffer.from(crypto.createHmac('sha256', secret).update(manifest).digest('hex'));
+    const received = Buffer.from(v1);
     return crypto.timingSafeEqual(expected, received)
         ? { valid: true, reason: 'valid', ...presence }
         : reject('signature_mismatch');

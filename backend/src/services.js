@@ -11,6 +11,28 @@ export async function logAudit(adminId, action, entityType, entityId, changes, i
 }
 
 // ─── Coupon Validation (server-side) ───────────────────────────────
+export async function couponPreviewSubtotal(items, db = pool) {
+    const invalid = () => Object.assign(new Error('Carrinho inválido'), { status: 400 });
+    if (!Array.isArray(items) || !items.length || items.length > 100) throw invalid();
+    for (const item of items) {
+        if (!item || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.productId)
+            || !Number.isSafeInteger(item.qty) || item.qty <= 0) throw invalid();
+    }
+    const { rows } = await db.query('SELECT id, price, sale_price FROM products WHERE id = ANY($1::uuid[])',
+        [[...new Set(items.map(item => item.productId))]]);
+    const products = new Map(rows.map(product => [product.id.toLowerCase(), product]));
+    let subtotal = 0;
+    for (const item of items) {
+        const product = products.get(item.productId.toLowerCase());
+        if (!product) throw Object.assign(new Error('Produto não encontrado'), { status: 404 });
+        const price = Number(product.sale_price || product.price);
+        if (!Number.isFinite(price) || price < 0) throw Object.assign(new Error('Preço de catálogo inválido'), { status: 500 });
+        subtotal += price * item.qty;
+    }
+    if (!Number.isFinite(subtotal) || subtotal > Number.MAX_SAFE_INTEGER / 100) throw invalid();
+    return Number(subtotal.toFixed(2));
+}
+
 export async function validateCoupon(code, userId, cartSubtotal, items, { db = pool, lock = false } = {}) {
     const { rows } = await db.query(`SELECT * FROM coupons WHERE code = $1${lock ? ' FOR UPDATE' : ''}`, [code.toUpperCase().trim()]);
     if (rows.length === 0) return { valid: false, error: 'Cupom não encontrado' };
