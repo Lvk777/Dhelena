@@ -231,7 +231,7 @@ export default function ProductDetail() {
                                     value={cep}
                                     onChange={(e) => { quoteVersion.current += 1; setCep(e.target.value); setFrete(null); setShippingLoading(false); }}
                                     placeholder="Digite seu CEP"
-                                    className="flex-1 border border-border px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))]"
+                                    className="min-w-0 flex-1 border border-border px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))]"
                                 />
                                 <button type="submit" disabled={shippingLoading} className="btn-outline px-6 disabled:opacity-50">{shippingLoading ? "Calculando..." : "Calcular"}</button>
                             </form>
