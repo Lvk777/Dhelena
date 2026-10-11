@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { isManagedMelhorEnvioConfig } from '../services/melhorEnvioEnvironment.js';
+import { orderEmailReadiness } from '../services/orderEmail.js';
 import { pool } from '../config/db.js';
 import { auth, requireAdmin } from '../middleware.js';
 import { logAudit } from '../services.js';
@@ -115,12 +117,30 @@ router.get('/look-promotions', async (req, res, next) => {
     } catch (e) { next(e); }
 });
 
-// Public: validate promotion discount for a cart (server-side calculation)
+// Public preview: resolve catalog prices, never use a browser subtotal.
 router.post('/look-promotions/validate', async (req, res, next) => {
     try {
-        const { items, subtotal } = req.body;
-        const itemCount = items?.length || 0;
-        const cartSubtotal = Number(subtotal) || 0;
+        const items = req.body?.items;
+        if (!Array.isArray(items) || items.length === 0 || items.length > 100
+            || items.some(item => !item || typeof item.productId !== 'string'
+                || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.productId)
+                || !Number.isInteger(item.qty) || item.qty < 1 || item.qty > 100)) {
+            return res.status(400).json({ error: 'Itens de carrinho inválidos' });
+        }
+        const ids = [...new Set(items.map(item => item.productId))];
+        const { rows: products } = await pool.query(
+            "SELECT id, price, sale_price, category FROM products WHERE id = ANY($1::uuid[]) AND status = 'published'",
+            [ids]
+        );
+        if (products.length !== ids.length) return res.status(400).json({ error: 'Produto indisponível' });
+        const byId = new Map(products.map(product => [product.id, product]));
+        const cartSubtotal = items.reduce((sum, item) => {
+            const product = byId.get(item.productId);
+            const price = Number(product.sale_price || product.price);
+            if (!Number.isFinite(price) || price <= 0) throw Object.assign(new Error('Preço de catálogo inválido'), { status: 500 });
+            return sum + price * item.qty;
+        }, 0);
+        const itemCount = items.length;
 
         const { rows: activePromos } = await pool.query(
             `SELECT * FROM look_promotions
@@ -142,6 +162,10 @@ router.post('/look-promotions/validate', async (req, res, next) => {
             }
             if (eligible && promo.min_value && Number(promo.min_value) > 0) {
                 eligible = cartSubtotal >= Number(promo.min_value);
+            }
+            if (eligible && promo.applicable_category) {
+                eligible = items.some(item => String(byId.get(item.productId)?.category || '').toLowerCase()
+                    .includes(String(promo.applicable_category).toLowerCase()));
             }
             if (eligible) {
                 appliedPromo = promo;
@@ -276,7 +300,7 @@ function buildSafeConfig(row) {
 router.get('/integrations/config', auth, requireAdmin, async (req, res, next) => {
     try {
         const { rows } = await pool.query("SELECT * FROM integration_configs WHERE service_key NOT LIKE 'melhor_envio_oauth_state_%' AND service_key NOT LIKE 'melhor_envio_oauth_code_%' AND service_key <> 'melhor_envio_sandbox_oauth' ORDER BY service_name");
-        res.json(rows.map(buildSafeConfig));
+        res.json(rows.filter(row => !isManagedMelhorEnvioConfig(row.service_key)).map(buildSafeConfig));
     } catch (e) { next(e); }
 });
 
@@ -284,7 +308,7 @@ router.get('/integrations/config', auth, requireAdmin, async (req, res, next) =>
 router.put('/integrations/config/:serviceKey', auth, requireAdmin, async (req, res, next) => {
     try {
         const { serviceKey } = req.params;
-        if (serviceKey.startsWith('melhor_envio_oauth_') || serviceKey === 'melhor_envio_sandbox_oauth') {
+        if (isManagedMelhorEnvioConfig(serviceKey)) {
             return res.status(403).json({ error: 'Configuração OAuth gerenciada pelo servidor.' });
         }
         const { service_name, description, config_data, is_active } = req.body;
@@ -343,7 +367,7 @@ router.put('/integrations/config/:serviceKey', auth, requireAdmin, async (req, r
 router.patch('/integrations/config/:serviceKey/toggle', auth, requireAdmin, async (req, res, next) => {
     try {
         const { serviceKey } = req.params;
-        if (serviceKey.startsWith('melhor_envio_oauth_') || serviceKey === 'melhor_envio_sandbox_oauth') {
+        if (isManagedMelhorEnvioConfig(serviceKey)) {
             return res.status(403).json({ error: 'Configuração OAuth gerenciada pelo servidor.' });
         }
         const { rows: existing } = await pool.query(
@@ -375,6 +399,8 @@ router.get('/integrations/status', auth, requireAdmin, async (req, res, next) =>
     try {
     const mpReadiness = getMercadoPagoReadiness();
     const meReadiness = await melhorEnvioTokens.readiness();
+    const { rows: mailSettings } = await pool.query('SELECT key, value FROM settings WHERE key = ANY($1::text[])', [['emails', 'general']]);
+    const mailReadiness = orderEmailReadiness(Object.fromEntries(mailSettings.map(row => [row.key, row.value])));
     const check = (val) => val ? 'Configurado' : 'Não configurado';
     res.json([
         {
@@ -402,9 +428,10 @@ router.get('/integrations/status', auth, requireAdmin, async (req, res, next) =>
         {
             key: 'melhorEnvio',
             name: 'Melhor Envio',
-            status: check((meReadiness.mode === 'sandbox' && meReadiness.oauth_token_present && !meReadiness.token_expired) || meReadiness.fallback_usable),
+            status: check((meReadiness.oauth_token_present && !meReadiness.token_expired) || meReadiness.fallback_usable),
             environment: meReadiness.mode === 'sandbox' ? 'Sandbox (teste)' : meReadiness.mode === 'production' ? 'Produção' : 'INDETERMINADO',
             readiness: meReadiness,
+            environments: { sandbox: await melhorEnvioTokens.readiness('sandbox'), production: await melhorEnvioTokens.readiness('production') },
             hint: 'Melhor Envio → Configurações → API Tokens.',
         },
         {
@@ -417,9 +444,10 @@ router.get('/integrations/status', auth, requireAdmin, async (req, res, next) =>
         {
             key: 'email',
             name: 'E-mail Transacional (Resend)',
-            status: check(process.env.RESEND_API_KEY),
+            status: check(mailReadiness.api_key_configured && mailReadiness.sender_and_reply_to_ready),
             environment: process.env.RESEND_API_KEY ? 'Produção' : '—',
-            hint: 'Resend → API Keys. Defina RESEND_API_KEY e EMAIL_FROM.',
+            readiness: mailReadiness,
+            hint: 'Resend: domínio verificado, API key e remetente autorizado. Configure Reply-To em E-mails.',
         },
     ]);
     } catch (e) { next(e); }

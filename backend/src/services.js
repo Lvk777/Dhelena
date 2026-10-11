@@ -1,5 +1,7 @@
 import { pool } from './config/db.js';
 import { effectiveSizes, stockForSize } from './lib/variantStock.js';
+import { sendOrderEmail, EMAIL_EVENTS } from './services/orderEmail.js';
+import { logSafeError } from './lib/safeErrorLog.js';
 
 // ─── Audit Log ─────────────────────────────────────────────────────
 export async function logAudit(adminId, action, entityType, entityId, changes, ip) {
@@ -127,6 +129,8 @@ export async function sendOrderNotifications(orderId, event) {
         const { rows: settingRows } = await pool.query("SELECT value FROM settings WHERE key = 'notifications'");
         const notifSettings = settingRows[0]?.value || { recipients: [] };
         const recipients = notifSettings.recipients || [];
+        const { rows: emailRows } = await pool.query("SELECT value FROM settings WHERE key = 'emails'");
+        const emailSettings = emailRows[0]?.value || {};
 
         for (const r of recipients) {
             if (!r.active) continue;
@@ -135,8 +139,8 @@ export async function sendOrderNotifications(orderId, event) {
             if (!events.includes(event)) continue;
 
             // Email
-            if (r.email && notifSettings.email_enabled !== false) {
-                await tryNotify(orderId, event, 'email', r.email, () => sendOrderEmail(order, r.email));
+            if (r.email && notifSettings.email_enabled !== false && EMAIL_EVENTS[event] && emailSettings[EMAIL_EVENTS[event][0]] !== false) {
+                await tryNotify(orderId, event, 'email', r.email, () => sendOrderEmail(order, r.email, event));
             }
 
             // WhatsApp
@@ -145,7 +149,7 @@ export async function sendOrderNotifications(orderId, event) {
             }
         }
     } catch (err) {
-        console.error('[Notifications] Dispatch failed');
+        logSafeError('notifications_dispatch_failed', err);
     }
 }
 
@@ -176,57 +180,10 @@ async function tryNotify(orderId, event, channel, recipient, sender) {
         await pool.query(
             `UPDATE notification_logs SET status = 'failed', error = $2
              WHERE order_id = $1 AND event = $3 AND channel = $4 AND recipient = $5`,
-            [orderId, err.message, event, channel, recipient]
+            [orderId, `${channel}_delivery_failed`, event, channel, recipient]
         ).catch(() => {});
-        console.error(`[Notify] ${channel} delivery failed`);
+        logSafeError(channel === 'email' ? 'email_delivery_failed' : 'whatsapp_delivery_failed', err);
     }
-}
-
-// ─── Email notification (Resend) ───────────────────────────────────
-async function sendOrderEmail(order, recipient) {
-    if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY não configurado');
-
-    const { default: Resend } = await import('resend');
-    const resend = new Resend(process.env.RESEND_API_KEY);
-
-    const items = order.snapshot?.items || [];
-    const addr = order.shipping_address || {};
-    const itemsHtml = items.map(i =>
-        `<tr><td style="padding:4px 8px">${i.product_name}</td><td style="padding:4px 8px">${i.color_name || '-'}</td><td style="padding:4px 8px">${i.size || '-'}</td><td style="padding:4px 8px;text-align:center">${i.quantity}</td><td style="padding:4px 8px;text-align:right">R$ ${Number(i.subtotal).toFixed(2)}</td></tr>`
-    ).join('');
-
-    const { data, error } = await resend.emails.send({
-        from: process.env.EMAIL_FROM || "D'Helenas <noreply@dhelenas.com.br>",
-        to: recipient,
-        subject: `Novo pedido ${order.order_number}`,
-        html: `
-            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-                <h2 style="color:#2d2926">Novo pedido: ${order.order_number}</h2>
-                <p><strong>Cliente:</strong> ${order.user_name || '-'}</p>
-                <p><strong>Telefone:</strong> ${order.user_phone || '-'}</p>
-                <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%">
-                    <tr style="background:#f5f5f5"><th style="padding:4px 8px;text-align:left">Produto</th><th style="padding:4px 8px">Cor</th><th style="padding:4px 8px">Tam</th><th style="padding:4px 8px">Qtd</th><th style="padding:4px 8px;text-align:right">Subtotal</th></tr>
-                    ${itemsHtml}
-                </table>
-                <p style="margin-top:12px"><strong>Subtotal:</strong> R$ ${Number(order.subtotal).toFixed(2)}</p>
-                <p><strong>Desconto:</strong> R$ ${Number(order.discount).toFixed(2)}</p>
-                <p><strong>Frete:</strong> R$ ${Number(order.shipping_cost).toFixed(2)} (${order.shipping_method || '-'})</p>
-                <p style="font-size:18px"><strong>Total:</strong> R$ ${Number(order.total).toFixed(2)}</p>
-                <hr>
-                <p><strong>Entrega:</strong> ${addr.recipient || order.user_name || '-'}</p>
-                <p>${addr.street || '-'}, ${addr.number || '-'} ${addr.complement || ''}</p>
-                <p>${addr.district || '-'} — ${addr.city || '-'}/${addr.state || '-'}</p>
-                <p>CEP: ${addr.zip_code || '-'}</p>
-                <hr>
-                <p><strong>Pagamento:</strong> ${order.payment_method || '-'}</p>
-                <p><strong>Status:</strong> ${order.status}</p>
-                <p><strong>Idempotência:</strong> ${order.idempotency_key || 'N/A'}</p>
-            </div>
-        `,
-    });
-
-    if (error) throw new Error(error.message);
-    return data;
 }
 
 // ─── WhatsApp notification (Cloud API) ────────────────────────────

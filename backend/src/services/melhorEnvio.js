@@ -1,36 +1,31 @@
 import crypto from 'crypto';
-import { melhorEnvioMode, melhorEnvioTokens, MELHOR_ENVIO_USER_AGENT_FALLBACK } from './melhorEnvioToken.js';
+import { melhorEnvioMode, melhorEnvioTokens } from './melhorEnvioToken.js';
+import { melhorEnvioEnvironment, melhorEnvioUserAgent } from './melhorEnvioEnvironment.js';
 
 /**
  * Melhor Envio Service — Freight calculation, label generation, tracking
- * Uses persisted Sandbox OAuth, with an environment-bound fixed-token fallback.
+ * Uses environment-isolated OAuth, with an environment-bound fixed-token fallback.
  * Sandbox: https://sandbox.melhorenvio.com.br/api/v2
  * Production: https://melhorenvio.com.br/api/v2
  */
-
-function getBaseUrl() {
-    const mode = melhorEnvioMode();
-    return mode === 'production'
-        ? 'https://melhorenvio.com.br/api/v2'
-        : 'https://sandbox.melhorenvio.com.br/api/v2';
-}
 
 function isSandbox() {
     return melhorEnvioMode() === 'sandbox';
 }
 
 async function meFetch(path, options = {}) {
-    const { token } = await melhorEnvioTokens.getToken();
-    const url = `${getBaseUrl()}${path}`;
+    const { token, mode } = await melhorEnvioTokens.getToken();
+    const url = `${melhorEnvioEnvironment(mode).base}/api/v2${path}`;
     const res = await fetch(url, {
         ...options,
         headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',
             'Content-Type': 'application/json',
-            'User-Agent': process.env.MELHOR_ENVIO_USER_AGENT || MELHOR_ENVIO_USER_AGENT_FALLBACK,
+            'User-Agent': melhorEnvioUserAgent(mode),
             ...(options.headers || {}),
         },
+        signal: options.signal || AbortSignal.timeout(10000),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import AdminConfirmDialog from '@/components/admin/AdminConfirmDialog';
+import { safeMelhorEnvioAuthorizationUrl } from '../../../backend/src/lib/navigation.js';
 import {
     Database, CreditCard, Truck, Mail, MessageCircle, Cloud,
     CheckCircle2, XCircle, Save, Lock, Power, Loader2, AlertTriangle, Zap
@@ -87,6 +89,19 @@ export default function Integrations() {
     const [testing, setTesting] = useState(null);
     const [testResult, setTestResult] = useState(null);
     const [showConfirmSave, setShowConfirmSave] = useState(false);
+    const [oauthMode, setOauthMode] = useState(null);
+    const [oauthBusy, setOauthBusy] = useState(false);
+    const [oauthError, setOauthError] = useState('');
+    const authorizeOAuth = async () => {
+        setOauthBusy(true); setOauthError('');
+        try {
+            const result = await client.custom.authorizeMelhorEnvio(oauthMode);
+            const url = safeMelhorEnvioAuthorizationUrl(oauthMode, result.authorization_url);
+            if (!url) throw new Error('Invalid OAuth destination');
+            window.location.assign(url);
+        } catch { setOauthError('Não foi possível iniciar o OAuth no ambiente selecionado.'); setOauthMode(null); }
+        finally { setOauthBusy(false); }
+    };
 
     useEffect(() => {
         Promise.all([
@@ -232,6 +247,13 @@ export default function Integrations() {
                                         </span>
                                     )}
                                 </div>
+                                {env?.environments && <dl className="mt-3 space-y-1 text-xs">
+                                    {Object.entries(env.environments).map(([mode, state]) => <div key={mode} className="flex flex-wrap justify-between gap-2">
+                                        <dt>{mode === 'sandbox' ? 'Sandbox' : 'Produção'}</dt>
+                                        <dd>{state.oauth_token_present ? (state.token_expired ? 'Autorização expirada' : 'OAuth autorizado') : state.oauth_configured ? 'Aguardando autorização' : 'Credenciais pendentes'}</dd>
+                                        <button type="button" title={`Autorizar OAuth ${mode}`} disabled={!state.oauth_configured || oauthBusy} onClick={() => setOauthMode(mode)} className="min-h-11 text-xs underline disabled:opacity-40">Autorizar {mode === 'sandbox' ? 'Sandbox' : 'Produção'}</button>
+                                    </div>)}
+                                </dl>}
 
                                 <div className="flex gap-2 mt-4">
                                     <button
@@ -256,6 +278,8 @@ export default function Integrations() {
             </div>
 
             {/* Integration Modal */}
+            {oauthError && <p role="alert" className="text-sm text-red-700 mt-4">{oauthError}</p>}
+            <AdminConfirmDialog open={!!oauthMode} onClose={() => setOauthMode(null)} onConfirm={authorizeOAuth} loading={oauthBusy} danger={false} title={`Autorizar Melhor Envio ${oauthMode === 'production' ? 'Produção' : 'Sandbox'}`} confirmLabel="Continuar para OAuth" message="A autorização será concluída no Melhor Envio. O ambiente ativo da loja permanecerá inalterado." />
             {editingDef && (
                 <AdminModal
                     open

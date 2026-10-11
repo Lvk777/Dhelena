@@ -1,15 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Truck, Loader2, Check, X } from "lucide-react";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminTextarea from "@/components/admin/AdminTextarea";
 import AdminToggle from "@/components/admin/AdminToggle";
-import AdminSelect from "@/components/admin/AdminSelect";
 import { base44 } from "@/api/base44Client";
 
 export default function ShippingTab({ data, onChange }) {
     const [testing, setTesting] = useState(false);
     const [testResult, setTestResult] = useState(null);
+    const [activeMode, setActiveMode] = useState('INDETERMINADO');
+    useEffect(() => {
+        base44.custom.integrationStatus().then(rows => setActiveMode(rows.find(row => row.key === 'melhorEnvio')?.environment || 'INDETERMINADO')).catch(() => {});
+    }, []);
     const set = (k, v) => onChange({ ...data, [k]: v });
 
     const testConnection = async () => {
@@ -33,6 +36,7 @@ export default function ShippingTab({ data, onChange }) {
                 </div>
                 <AdminInput label="Nome exibido" value={data.pickup_name} onChange={(v) => set("pickup_name", v)} />
                 <AdminInput label="Prazo para retirada" value={data.pickup_time} onChange={(v) => set("pickup_time", v)} placeholder="Ex: 2 dias úteis" />
+                <AdminTextarea label="Endereço público de retirada" value={data.pickup_address || ''} onChange={v => set('pickup_address', v)} full rows={2} />
                 <AdminTextarea label="Instruções de retirada" value={data.pickup_instructions} onChange={(v) => set("pickup_instructions", v)} rows={2} full placeholder="Ex: Retirar no endereço X, das 9h às 18h" />
             </AdminFormSection>
 
@@ -48,7 +52,7 @@ export default function ShippingTab({ data, onChange }) {
                 <div className="sm:col-span-2">
                     <AdminToggle label="Ativar Melhor Envio" checked={data.melhor_envio_enabled} onChange={(v) => set("melhor_envio_enabled", v)} description="Calcula frete real com transportadoras via Melhor Envio" />
                 </div>
-                <AdminSelect label="Ambiente" value={data.melhor_envio_mode} onChange={(v) => set("melhor_envio_mode", v)} options={[{ value: "sandbox", label: "Sandbox (teste)" }, { value: "production", label: "Produção" }]} />
+                <AdminInput label="Ambiente ativo" value={activeMode} disabled onChange={() => {}} />
                 <AdminInput label="Prazo adicional de preparação (dias)" type="number" value={data.melhor_envio_extra_days} onChange={(v) => set("melhor_envio_extra_days", parseInt(v) || 0)} description="Dias extras somados ao prazo da transportadora" />
                 <div className="sm:col-span-2">
                     {testResult && (

@@ -8,9 +8,11 @@ test('notification failures never log recipient or raw error details', async () 
     const logger = console.error;
     const token = process.env.RESEND_API_KEY;
     const records = [];
+    const storedErrors = [];
     delete process.env.RESEND_API_KEY;
     console.error = (...args) => records.push(args.join(' '));
-    pool.query = async sql => {
+    pool.query = async (sql, args) => {
+        if (sql.includes("SET status = 'failed', error")) storedErrors.push(args[1]);
         if (sql.includes('FROM orders o JOIN')) return { rows: [{ id: 'fixture-order' }] };
         if (sql.includes('FROM settings')) return { rows: [{ value: { recipients: [
             { active: true, email: 'recipient@example.invalid', events: ['payment_approved'] },
@@ -21,7 +23,8 @@ test('notification failures never log recipient or raw error details', async () 
     };
     try {
         await sendOrderNotifications('fixture-order', 'payment_approved');
-        assert.ok(records.some(record => record.includes('email delivery failed')));
+        assert.ok(records.some(record => JSON.parse(record).event === 'email_delivery_failed'));
+        assert.deepEqual(storedErrors, ['email_delivery_failed']);
         pool.query = async () => { throw new Error('payer@example.invalid Bearer fixture-secret'); };
         await sendOrderNotifications('fixture-order', 'payment_approved');
         const output = records.join('\n');
