@@ -11,6 +11,7 @@ export default function AdminConfirmDialog({
     danger = true,
     requireTyping = false,
     loading = false,
+    note = "Esta ação não poderá ser desfeita.",
 }) {
     const [typedText, setTypedText] = useState("");
 
@@ -65,7 +66,7 @@ export default function AdminConfirmDialog({
                             />
                         </div>
                     )}
-                    <p className="text-[11px] text-muted-foreground">Esta ação não poderá ser desfeita.</p>
+                    {note && <p className="text-[11px] text-muted-foreground">{note}</p>}
                 </div>
                 <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-3 bg-background">
                     <button onClick={onClose} className="btn-ghost" disabled={loading}>{cancelLabel}</button>

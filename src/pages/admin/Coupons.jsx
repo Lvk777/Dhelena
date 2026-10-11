@@ -21,21 +21,31 @@ const WIZARD_STEPS = [
 export default function Coupons() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
     const [editing, setEditing] = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [deleting, setDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState(false);
 
-    const load = () => { setLoading(true); base44.entities.Coupon.list("-created_date", 100).then(setItems).catch(() => { }).finally(() => setLoading(false)); };
+    const load = () => {
+        setLoading(true);
+        setLoadError(false);
+        base44.entities.Coupon.list("-created_date", 100)
+            .then(setItems)
+            .catch(() => setLoadError(true))
+            .finally(() => setLoading(false));
+    };
     useEffect(() => { load(); }, []);
 
     const confirmDelete = async () => {
         setDeleting(true);
+        setDeleteError(false);
         try {
             await base44.entities.Coupon.delete(deleteTarget.id);
-            await logAdminAction("coupon_delete", "Coupon", deleteTarget.id, deleteTarget.code, "Cupom excluído");
+            await logAdminAction("coupon_delete", "Coupon", deleteTarget.id, deleteTarget.code, "Cupom desativado");
             setDeleteTarget(null); load();
         }
-        catch { } finally { setDeleting(false); }
+        catch { setDeleteError(true); } finally { setDeleting(false); }
     };
 
     return (
@@ -44,7 +54,12 @@ export default function Coupons() {
                 <h1 className="font-heading text-2xl tracking-[0.03em]">Cupons</h1>
                 <button onClick={() => setEditing({})} className="btn-gold"><Plus className="w-4 h-4" strokeWidth={1.5} /> Novo cupom</button>
             </div>
-            {loading ? <div className="h-40 bg-background animate-pulse rounded-lg" /> : items.length === 0 ? (
+            {loading ? <div className="h-40 bg-background animate-pulse rounded-lg" /> : loadError ? (
+                <div role="alert" className="bg-background p-8 text-center rounded-lg border border-border">
+                    <p className="text-sm text-muted-foreground mb-4">Não foi possível carregar os cupons.</p>
+                    <button type="button" onClick={load} className="btn-outline min-h-11 px-5">Tentar novamente</button>
+                </div>
+            ) : items.length === 0 ? (
                 <div className="bg-background p-12 text-center rounded-lg border border-border">
                     <Ticket className="w-10 h-10 text-muted-foreground/40 mx-auto mb-4" strokeWidth={1} />
                     <p className="text-sm text-muted-foreground">Nenhum cupom cadastrado.</p>
@@ -62,12 +77,12 @@ export default function Coupons() {
                             {items.map((c) => (
                                 <tr key={c.id} className="hover:bg-muted/50 transition-colors">
                                     <td className="py-3 px-4 font-medium font-mono">{c.code}</td>
-                                    <td className="py-3 px-4 text-muted-foreground">{c.type === "percent" ? "Percentual" : c.type === "fixed" ? "Fixo" : "Frete grátis"}</td>
-                                    <td className="py-3 px-4 font-numeric">{c.type === "percent" ? `${c.value}%` : c.type === "fixed" ? formatBRL(c.value) : "—"}</td>
-                                    <td className="py-3 px-4 hidden sm:table-cell text-muted-foreground font-numeric">{c.uses || 0}{c.max_uses ? `/${c.max_uses}` : " ∞"}</td>
-                                    <td className="py-3 px-4 hidden md:table-cell text-muted-foreground font-numeric">{c.end_date ? new Date(c.end_date).toLocaleDateString("pt-BR") : "—"}</td>
+                                    <td className="py-3 px-4 text-muted-foreground">{c.discount_type === "percentage" ? "Percentual" : "Fixo"}</td>
+                                    <td className="py-3 px-4 font-numeric">{c.discount_type === "percentage" ? `${c.discount_value}%` : formatBRL(c.discount_value)}</td>
+                                    <td className="py-3 px-4 hidden sm:table-cell text-muted-foreground font-numeric">{c.uses ?? "—"}{c.max_uses ? `/${c.max_uses}` : " ∞"}</td>
+                                    <td className="py-3 px-4 hidden md:table-cell text-muted-foreground font-numeric">{c.valid_until ? new Date(c.valid_until).toLocaleDateString("pt-BR") : "—"}</td>
                                     <td className="py-3 px-4"><span className={`text-[10px] uppercase tracking-[0.12em] px-2 py-1 rounded ${c.active ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground"}`}>{c.active ? "Ativo" : "Inativo"}</span></td>
-                                    <td className="py-3 px-4"><div className="flex gap-1"><button onClick={() => setEditing(c)} className="p-1.5 hover:bg-muted rounded transition-colors"><Pencil className="w-4 h-4" strokeWidth={1.25} /></button><button onClick={() => setDeleteTarget(c)} className="p-1.5 hover:bg-muted rounded transition-colors text-rose"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button></div></td>
+                                    <td className="py-3 px-4"><div className="flex gap-1"><button type="button" aria-label={`Editar cupom ${c.code}`} onClick={() => setEditing(c)} className="min-w-11 min-h-11 inline-flex items-center justify-center hover:bg-muted rounded transition-colors"><Pencil className="w-4 h-4" strokeWidth={1.25} /></button><button type="button" aria-label={`Desativar cupom ${c.code}`} onClick={() => setDeleteTarget(c)} className="min-w-11 min-h-11 inline-flex items-center justify-center hover:bg-muted rounded transition-colors text-rose"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button></div></td>
                                 </tr>
                             ))}
                         </tbody>
@@ -78,12 +93,13 @@ export default function Coupons() {
 
             <AdminConfirmDialog
                 open={!!deleteTarget}
-                onClose={() => setDeleteTarget(null)}
+                onClose={() => { setDeleteTarget(null); setDeleteError(false); }}
                 onConfirm={confirmDelete}
-                title="Excluir cupom"
-                message="Você está prestes a excluir:"
+                title="Desativar cupom"
+                message={deleteError ? "Não foi possível desativar o cupom. Tente novamente." : "O cupom deixará de ser aceito no checkout:"}
                 itemName={deleteTarget?.code}
-                confirmLabel="Excluir"
+                confirmLabel="Desativar"
+                note="O cupom pode ser reativado pela edição."
                 loading={deleting}
             />
         </div>
@@ -92,13 +108,14 @@ export default function Coupons() {
 
 function CouponWizard({ item, onClose, onSaved }) {
     const [form, setForm] = useState({
-        code: item.code || "", description: item.description || "", type: item.type || "percent", value: item.value ?? "",
-        max_discount: item.max_discount ?? "", active: item.active !== false, max_uses: item.max_uses ?? "",
-        max_uses_per_client: item.max_uses_per_client ?? "", min_value: item.min_value ?? 0,
-        start_date: item.start_date ? item.start_date.slice(0, 10) : "", end_date: item.end_date ? item.end_date.slice(0, 10) : "",
+        code: item.code || "", description: item.description || "", type: item.discount_type || "percentage", value: item.discount_value ?? "",
+        active: item.active !== false, max_uses: item.max_uses ?? "",
+        max_uses_per_client: item.id ? (item.max_uses_per_customer ?? "") : 1, min_value: item.min_order_value ?? 0,
+        start_date: item.valid_from ? item.valid_from.slice(0, 10) : "", end_date: item.valid_until ? item.valid_until.slice(0, 10) : "",
         first_purchase_only: item.first_purchase_only || false,
     });
     const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState(false);
     const [stepErrors, setStepErrors] = useState(null);
     const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setStepErrors(null); };
 
@@ -106,9 +123,9 @@ function CouponWizard({ item, onClose, onSaved }) {
         const errors = {};
         if (stepIndex === 0 && !form.code.trim()) errors.code = "Informe o código do cupom";
         if (stepIndex === 1) {
-            if (form.type === "percent" && (parseFloat(form.value) > 100 || parseFloat(form.value) <= 0)) errors.value = "Percentual deve ser entre 0 e 100";
-            if ((form.type === "percent" || form.type === "fixed") && !form.value) errors.value = "Informe o valor do desconto";
-            if (form.type === "fixed" && parseFloat(form.value) <= 0) errors.value = "Valor deve ser maior que zero";
+            const value = Number(form.value);
+            if (form.value === "" || !Number.isFinite(value) || value <= 0) errors.value = "Informe um valor maior que zero";
+            else if (form.type === "percentage" && value > 100) errors.value = "Percentual deve ser entre 0 e 100";
         }
         if (stepIndex === 3 && form.start_date && form.end_date && form.start_date > form.end_date) errors.end_date = "Data final anterior à data de início";
         return Object.keys(errors).length > 0 ? errors : null;
@@ -118,22 +135,27 @@ function CouponWizard({ item, onClose, onSaved }) {
         // Final validation
         const allErrors = {};
         if (!form.code.trim()) allErrors.code = "Informe o código do cupom";
-        if (form.type === "percent" && (parseFloat(form.value) > 100 || parseFloat(form.value) <= 0)) allErrors.value = "Percentual deve ser entre 0 e 100";
-        if ((form.type === "percent" || form.type === "fixed") && !form.value) allErrors.value = "Informe o valor do desconto";
-        if (form.type === "fixed" && parseFloat(form.value) <= 0) allErrors.value = "Valor deve ser maior que zero";
+        const value = Number(form.value);
+        if (form.value === "" || !Number.isFinite(value) || value <= 0) allErrors.value = "Informe um valor maior que zero";
+        else if (form.type === "percentage" && value > 100) allErrors.value = "Percentual deve ser entre 0 e 100";
         if (form.start_date && form.end_date && form.start_date > form.end_date) allErrors.end_date = "Data final anterior à data de início";
         if (Object.keys(allErrors).length > 0) { setStepErrors(allErrors); return; }
 
         setSaving(true);
+        setSaveError(false);
         try {
             const payload = {
-                ...form,
                 code: form.code.toUpperCase().trim(),
-                value: form.type === "free_shipping" ? 0 : parseFloat(form.value) || 0,
-                max_discount: form.max_discount ? parseFloat(form.max_discount) : null,
+                description: form.description,
+                discount_type: form.type,
+                discount_value: parseFloat(form.value),
+                min_order_value: parseFloat(form.min_value) || 0,
                 max_uses: form.max_uses ? parseInt(form.max_uses) : null,
-                max_uses_per_client: form.max_uses_per_client ? parseInt(form.max_uses_per_client) : null,
-                min_value: parseFloat(form.min_value) || 0,
+                max_uses_per_customer: form.max_uses_per_client ? parseInt(form.max_uses_per_client) : null,
+                first_purchase_only: form.first_purchase_only,
+                active: form.active,
+                valid_from: form.start_date || null,
+                valid_until: form.end_date || null,
             };
             if (item.id) {
                 await base44.entities.Coupon.update(item.id, payload);
@@ -143,7 +165,7 @@ function CouponWizard({ item, onClose, onSaved }) {
                 await logAdminAction("coupon_create", "Coupon", newCoupon.id, payload.code, "Cupom criado");
             }
             onSaved();
-        } catch { console.error("Erro ao salvar cupom"); } finally { setSaving(false); }
+        } catch { setSaveError(true); } finally { setSaving(false); }
     };
 
     const renderStep = (step, wizProps) => {
@@ -154,19 +176,14 @@ function CouponWizard({ item, onClose, onSaved }) {
                 return (
                     <div className="max-w-xl mx-auto space-y-4">
                         <AdminInput label="Código" value={form.code} onChange={(v) => set("code", v.toUpperCase())} required error={errors?.code} placeholder="DHELENAS10" mono description="Código que o cliente digita no checkout" full />
-                        <AdminSelect label="Tipo de desconto" value={form.type} onChange={(v) => set("type", v)} required options={[{ value: "percent", label: "Percentual (%)" }, { value: "fixed", label: "Valor fixo (R$)" }, { value: "free_shipping", label: "Frete grátis" }]} />
+                        <AdminSelect label="Tipo de desconto" value={form.type} onChange={(v) => set("type", v)} required options={[{ value: "percentage", label: "Percentual (%)" }, { value: "fixed", label: "Valor fixo (R$)" }]} />
                         <AdminTextarea label="Descrição interna" value={form.description} onChange={(v) => set("description", v)} rows={2} placeholder="Descrição para uso interno (não visível ao cliente)" full />
                     </div>
                 );
             case "discount":
-                return form.type === "free_shipping" ? (
-                    <div className="max-w-xl mx-auto text-center py-8">
-                        <p className="text-sm text-muted-foreground">Frete grátis — nenhum valor de desconto adicional necessário.</p>
-                    </div>
-                ) : (
+                return (
                     <div className="max-w-xl mx-auto space-y-4">
-                        <AdminInput label={form.type === "percent" ? "Percentual (%)" : "Valor (R$)"} type="number" value={form.value} onChange={(v) => set("value", v)} required error={errors?.value} placeholder={form.type === "percent" ? "10" : "50.00"} full />
-                        <AdminInput label="Desconto máximo (R$)" type="number" value={form.max_discount} onChange={(v) => set("max_discount", v)} description="Opcional — limite máximo do desconto para cupons percentuais" placeholder="Sem limite" full />
+                        <AdminInput label={form.type === "percentage" ? "Percentual (%)" : "Valor (R$)"} type="number" value={form.value} onChange={(v) => set("value", v)} required error={errors?.value} placeholder={form.type === "percentage" ? "10" : "50.00"} full />
                     </div>
                 );
             case "rules":
@@ -195,11 +212,12 @@ function CouponWizard({ item, onClose, onSaved }) {
             case "review":
                 return (
                     <div className="max-w-2xl mx-auto">
+                        {saveError && <p role="alert" className="text-sm text-destructive mb-4">Não foi possível salvar o cupom. Revise os dados e tente novamente.</p>}
                         <div className="bg-muted/30 rounded-lg border border-border p-6 space-y-2">
                             <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-accent mb-3">Resumo do Cupom</h3>
                             <SummaryRow label="Código" value={form.code || "—"} />
-                            <SummaryRow label="Tipo" value={form.type === "percent" ? "Percentual" : form.type === "fixed" ? "Fixo" : "Frete grátis"} />
-                            <SummaryRow label="Valor" value={form.type === "percent" ? `${form.value}%` : form.type === "fixed" ? formatBRL(form.value) : "—"} />
+                            <SummaryRow label="Tipo" value={form.type === "percentage" ? "Percentual" : "Fixo"} />
+                            <SummaryRow label="Valor" value={form.type === "percentage" ? `${form.value}%` : formatBRL(form.value)} />
                             <SummaryRow label="Valor mínimo" value={form.min_value ? formatBRL(form.min_value) : "—"} />
                             <SummaryRow label="Início" value={form.start_date || "—"} />
                             <SummaryRow label="Término" value={form.end_date || "—"} />

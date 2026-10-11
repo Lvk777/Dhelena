@@ -153,7 +153,12 @@ router.get('/coupons/:id', auth, requireAdmin, async (req, res, next) => {
 // GET /api/coupons — list (admin)
 router.get('/coupons', auth, requireAdmin, async (req, res, next) => {
     try {
-        const { rows } = await pool.query('SELECT *, created_at as created_date FROM coupons ORDER BY created_at DESC');
+        const { rows } = await pool.query(`
+            SELECT c.*, c.created_at AS created_date,
+                   (SELECT COUNT(*)::int FROM coupon_usages cu WHERE cu.coupon_id = c.id) AS uses
+            FROM coupons c
+            ORDER BY c.created_at DESC
+        `);
         res.json(rows);
     } catch (err) { next(err); }
 });
