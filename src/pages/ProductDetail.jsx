@@ -17,7 +17,7 @@ export default function ProductDetail() {
     const { getProductById, getRelated, getCompleteLook, loading } = useCatalog();
     const product = getProductById(id);
     const { addToCart, toggleFavorite, isFavorite, setCartOpen } = useStore();
-    const { freeShippingThreshold, isFreeShipping } = usePublicSettings();
+    const { settings, isFreeShipping } = usePublicSettings();
     const [activeImg, setActiveImg] = useState(0);
     const [color, setColor] = useState(product?.colors[0]?.id);
     const [size, setSize] = useState(null);
@@ -28,7 +28,7 @@ export default function ProductDetail() {
     const [frete, setFrete] = useState(null);
     const [shippingLoading, setShippingLoading] = useState(false);
     const quoteVersion = useRef(0);
-    useEffect(() => { quoteVersion.current += 1; setFrete(null); setShippingLoading(false); }, [product?.id]);
+    useEffect(() => { quoteVersion.current += 1; setFrete(null); setShippingLoading(false); setActiveImg(0); }, [product?.id]);
 
     // Dynamic SEO
     useSEO({
@@ -64,6 +64,7 @@ export default function ProductDetail() {
     }
 
     const price = product.salePrice ?? product.price;
+    const galleryImages = product.images.filter(Boolean).slice(0, 4);
     const fav = isFavorite(product.id);
     const currentColor = product.colors.find((c) => c.id === color);
     const sizeStock = size ? stockFor(product, color, size) : 0;
@@ -109,10 +110,12 @@ export default function ProductDetail() {
                     <div className="min-w-0 flex flex-col-reverse lg:flex-row gap-4">
                         {/* thumbs */}
                         <div className="flex lg:flex-col gap-3 lg:max-h-[560px] overflow-x-auto lg:overflow-y-auto no-scrollbar">
-                            {product.images.concat(product.images).slice(0, 4).map((src, i) => (
+                            {galleryImages.map((src, i) => (
                                 <button
                                     key={i}
                                     onClick={() => setActiveImg(i)}
+                                    aria-label={`Ver foto ${i + 1} de ${galleryImages.length} de ${product.name}`}
+                                    aria-pressed={activeImg === i}
                                     className={`shrink-0 w-16 h-20 lg:w-20 lg:h-24 overflow-hidden bg-bone border ${activeImg === i ? "border-[hsl(var(--gold))]" : "border-transparent"}`}
                                 >
                                     <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -121,11 +124,11 @@ export default function ProductDetail() {
                         </div>
                         {/* main */}
                         <div className="flex-1 relative overflow-hidden bg-bone aspect-[3/4] group">
-                            <img
-                                src={(product.images.concat(product.images))[activeImg]}
+                            {galleryImages.length > 0 ? <img
+                                src={galleryImages[activeImg] || galleryImages[0]}
                                 alt={product.name}
                                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                            />
+                            /> : <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">Imagem indisponível</div>}
                             <div className="absolute top-4 left-4 flex flex-col gap-1.5">
                                 {product.badges.novo && <span className="text-[9px] uppercase tracking-[0.18em] bg-[hsl(var(--gold))] text-white px-2.5 py-1">Novo</span>}
                                 {product.badges.ultimas && <span className="text-[9px] uppercase tracking-[0.18em] bg-[hsl(var(--rose))] text-white px-2.5 py-1">Últimas peças</span>}
@@ -247,8 +250,12 @@ export default function ProductDetail() {
                     <Accordion id="detalhes" title="Detalhes da peça" open={openAcc} setOpen={setOpenAcc}>{product.details}</Accordion>
                     <Accordion id="composicao" title="Composição" open={openAcc} setOpen={setOpenAcc}>{product.composition}</Accordion>
                     <Accordion id="cuidados" title="Cuidados" open={openAcc} setOpen={setOpenAcc}>{product.care}</Accordion>
-                    <Accordion id="entrega" title="Entrega" open={openAcc} setOpen={setOpenAcc}>{`Enviamos para todo o Brasil${freeShippingThreshold ? `. Frete grátis a partir de ${formatBRL(freeShippingThreshold)} após descontos` : ""}. O prazo varia conforme a cotação para seu CEP.`}</Accordion>
-                    <Accordion id="trocas" title="Trocas e devoluções" open={openAcc} setOpen={setOpenAcc}>Você tem até 30 dias para solicitar troca ou devolução. A primeira troca é por nossa conta.</Accordion>
+                    <Accordion id="entrega" title="Entrega" open={openAcc} setOpen={setOpenAcc}>
+                        {settings.policies?.shipping_policy ? <span className="whitespace-pre-line">{settings.policies.shipping_policy}</span> : <Link to="/politica-de-entrega" className="underline">Consulte as condições de entrega. Opções e prazos são confirmados pela cotação para seu CEP.</Link>}
+                    </Accordion>
+                    <Accordion id="trocas" title="Trocas e devoluções" open={openAcc} setOpen={setOpenAcc}>
+                        {settings.policies?.return_policy ? <span className="whitespace-pre-line">{settings.policies.return_policy}</span> : <Link to="/trocas-e-devolucoes" className="underline">Consulte a política de trocas e devoluções.</Link>}
+                    </Accordion>
                 </div>
 
                 {/* complete the look */}

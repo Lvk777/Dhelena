@@ -178,7 +178,7 @@ export async function placeOrder(userId, body, idempotencyKey) {
         let shippingPackages = [];
         const { rows: shipSettings } = await client.query("SELECT value FROM settings WHERE key = 'shipping'");
         const shipConfig = shipSettings[0]?.value || {};
-        const freeEnabled = shipConfig.free_shipping_enabled !== false;
+        const freeEnabled = shipConfig.free_shipping_enabled === true;
 
         if (shipping_method === 'retirada') {
             if (shipConfig.pickup_enabled !== true) {
@@ -214,7 +214,7 @@ export async function placeOrder(userId, body, idempotencyKey) {
             shippingServiceName = quote.service || quote.name || null;
             shippingDeliveryTime = Number.isInteger(Number(quote.delivery_time)) ? Number(quote.delivery_time) : null;
             shippingPackages = Array.isArray(quote.packages) ? quote.packages : [];
-            shippingCost = calculateCheckoutShippingCost(quote.price, subtotal, discount, freeEnabled);
+            shippingCost = calculateCheckoutShippingCost(quote.price, subtotal, discount, freeEnabled, shipConfig.free_shipping_threshold);
         }
 
         const total = calculateServerOrderTotal(subtotal, discount, shippingCost);

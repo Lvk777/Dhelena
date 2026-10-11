@@ -6,6 +6,7 @@ const SYSTEM_CODES = new Set([
     'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN',
     'EACCES', 'ENOENT', 'ENOSPC', 'ERR_NETWORK', 'UND_ERR_CONNECT_TIMEOUT',
     'LIMIT_FILE_SIZE', 'LIMIT_UNEXPECTED_FILE',
+    'EMAIL_CONFIG_INVALID', 'EMAIL_DELIVERY_FAILED',
 ]);
 const ERROR_TYPES = new Set(['Error', 'TypeError', 'SyntaxError', 'AbortError', 'TimeoutError', 'MulterError']);
 

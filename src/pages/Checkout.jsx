@@ -90,13 +90,14 @@ export default function Checkout() {
     const subtotal = lines.reduce((s, l) => s + (l.product.salePrice || l.product.price) * l.qty, 0);
     const couponDiscount = couponResult?.valid ? (couponResult.discount || 0) : 0;
     const freeShippingFromCoupon = couponResult?.valid && couponResult.freeShipping;
-    const freeShippingThreshold = 499;
+    const freeShippingThreshold = Number(publicSettings?.shipping?.free_shipping_threshold);
     const freeShippingEnabled = publicSettings?.shipping?.free_shipping_enabled !== false;
     const pickupEnabled = publicSettings?.shipping?.pickup_enabled;
     const pickupName = publicSettings?.shipping?.pickup_name;
     const pickupTime = publicSettings?.shipping?.pickup_time;
 
-    const hasFreeShipping = freeShippingFromCoupon || (freeShippingEnabled && subtotal - couponDiscount >= freeShippingThreshold);
+    const hasFreeShipping = freeShippingFromCoupon || (freeShippingEnabled && Number.isFinite(freeShippingThreshold)
+        && freeShippingThreshold > 0 && subtotal - couponDiscount >= freeShippingThreshold);
     // Only a selected service can contribute a shipping amount.
     const currentShipping = selectedDelivery(shipping, shippingKey);
     const shippingCost = selectedDeliveryCost(shipping, shippingKey, hasFreeShipping);
@@ -318,6 +319,8 @@ export default function Checkout() {
                                 pickupEnabled={pickupEnabled}
                                 pickupName={pickupName}
                                 pickupTime={pickupTime}
+                                pickupAddress={publicSettings?.shipping?.pickup_address}
+                                pickupInstructions={publicSettings?.shipping?.pickup_instructions}
                             />
                             {errors.shipping && <p className="text-[11px] text-[hsl(var(--rose))]">{errors.shipping}</p>}
                         </div>

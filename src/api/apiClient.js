@@ -70,16 +70,19 @@ const ENTITY_MAP = {
     AuditLog: 'audit-logs',
     User: 'users',
     NotificationLog: 'notifications',
+    SizeGuide: 'size-guides',
+    LookPromotion: 'look-promotions',
 };
 
 // ─── Entity CRUD factory ───────────────────────────────────────────
 function makeEntity(name) {
     const endpoint = ENTITY_MAP[name] || name.toLowerCase();
     return {
-        async list(sortField, limit) {
+        async list(sortField, limit, page) {
             const params = new URLSearchParams();
             if (sortField) params.set('sort', sortField);
             if (limit) params.set('limit', limit);
+            if (page) params.set('page', page);
             return apiFetch(`/${endpoint}?${params}`);
         },
         async filter(predicate, sortField, limit) {
@@ -392,8 +395,15 @@ const entities = /** @type {Record<string, ReturnType<typeof makeEntity>>} */ (n
 
 // ─── Custom analytics endpoints ───────────────────────────────────
 const custom = {
+    submitContact: data => apiFetch('/contact', { method: 'POST', body: JSON.stringify(data) }),
+    activePromotions: () => apiFetch('/look-promotions'),
+    adminPromotions: () => apiFetch('/look-promotions/admin'),
     integrationConfigs: () => apiFetch('/integrations/config'),
     integrationStatus: () => apiFetch('/integrations/status'),
+    authorizeMelhorEnvio: mode => {
+        if (!['sandbox', 'production'].includes(mode)) throw new Error('Ambiente inválido.');
+        return apiFetch(`/integrations/melhor-envio/oauth${mode === 'production' ? '/production' : ''}/authorize`);
+    },
     updateIntegrationConfig: (serviceKey, data) => apiFetch(`/integrations/config/${serviceKey}`, {
         method: 'PUT',
         body: JSON.stringify(data),

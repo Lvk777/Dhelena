@@ -103,6 +103,7 @@ export function requireSupabaseAdmin(req, res, next) {
 // ─── Error handler ─────────────────────────────────────────────────
 export function errorHandler(err, req, res, next) {
     logSafeError('api_request_failed', err);
-    const status = err.status || 500;
-    res.status(status).json({ error: err.message || 'Erro interno do servidor' });
+    const status = Number.isInteger(err?.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
+    res.status(status).json({ error: status >= 500 ? 'Erro interno do servidor'
+        : err instanceof SyntaxError ? 'JSON inválido' : (err.message || 'Requisição inválida') });
 }

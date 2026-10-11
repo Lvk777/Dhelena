@@ -11,10 +11,12 @@ export default function Collections() {
     const [editing, setEditing] = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [deleting, setDeleting] = useState(false);
+    const [error, setError] = useState("");
 
     const load = () => {
         setLoading(true);
-        base44.entities.Collection.list("sort_order", 100).then(setItems).catch(() => { }).finally(() => setLoading(false));
+        setError("");
+        base44.entities.Collection.list("sort_order", 100).then(setItems).catch(() => setError("Não foi possível carregar as coleções.")).finally(() => setLoading(false));
     };
     useEffect(() => { load(); }, []);
 
@@ -26,7 +28,7 @@ export default function Collections() {
             setDeleteTarget(null);
             load();
         } catch {
-            // keep dialog open on error
+            setError("Não foi possível excluir a coleção.");
         } finally {
             setDeleting(false);
         }
@@ -38,6 +40,8 @@ export default function Collections() {
                 <h1 className="font-heading text-2xl tracking-[0.03em]">Coleções</h1>
                 <button onClick={() => setEditing({})} className="btn-gold"><Plus className="w-4 h-4" strokeWidth={1.5} /> Nova coleção</button>
             </div>
+
+            {error && <div role="alert" className="mb-4 text-sm text-destructive">{error} <button type="button" className="underline" onClick={load}>Tentar novamente</button></div>}
 
             {loading ? (
                 <div className="h-40 bg-background animate-pulse rounded-lg" />

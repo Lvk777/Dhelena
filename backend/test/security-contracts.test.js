@@ -78,11 +78,13 @@ test('birth date accepts only real dates with a four-digit, non-future year', ()
 });
 
 test('free shipping uses the discounted eligible subtotal at the exact R$ 499 boundary', () => {
-    assert.equal(calculateCheckoutShippingCost(29.9, 498.99, 0, true), 29.9);
-    assert.equal(calculateCheckoutShippingCost(29.9, 499, 0, true), 0);
-    assert.equal(calculateCheckoutShippingCost(29.9, 520, 21, true), 0);
-    assert.equal(calculateCheckoutShippingCost(29.9, 520, 21.01, true), 29.9);
-    assert.equal(calculateCheckoutShippingCost(29.9, 520, 0, false), 29.9);
+    assert.equal(calculateCheckoutShippingCost(29.9, 498.99, 0, true, 499), 29.9);
+    assert.equal(calculateCheckoutShippingCost(29.9, 499, 0, true, 499), 0);
+    assert.equal(calculateCheckoutShippingCost(29.9, 520, 21, true, 499), 0);
+    assert.equal(calculateCheckoutShippingCost(29.9, 520, 21.01, true, 499), 29.9);
+    assert.equal(calculateCheckoutShippingCost(29.9, 520, 0, false, 499), 29.9);
+    assert.equal(calculateCheckoutShippingCost(29.9, 520, 0, true), 29.9);
+    assert.equal(calculateCheckoutShippingCost(29.9, 300, 0, true, 300), 0);
 });
 
 test('publication rejects variants whose sizes and stock keys diverge', () => {

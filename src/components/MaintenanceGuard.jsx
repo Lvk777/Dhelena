@@ -6,7 +6,7 @@ import ComingSoon from "@/pages/ComingSoon";
 import { getMaintenanceRedirect } from "@/lib/maintenance";
 
 export default function MaintenanceGuard({ children }) {
-    const { settings, loading } = usePublicSettings();
+    const { settings, loading, error, reload } = usePublicSettings();
     const { user } = useAuth();
     const location = useLocation();
 
@@ -18,6 +18,14 @@ export default function MaintenanceGuard({ children }) {
                 <div className="w-8 h-8 border-4 border-[hsl(var(--bone))] border-t-[hsl(var(--gold))] rounded-full animate-spin" />
             </div>
         );
+    }
+
+    if (error) {
+        return <main className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center" role="alert">
+            <h1 className="font-heading text-3xl">Loja temporariamente indisponível</h1>
+            <p className="text-sm text-muted-foreground">Não foi possível verificar o estado da loja. Tente novamente em instantes.</p>
+            <button type="button" className="btn-gold" onClick={reload}>Tentar novamente</button>
+        </main>;
     }
 
     const isMaintenance = settings.maintenance?.maintenance_mode === true;

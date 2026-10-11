@@ -3,7 +3,7 @@ import { Truck, Store, Loader2, AlertCircle } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL } from "@/data/products";
 
-export default function ShippingStep({ cep, products, quoteContextKey, shippingMethod, shippingQuoteId, shippingCost, onShippingSelect, onQuoteLoading, pickupEnabled, pickupName, pickupTime, freeShipping }) {
+export default function ShippingStep({ cep, products, quoteContextKey, shippingMethod, shippingQuoteId, shippingCost, onShippingSelect, onQuoteLoading, pickupEnabled, pickupName, pickupTime, pickupAddress, pickupInstructions, freeShipping }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [options, setOptions] = useState([]);
@@ -45,9 +45,10 @@ export default function ShippingStep({ cep, products, quoteContextKey, shippingM
             onClick={() => onShippingSelect({ method: "retirada", cost: 0, quoteId: null })}
             className={`w-full flex items-center gap-4 p-5 border text-left min-h-14 ${shippingMethod === "retirada" ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))]/5" : "border-border hover:border-foreground/40"}`}>
             <Store className="w-5 h-5 text-[hsl(var(--gold))]" />
-            <span className="flex-1"><span className="block text-sm font-medium">{pickupName || "Retirada no estoque"}</span><span className="block text-xs text-muted-foreground">{pickupTime || "Retire em nosso endereço"}</span></span>
+            <span className="flex-1 min-w-0"><span className="block text-sm font-medium">{pickupName || "Retirada"}</span><span className="block text-xs text-muted-foreground break-words">{pickupTime || "A combinar após a confirmação"}</span></span>
             <span className="text-sm">Grátis</span><SelectionDot selected={shippingMethod === "retirada"} />
         </button>}
+        {pickupEnabled && shippingMethod === 'retirada' && (pickupAddress || pickupInstructions) && <div className="text-sm text-muted-foreground whitespace-pre-line break-words">{pickupAddress && <p>{pickupAddress}</p>}{pickupInstructions && <p className="mt-2">{pickupInstructions}</p>}</div>}
         {loading && <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status"><Loader2 className="w-4 h-4 animate-spin" /> Calculando frete...</p>}
         {error && !loading && <p className="flex items-center gap-2 text-sm text-amber-700" role="alert"><AlertCircle className="w-4 h-4" /> {error}</p>}
         {!loading && options.map((opt) => {

@@ -20,7 +20,7 @@ const PRICE_RANGES = [
 ];
 
 export default function Shop() {
-    const { products, categories, loading } = useCatalog();
+    const { products, categories, loading, error, reload } = useCatalog();
     const [params, setParams] = useSearchParams();
     const [visibleCount, setVisibleCount] = useState(12);
     const [sort, setSort] = useState("recentes");
@@ -80,6 +80,7 @@ export default function Shop() {
     const clearAll = () => { setSelectedCats([]); setSelectedSizes([]); setSelectedColors([]); setSelectedPrices([]); setOnlyAvailable(false); setParams({}, { replace: true }); };
 
     if (loading) return <div className="h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-[hsl(var(--bone))] border-t-[hsl(var(--gold))] rounded-full animate-spin" /></div>;
+    if (error) return <div className="container-boutique py-24 text-center"><p role="alert">Não foi possível carregar a coleção.</p><button onClick={reload} className="btn-outline mt-6">Tentar novamente</button></div>;
 
     return (
         <div>

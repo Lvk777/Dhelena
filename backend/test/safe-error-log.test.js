@@ -43,6 +43,7 @@ test('invalid JSON containing sensitive input does not leak through the global A
             body: '{"email":"payer@example.invalid","cpf":"fixture-cpf","token":"fixture-token",}',
         });
         assert.equal(response.status, 400);
+        assert.deepEqual(await response.json(), { error: 'JSON inválido' });
         const log = JSON.parse(records[0]);
         assert.deepEqual(log, { event: 'api_request_failed', error_type: 'SyntaxError', error_code: null, http_status: 400 });
         assert.ok(!records.join('').includes('payer@example.invalid'));
@@ -52,6 +53,19 @@ test('invalid JSON containing sensitive input does not leak through the global A
         console.error = saved;
         await new Promise(resolve => server.close(resolve));
     }
+});
+
+test('unexpected server error bodies never echo provider or database messages', () => {
+    const saved = console.error;
+    console.error = () => {};
+    try {
+        for (const status of [500, 503]) {
+            const response = { status(value) { this.code = value; return this; }, json(value) { this.body = value; return this; } };
+            errorHandler(Object.assign(new Error('Bearer fixture-secret'), { status }), {}, response, () => {});
+            assert.equal(response.code, status);
+            assert.deepEqual(response.body, { error: 'Erro interno do servidor' });
+        }
+    } finally { console.error = saved; }
 });
 
 test('warning logger uses the same whitelist, without serializing error bodies', () => {

@@ -6,6 +6,7 @@ import { auth, errorHandler } from './middleware.js';
 import { pool } from './config/db.js';
 import { logSafeError } from './lib/safeErrorLog.js';
 import { globalLimiter } from './middleware/rateLimiters.js';
+import { noStore } from './middleware/noStore.js';
 import authRoutes from './routes/auth.js';
 import catalogRoutes from './routes/catalog.js';
 import orderRoutes from './routes/orders.js';
@@ -63,6 +64,7 @@ app.use(cors({
 }));
 
 // ─── Body size limits ─────────────────────────────────────────────
+app.use(['/api', '/health'], noStore);
 app.use(express.json({
     limit: '100kb',
     // Melhor Envio signs the exact request payload. Keep it only in memory

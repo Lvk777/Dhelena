@@ -19,6 +19,8 @@ import { orderAttemptLockSql } from '../lib/orderAttemptLock.js';
 import { logSafeError } from '../lib/safeErrorLog.js';
 
 const router = Router();
+const publicError = error => Number.isInteger(error?.status) && error.status >= 400 && error.status < 500
+    ? (error.message || 'Requisição inválida') : 'Operação indisponível';
 const COUPON_MUTABLE_FIELDS = new Set([
     'code', 'description', 'discount_type', 'discount_value', 'min_order_value',
     'max_uses', 'max_uses_per_customer', 'first_purchase_only', 'active',
@@ -39,11 +41,17 @@ router.use('/orders', auth, (req, res, next) => {
 router.post('/orders', auth, orderLimiter, async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'É necessário estar autenticado para criar um pedido' });
     try {
+        if (req.user.role !== 'admin') {
+            const { rows: maintenance } = await pool.query("SELECT value FROM settings WHERE key = 'maintenance'");
+            if (maintenance[0]?.value?.maintenance_mode === true) {
+                return res.status(503).json({ error: 'Loja em manutenção. Tente novamente após a reabertura.' });
+            }
+        }
         const idempotencyKey = req.headers['x-idempotency-key'] || req.headers['idempotency-key'];
         const order = await placeOrder(req.user.id, req.body, idempotencyKey);
         res.status(201).json(order);
     } catch (err) {
-        res.status(err.status || 500).json({ error: err.message });
+        res.status(err.status || 500).json({ error: publicError(err) });
     }
 });
 
@@ -91,7 +99,7 @@ router.delete('/orders/:id', auth, async (req, res) => {
         const order = await cancelOrder(req.params.id, req.user.id, isAdmin);
         res.json(order);
     } catch (err) {
-        res.status(err.status || 500).json({ error: err.message });
+        res.status(err.status || 500).json({ error: publicError(err) });
     }
 });
 
@@ -205,7 +213,7 @@ router.post('/stock/adjust', auth, requireAdmin, async (req, res) => {
         await logAudit(req.user.id, 'stock.adjust', 'product', product_id, { color_id, size, ...result }, req.ip);
         res.json(result);
     } catch (err) {
-        res.status(err.status || 500).json({ error: err.message });
+        res.status(err.status || 500).json({ error: publicError(err) });
     }
 });
 
@@ -268,7 +276,7 @@ router.get('/payments/test', auth, requireAdmin, async (req, res) => {
         const result = await mp.testConnection();
         res.json(result);
     } catch (err) {
-        res.status(500).json({ connected: false, error: err.message });
+        res.status(500).json({ connected: false, error: 'Conexão indisponível' });
     }
 });
 
@@ -282,7 +290,7 @@ router.get('/payments/test-orders/:orderNumber', auth, requireAdmin, async (req,
         const orders = await mp.findTestOrdersByReference(rows[0].order_number, rows[0].created_at);
         res.json({ orders });
     } catch (err) {
-        res.status(err.status || 500).json({ error: err.message });
+        res.status(err.status || 500).json({ error: publicError(err) });
     }
 });
 
@@ -577,7 +585,7 @@ router.get('/orders/:id/payment/status', auth, async (req, res) => {
             payment_method: order.payment_method,
         });
     } catch (err) {
-        res.status(err.status || 500).json({ error: err.message });
+        res.status(err.status || 500).json({ error: publicError(err) });
     }
 });
 
@@ -648,7 +656,7 @@ router.post('/shipping/quote', async (req, res) => {
         const productsById = new Map(catalogProducts.map((product) => [product.id, product]));
         let totalValue = 0;
         const catalogItems = items.map((item) => {
-            const quantity = Number.parseInt(item.qty, 10);
+            const quantity = Number(item.qty);
             const product = productsById.get(item.productId);
             if (!Number.isInteger(quantity) || quantity <= 0 || !product) {
                 throw Object.assign(new Error('Quantidade de item inválida'), { status: 400 });
@@ -676,7 +684,7 @@ router.post('/shipping/quote', async (req, res) => {
         res.json({ options });
     } catch (err) {
         logSafeError('shipping_quote_failed', err);
-        res.status(err.status || 500).json({ error: err.message });
+        res.status(err.status || 500).json({ error: publicError(err) });
     }
 });
 
@@ -686,7 +694,7 @@ router.get('/shipping/test', auth, requireAdmin, async (req, res) => {
         const result = await me.testConnection();
         res.json(result);
     } catch (err) {
-        res.status(500).json({ connected: false, error: err.message });
+        res.status(500).json({ connected: false, error: 'Conexão indisponível' });
     }
 });
 
@@ -818,7 +826,7 @@ router.post('/orders/:id/shipping/label', auth, requireAdmin, async (req, res) =
         });
     } catch (err) {
         logSafeError('shipping_label_failed', err);
-        res.status(err.status || 500).json({ error: err.message });
+        res.status(err.status || 500).json({ error: publicError(err) });
     } finally {
         if (client) {
             await client.query('SELECT pg_advisory_unlock(hashtext($1))', [`shipping-label:${req.params.id}`]).catch(() => {});
@@ -849,7 +857,7 @@ router.get('/orders/:id/tracking', auth, async (req, res) => {
         const tracking = await me.getTracking(order.melhor_envio_shipment_id);
         res.json(tracking);
     } catch (err) {
-        res.status(err.status || 500).json({ error: err.message });
+        res.status(err.status || 500).json({ error: publicError(err) });
     }
 });
 

@@ -30,8 +30,10 @@ export function calculateServerOrderTotal(subtotal, discount, shippingCost) {
     return Number((values[0] - values[1] + values[2]).toFixed(2));
 }
 
-export function calculateCheckoutShippingCost(quotePrice, subtotal, discount, freeEnabled) {
+export function calculateCheckoutShippingCost(quotePrice, subtotal, discount, freeEnabled, freeThreshold) {
     const values = [quotePrice, subtotal, discount].map(Number);
     if (values.some(value => !Number.isFinite(value) || value < 0)) throw invalid('Cotação ou subtotal inválido');
-    return freeEnabled && values[1] - values[2] >= 499 ? 0 : values[0];
+    const threshold = Number(freeThreshold);
+    return freeEnabled === true && Number.isFinite(threshold) && threshold > 0
+        && values[1] - values[2] >= threshold ? 0 : values[0];
 }

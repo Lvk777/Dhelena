@@ -155,7 +155,9 @@ export default function Cart() {
                         {couponResult?.valid && (
                             <div className="flex items-center justify-between -mt-2">
                                 <p className="text-[11px] text-[hsl(var(--gold))]">
-                                    Cupom {couponCode} aplicado {couponResult.type === 'percent' ? `(${couponResult.value}% off)` : couponResult.type === 'fixed' ? `(R$ off)` : '(frete grátis)'}
+                                    Cupom {couponCode} aplicado {couponResult.discount_type === 'percentage'
+                                        ? `(${couponResult.discount_value}% de desconto)`
+                                        : `(${formatBRL(couponResult.discount)} de desconto)`}
                                 </p>
                                 <button onClick={() => { clearCoupon(); setCouponInput(""); }} className="text-[11px] text-muted-foreground hover:text-foreground underline">Remover</button>
                             </div>

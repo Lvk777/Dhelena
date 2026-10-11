@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { COLOR_SWATCHES } from "@/data/products";
+import { loadProductPages } from "@/lib/catalogPaging";
 
 const CatalogContext = createContext(null);
 
@@ -55,12 +56,14 @@ export function CatalogProvider({ children }) {
     const [collections, setCollections] = useState([]);
     const [banners, setBanners] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
 
     const loadAll = useCallback(async () => {
         setLoading(true);
+        setError(false);
         try {
             const [prodRes, catRes, colRes, banRes] = await Promise.all([
-                base44.entities.Product.list("-created_date", 200).catch(() => []),
+                loadProductPages((limit, page) => base44.entities.Product.list("-created_date", limit, page), 60),
                 base44.entities.Category.list("sort_order", 100).catch(() => []),
                 base44.entities.Collection.list("sort_order", 100).catch(() => []),
                 base44.entities.Banner.filter({ active: true }, "-priority", 20).catch(() => []),
@@ -71,6 +74,7 @@ export function CatalogProvider({ children }) {
             setBanners(banRes || []);
         } catch (e) {
             console.error("Catalog load error:", e);
+            setError(true);
         } finally {
             setLoading(false);
         }
@@ -100,6 +104,7 @@ export function CatalogProvider({ children }) {
                 collections,
                 banners,
                 loading,
+                error,
                 reload: loadAll,
                 getProductById,
                 getRelated,
