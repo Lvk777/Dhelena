@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { base44 } from '@/api/base44Client';
 import { Plus, Trash2, Power, Tag, Calendar, Palette, Percent, Truck, ShoppingCart, Eye, Check } from "lucide-react";
 import AdminWizard from "@/components/admin/AdminWizard";
 import AdminInput from "@/components/admin/AdminInput";
@@ -42,14 +43,10 @@ export default function Promotions() {
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(null);
 
-    const token = localStorage.getItem("dhelena_access_token");
-    const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
-
     const load = async () => {
         setLoading(true);
         try {
-            const res = await fetch("/api/look-promotions/admin", { headers });
-            const data = await res.json();
+            const data = await base44.custom.adminPromotions();
             setPromos(data || []);
         } catch { /* */ }
         finally { setLoading(false); }
@@ -59,22 +56,22 @@ export default function Promotions() {
 
     const handleSave = async (promo) => {
         if (promo.id) {
-            await fetch(`/api/look-promotions/${promo.id}`, { method: "PATCH", headers, body: JSON.stringify(promo) });
+            await base44.entities.LookPromotion.update(promo.id, promo);
         } else {
-            await fetch("/api/look-promotions", { method: "POST", headers, body: JSON.stringify(promo) });
+            await base44.entities.LookPromotion.create(promo);
         }
         setEditing(null);
         load();
     };
 
     const handleToggle = async (promo) => {
-        await fetch(`/api/look-promotions/${promo.id}`, { method: "PATCH", headers, body: JSON.stringify({ active: !promo.active }) });
+        await base44.entities.LookPromotion.update(promo.id, { active: !promo.active });
         load();
     };
 
     const handleDelete = async (id) => {
         if (!confirm("Excluir esta promoção?")) return;
-        await fetch(`/api/look-promotions/${id}`, { method: "DELETE", headers });
+        await base44.entities.LookPromotion.delete(id);
         load();
     };
 

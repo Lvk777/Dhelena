@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Sparkles, Truck, ArrowRight, Check } from "lucide-react";
+import { base44 } from '@/api/base44Client';
 
 export function useActivePromotions() {
     const [promos, setPromos] = useState([]);
     useEffect(() => {
-        fetch("/api/look-promotions")
-            .then(r => r.ok ? r.json() : [])
+        base44.custom.activePromotions()
             .then(data => setPromos(data || []))
             .catch(() => {});
     }, []);

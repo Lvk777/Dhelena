@@ -3,6 +3,7 @@ import { Store } from "lucide-react";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminImageUploader from "@/components/admin/AdminImageUploader";
+import AdminTextarea from '@/components/admin/AdminTextarea';
 
 export default function GeneralTab({ data, onChange }) {
     const set = (k, v) => onChange({ ...data, [k]: v });
@@ -15,9 +16,14 @@ export default function GeneralTab({ data, onChange }) {
                 <AdminInput label="CNPJ" value={data.cnpj} onChange={(v) => set("cnpj", v)} placeholder="00.000.000/0000-00" />
             </AdminFormSection>
             <AdminFormSection title="Contato">
-                <AdminInput label="E-mail principal" value={data.email} onChange={(v) => set("email", v)} type="email" placeholder="contato@dhelenas.com.br" />
+                <AdminInput label="E-mail principal" value={data.email} onChange={(v) => set("email", v)} type="email" placeholder="E-mail oficial de atendimento" />
                 <AdminInput label="Telefone" value={data.phone} onChange={(v) => set("phone", v)} placeholder="(11) 3000-0000" />
                 <AdminInput label="WhatsApp" value={data.whatsapp} onChange={(v) => set("whatsapp", v)} placeholder="(11) 99999-9999" full />
+            </AdminFormSection>
+            <AdminFormSection title="Atendimento público">
+                <AdminTextarea label="Endereço público da boutique" value={data.public_address || ''} onChange={v => set('public_address', v)} full rows={3} />
+                <AdminTextarea label="Horários de funcionamento" value={data.business_hours || ''} onChange={v => set('business_hours', v)} full rows={3} />
+                <AdminTextarea label="Origens HTTPS autorizadas para links externos" value={(data.external_link_origins || []).join('\n')} onChange={v => set('external_link_origins', v.split('\n'))} full rows={3} placeholder="https://dominio-autorizado.com" />
             </AdminFormSection>
             <AdminFormSection title="Identidade visual">
                 <AdminImageUploader label="Logo" preset="logo" value={data.logo} onChange={(v) => set("logo", v)} description="Logo principal da loja" />

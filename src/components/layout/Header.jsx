@@ -23,7 +23,7 @@ export default function Header() {
     const [q, setQ] = useState("");
     const { cartCount, favorites, setCartOpen } = useStore();
     const { isAuthenticated, user } = useAuth();
-    const { settings, freeShippingThreshold } = usePublicSettings();
+    const { settings } = usePublicSettings();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -47,9 +47,9 @@ export default function Header() {
     return (
         <>
             {/* announcement bar */}
-            <div className="bg-[hsl(var(--rose))] text-white text-[10px] tracking-[0.3em] uppercase text-center py-2 px-4">
-                {(settings.store.top_bar_text || "").replace(/acima de R\$\s*[\d.,]+|a partir de R\$\s*[\d.,]+/gi, `a partir de R$ ${(freeShippingThreshold || 499).toLocaleString("pt-BR")}`)}
-            </div>
+            {settings.store.top_bar_text && <div className="bg-[hsl(var(--rose))] text-white text-[10px] tracking-[0.3em] uppercase text-center py-2 px-4">
+                {settings.store.top_bar_text}
+            </div>}
 
             <header className={`sticky top-0 z-50 transition-all duration-500 ${scrolled ? "bg-background/95 backdrop-blur-md shadow-[0_1px_0_0_rgba(0,0,0,0.04)]" : "bg-background"}`}>
                 <div className="container-boutique">

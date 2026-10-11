@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Truck, ExternalLink } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL, ORDER_STATUS } from "@/data/products";
+import SafeConfiguredLink from '@/components/SafeConfiguredLink';
 
 export default function Tracking() {
     const [orders, setOrders] = useState([]);
@@ -59,9 +60,9 @@ export default function Tracking() {
                             </div>
 
                             {order.tracking_link ? (
-                                <a href={order.tracking_link} target="_blank" rel="noopener noreferrer" className="btn-gold mt-5 w-full sm:w-auto">
+                                <SafeConfiguredLink to={order.tracking_link} className="btn-gold mt-5 w-full sm:w-auto">
                                     <ExternalLink className="w-4 h-4" strokeWidth={1.5} /> Rastrear pedido
-                                </a>
+                                </SafeConfiguredLink>
                             ) : (
                                 <a
                                     href={`https://www.linkcorreios.com.br/?id=${encodeURIComponent(order.tracking_code)}`}

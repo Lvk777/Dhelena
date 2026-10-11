@@ -10,7 +10,7 @@ export default function StoreTab({ data, onChange }) {
     return (
         <div className="space-y-5">
             <AdminFormSection title="Barra superior" icon={ShoppingBag}>
-                <AdminTextarea label="Texto da barra superior" value={data.top_bar_text} onChange={(v) => set("top_bar_text", v)} rows={2} full description="Aparece no topo da loja pública" placeholder="Frete grátis a partir de R$ 499 · Parcelamos em até 6x" />
+                <AdminTextarea label="Texto da barra superior" value={data.top_bar_text} onChange={(v) => set("top_bar_text", v)} rows={2} full description="Aparece no topo da loja pública; confirme as condições comerciais antes de publicar" placeholder="Mensagem aprovada para a barra superior" />
             </AdminFormSection>
             <AdminFormSection title="Frete e parcelamento">
                 <p className="text-sm text-muted-foreground">Frete grátis a partir de R$ 499 após descontos. Configuração aplicada no servidor.</p>
