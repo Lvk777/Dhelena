@@ -1,5 +1,9 @@
 # D'Helenas: Checklist Definitivo de Cutover
 
+Este arquivo registra a auditoria da fase de logging (HEAD 7824557). O checklist vigente, os campos conectados e a arquitetura atual estão em [integration-finalization.md](integration-finalization.md). As pendências históricas abaixo não significam que continuem abertas nem autorizam mudanças externas.
+
+A proprietária confirmou posteriormente a chave Webhook TEST. A causa das falhas HMAC históricas continua inconclusiva; não trocar a chave novamente por hipótese.
+
 Auditoria: 2026-10-07. Preparação somente; nenhuma mudança de modo, credencial, manutenção ou operação financeira foi executada.
 
 ## Resumo Executivo
@@ -11,7 +15,7 @@ Auditoria: 2026-10-07. Preparação somente; nenhuma mudança de modo, credencia
 - EMAIL/DNS GATES: domínio real do remetente aprovado/verificado no Resend, DNS de autenticação, reply-to funcional, domínio de recebimento e controles Cloudflare/origin.
 - LOG PRIVACY BLOCKERS: casos de risco nos logs runtime foram substituídos por whitelist técnica, com testes. Publicação e verificação operacional continuam sendo gates; logs históricos e configurações de log do edge não foram apagados nem certificados.
 - READY AFTER WEBHOOK TEST SECRET FIX: NÃO.
-- NEXT EXACT ACTION: operador autorizado deve atualizar a chave Webhook TEST da aplicação 6694235692742515 diretamente no Railway, confirmar apenas a atualização e validar um retry real da Order existente. Em paralelo, coletar/aprovar os dados desta lista. Não criar Pix para provocar webhook.
+- NEXT EXACT ACTION (atualizado): correlacionar os metadados de uma entrega existente no painel da aplicação 6694235692742515 com os logs Railway, sem nova troca de chave ou novo Pix. Seguir o checklist vigente para as demais integrações.
 
 ## 1. Advisories de Produção e Reachability
 
@@ -131,7 +135,7 @@ Fontes: [Cloudflare Full (strict)](https://developers.cloudflare.com/ssl/origin-
 
 ## 7. Ordem de Liberação
 
-1. Instalar/homologar secret TEST correto usando apenas retry real da Order existente; manter manutenção ligada.
+1. Homologar a entrega TEST usando apenas retry existente e metadados do painel; a chave foi confirmada pela proprietária. Não substituir novamente por hipótese. Manter manutenção ligada.
 2. Receber e aprovar dados reais, políticas e decisões de publicação; ligar os consumidores que hoje estão hardcoded ou não funcionais.
 3. Resolver autenticação Melhor Envio PRODUÇÃO isolada e envio/reply-to real; avaliar/validar destinos de CTA do CMS.
 4. Operador configurar credenciais e webhooks de PRODUÇÃO; validar saúde, cotação, DNS/Resend/Cloudflare e verificações não financeiras.
@@ -147,3 +151,41 @@ As correções desta fase são restritas a logging e seus testes. Nenhum depende
 Resultados finais: lint PASS; typecheck PASS; build de produção PASS; backend 140/140 PASS (135 anteriores + 5 novos testes); git diff --check PASS. Audit frontend --omit=dev: 0 critical / 6 high / 5 moderate / 3 low no grafo instalado, com reachability discriminada acima. Audit backend --omit=dev: todos os counts zero.
 
 Entrega local na branch codex/production-hardening: não houve commit/push/redeploy nesta etapa de preparação. As correções de logging ainda precisam ser publicadas e verificadas antes do cutover. Main remoto permanece d5378bac76f59d1dba5aa6ec5adf93b924b130f2, PR #3 OPEN/mergedAt=null e maintenance_mode=true na leitura pública final.
+# Sprint final — matriz de inauguração (2026-10-11)
+
+Esta matriz prevalece sobre notas históricas acima. Evidência local: lint, typecheck, build com `VITE_API_URL=https://api.dhelenas.com`, 201 testes backend e regressão visual com fixture isolado em 375/768/1024/1440 px. A jornada com produto, cupom fixo, cotação, seleção de frete e etapas até a escolha do pagamento foi percorrida no fixture; zero mutações proibidas. Nenhuma operação financeira ou comunicação real foi feita. Estado remoto e CI devem ser conferidos após o push.
+
+## A — Concluído e testado no código/fixture
+
+- [x] Checkout recalcula preço, cupom, frete e total no backend; idempotência, estoque e fluxo mockado cobertos por testes. Não equivale a homologação financeira real.
+- [x] Catálogo público paginado, com ordenação estável; admin pode listar páginas além de 200 itens. Colunas de gravação administrativa possuem allowlist, inclusive campos de produto, categoria, coleção e banner. Formulários de categorias/coleções alinhados à migration aditiva 014, ainda pendente no banco real; as leituras públicas aceitam o schema anterior até sua aplicação.
+- [x] Painel de cupons corrigido e validado no commit `e20a16f`; settings públicos filtrados por campo; destinos de CTA validados. Melhor Envio Sandbox/Produção isolados no código, Resend testado com mocks, sem ativação externa.
+- [x] Prévia de promoções deriva subtotal do catálogo publicado. Frete grátis usa o limiar configurado no backend e na loja; sem limiar positivo não é prometido. Mensagens padrão de parcelamento e bandeiras foram retiradas da vitrine.
+- [x] Erros inesperados da API não retornam detalhes internos; logs usam metadados restritos. Se o estado de manutenção não puder ser lido, o frontend bloqueia a vitrine e oferece nova tentativa; com manutenção ativa, a API bloqueia a criação de novos pedidos por clientes. Fluxos locais de conta, loja, produto, carrinho e admin foram inspecionados no fixture, sem rolagem horizontal nas larguras testadas.
+
+## B — Concluído no código, aguardando dados e aprovação da cliente
+
+- [ ] Razão social, nome fantasia, CNPJ confirmado, canais de atendimento, endereço e horários públicos; preencher no painel sem publicar dados fictícios.
+- [ ] Endereço de origem e remetente privados, local/horário/instruções de retirada, medidas reais de cada peça e revisão do catálogo.
+- [ ] Políticas de privacidade, trocas, entrega e termos aprovados; revisão de quaisquer textos comerciais já salvos, especialmente frete grátis e parcelamento na barra superior.
+- [ ] Remetente e Reply-To aprovados, domínio próprio autorizado e decisão sobre analytics/consentimento.
+
+## C — Aguardando integrações de produção
+
+- [ ] Aplicar conscientemente `backend/migrations/014_category_collection_fields.sql` após backup e janela aprovada; verificar formulários e filtros públicos de categorias/coleções no banco real. A migration é aditiva e não foi executada neste sprint.
+- [ ] Resposta técnica do Mercado Pago sobre a assinatura da Order TEST existente; depois, homologação da aplicação e configuração corretas. Sem alterar HMAC por suposição nem criar novo pagamento agora.
+- [ ] Melhor Envio: credenciais/OAuth e remetente de Produção, autorização da conta correta, cotação autorizada e permissões de transportadora. Sandbox preservado.
+- [ ] Resend: domínio verificado, DNS e entrega para caixa autorizada; WhatsApp Business somente se aprovado e configurado.
+- [ ] Cloudflare, DNS, TLS da origem, cache da API, WAF e acesso direto à origem verificados pelo operador. Smoke financeiro/etiqueta requer autorização separada.
+
+## D — Bloqueadores de segurança
+
+- [ ] Executar o [plano de rotação](credential-rotation-plan.md) das categorias de credenciais potencialmente expostas, após autorização. Nenhum valor sensível consta neste documento.
+- [ ] Auditar dependências do frontend: após remover `moment`, `react-quill-new` e `jspdf` e mover `tailwindcss-animate` para desenvolvimento, `npm audit --omit=dev` apresenta 0 crítico, 0 alto, 2 moderados e 0 baixo (React Router/React Router DOM). O grafo completo de desenvolvimento ainda contém avisos de tooling. Repetir o audit antes da liberação e planejar a migração compatível do roteador.
+- [ ] Revisar logs/retention, acessos aos transcripts e segredos em CI; confirmar ausência de exposição pública.
+
+## E — Melhorias opcionais
+
+- [ ] Paginação no servidor para filtros/busca em catálogos muito grandes; carregamento atual pagina a API, mas mantém o conjunto publicado em memória para filtros da loja.
+- [ ] Medição Lighthouse/Core Web Vitals em ambiente de produção aprovado, otimização de imagens e carregamento inicial conforme resultados reais.
+- [ ] Ampliar testes de interface automatizados para todas as telas administrativas; o fixture e os testes atuais cobrem fluxos críticos, sem homologação de ponta a ponta com provedores.
