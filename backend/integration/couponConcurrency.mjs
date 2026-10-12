@@ -135,4 +135,6 @@ try {
     console.log('FIRST PURCHASE: concurrent customer orders cannot both use the coupon');
 } finally {
     await pool.end();
+    const { pool: applicationPool } = await import('../src/config/db.js');
+    await applicationPool.end();
 }

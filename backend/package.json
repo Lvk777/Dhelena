@@ -11,7 +11,8 @@
     "migrate": "node src/runMigrations.js",
     "seed": "node seed/seed.js",
     "test": "node --test",
-    "test:coupon-postgres": "node integration/couponConcurrency.mjs"
+    "test:coupon-postgres": "node integration/couponConcurrency.mjs",
+    "test:security-postgres": "node supabase/security/rehearse_local.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

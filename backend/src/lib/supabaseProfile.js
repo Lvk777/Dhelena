@@ -1,0 +1,67 @@
+const fields = 'id, email, full_name, phone, cpf, birth_date, role';
+
+function profileError(message, status = 503) {
+    return Object.assign(new Error(message), { status });
+}
+
+// Call only with the user returned by auth.getUser(accessToken), never a
+// decoded token, request body, or user-editable metadata object.
+export async function ensureSupabaseProfile(db, user) {
+    if (!user?.id || !user.email || user.is_anonymous || !user.email_confirmed_at) {
+        throw profileError('Confirme seu e-mail para acessar o perfil.', 401);
+    }
+    const email = user.email.trim().toLowerCase();
+    const existing = await db.query(`SELECT ${fields} FROM profiles WHERE id = $1 LIMIT 1`, [user.id]);
+    if (existing.rows.length) return existing.rows[0];
+
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query("SET LOCAL lock_timeout = '5s'");
+        // Serialize first requests for the same verified email. UUID uniqueness
+        // also handles a concurrent email change or an Auth profile trigger.
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`supabase-profile:${email}`]);
+        const byId = await client.query(`SELECT ${fields} FROM profiles WHERE id = $1 LIMIT 1`, [user.id]);
+        let profile = byId.rows[0];
+        if (!profile) {
+            const legacy = await client.query(
+                `SELECT ${fields} FROM profiles WHERE lower(email) = $1 LIMIT 2 FOR UPDATE`, [email]);
+            if (legacy.rows.length > 1) throw profileError('Perfil exige reconciliação.', 409);
+            // Preserve legacy UUIDs and their orders. Only the verified Auth
+            // email may use this compatibility path; do not rewrite role or ID.
+            profile = legacy.rows[0];
+        }
+        if (!profile) {
+            const fullName = typeof user.user_metadata?.full_name === 'string'
+                ? user.user_metadata.full_name.trim().slice(0, 200) || null : null;
+            const created = await client.query(
+                `INSERT INTO profiles (id, email, password_hash, full_name, role)
+                 VALUES ($1, $2, '!supabase-auth-only', $3, 'customer')
+                 ON CONFLICT DO NOTHING RETURNING ${fields}`, [user.id, email, fullName]);
+            profile = created.rows[0];
+            if (!profile) {
+                const concurrent = await client.query(`SELECT ${fields} FROM profiles WHERE id = $1 LIMIT 1`, [user.id]);
+                profile = concurrent.rows[0];
+            }
+            if (!profile) throw profileError('Perfil exige reconciliação.', 409);
+        }
+        await client.query('COMMIT');
+        return profile;
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
+}
+
+export async function authenticateSupabaseProfile(admin, db, token) {
+    const { data, error } = await admin.auth.getUser(token);
+    if (error || !data?.user) {
+        if (error && (!error.status || error.status >= 500)) {
+            throw profileError('Autenticação temporariamente indisponível.');
+        }
+        return null;
+    }
+    return ensureSupabaseProfile(db, data.user);
+}

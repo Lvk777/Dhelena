@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import pg from 'pg';
 import { resolveCatalogLine } from '../src/lib/orderPricing.js';
 import { reserveVariantStock, stockForSize } from '../src/lib/variantStock.js';
@@ -11,6 +12,7 @@ if (!['localhost', '127.0.0.1'].includes(url.hostname)
 }
 const pool = new pg.Pool({ connectionString: url.href, max: 5 });
 const colorId = 'audit-color';
+const runId = crypto.randomUUID();
 
 async function transaction(fn) {
     const client = await pool.connect();
@@ -90,6 +92,11 @@ async function competingReservations(productId, quantity, expectedFinal) {
 }
 
 try {
+    const { rows: indexes } = await pool.query(`SELECT indexname, indexdef FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = 'stock_restorations'
+        AND indexname IN ('idx_stock_restoration_cancellation', 'idx_stock_restoration_return')`);
+    assert.equal(indexes.length, 2, 'staging must include BOTH partial unique restoration indexes from migration 011');
+    for (const index of indexes) assert.match(index.indexdef, /CREATE UNIQUE INDEX.*WHERE/);
     const ordinary = await productFixture('Concorrência normal', { Único: 1 });
     await competingReservations(ordinary, 1, 0);
     console.log('PASS: row lock serialized two reservations; one won, no overselling');
@@ -112,11 +119,12 @@ try {
     console.log('PASS: legacy Único bins serialized without negative stock');
 
     const { rows: users } = await pool.query(
-        "INSERT INTO profiles (email, password_hash) VALUES ('audit-local@example.invalid', 'not-a-login') RETURNING id"
+        "INSERT INTO profiles (email, password_hash) VALUES ($1, 'not-a-login') RETURNING id",
+        [`audit-local-${runId}@example.invalid`]
     );
     const { rows: orders } = await pool.query(
         `INSERT INTO orders (order_number, user_id, subtotal, total, snapshot)
-         VALUES ('AUDIT-LOCAL-1', $1, 100, 100, '{}') RETURNING id`, [users[0].id]
+         VALUES ($2, $1, 100, 100, '{}') RETURNING id`, [users[0].id, `AUDIT-${runId}`]
     );
     const { rows: items } = await pool.query(
         `INSERT INTO order_items
