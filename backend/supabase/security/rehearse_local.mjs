@@ -66,6 +66,7 @@ try {
     for (const file of ['postgresConcurrency.mjs', 'couponConcurrency.mjs', 'supabaseProfiles.mjs']) {
         await run('integration/' + file);
     }
+    await run('integration/categoryMigration.mjs');
     const result = await sql('2026-10-11_public_rls_postcheck.sql');
     console.log('POSTCHECK', JSON.stringify(result.rows));
     console.log('PASS: local rehearsal complete; hosted Supabase and real backup still require separate validation');

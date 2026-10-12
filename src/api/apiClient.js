@@ -258,6 +258,8 @@ const auth = {
 const functions = {
     async invoke(name, args) {
         switch (name) {
+            case 'previewCheckout':
+                return apiFetch('/checkout/preview', { method: 'POST', body: JSON.stringify(args) });
             case 'placeOrder':
                 return apiFetch('/orders', buildPlaceOrderRequest(args));
             case 'cancelOrder':

@@ -41,6 +41,10 @@ export default function Checkout() {
     const [errors, setErrors] = useState(/** @type {Record<string, any>} */ ({}));
     const [orderError, setOrderError] = useState("");
     const [paymentScreen, setPaymentScreen] = useState(null); // null | 'pix' | 'card'
+    const [pricingPreview, setPricingPreview] = useState(null);
+    const [pricingLoading, setPricingLoading] = useState(false);
+    const [pricingError, setPricingError] = useState("");
+    const [pricingRetry, setPricingRetry] = useState(0);
     const shippingKey = shippingContextKey(form.cep, cart, couponCode);
 
     useEffect(() => {
@@ -103,6 +107,29 @@ export default function Checkout() {
     const shippingCost = selectedDeliveryCost(shipping, shippingKey, hasFreeShipping);
 
     const total = subtotal - couponDiscount + (shippingCost ?? 0);
+    const previewKey = JSON.stringify({ userId: user?.id, request: {
+        items: cart.map(({ productId, colorId, size, qty }) => ({ productId, colorId, size, qty })),
+        coupon_code: couponCode || "", payment_method: paymentMethod,
+        shipping_method: currentShipping?.method, shipping_quote_id: currentShipping?.quoteId,
+        shipping_address: { cep: form.cep },
+    } });
+    const pricing = pricingPreview?.key === previewKey ? pricingPreview.data : null;
+
+    useEffect(() => {
+        let current = true;
+        if (!paymentMethod || !currentShipping) {
+            setPricingLoading(false); setPricingError("");
+            return () => { current = false; };
+        }
+        setPricingLoading(true); setPricingError(""); setPricingPreview(null);
+        base44.functions.invoke("previewCheckout", JSON.parse(previewKey).request)
+            .then(data => {
+                if (current) setPricingPreview({ key: previewKey, data });
+            }).catch(() => {
+                if (current) setPricingError("Não foi possível confirmar o total. Revise a sacola e tente novamente.");
+            }).finally(() => { if (current) setPricingLoading(false); });
+        return () => { current = false; };
+    }, [previewKey, pricingRetry]);
 
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -153,6 +180,8 @@ export default function Checkout() {
             shipping_method: currentShipping?.method,
             shipping_quote_id: currentShipping?.quoteId,
             coupon_code: couponCode || "",
+            expected_pricing: pricing ? { subtotal: pricing.subtotal, discount: pricing.discount,
+                shipping_cost: pricing.shipping_cost, total: pricing.total } : null,
         });
         return res;
     };
@@ -162,6 +191,10 @@ export default function Checkout() {
         if (invalidLines.length || lines.length !== cart.length) { setOrderError("Revise os itens e o estoque da sacola antes de continuar."); return; }
         if (!validateStep(2)) { setStep(2); return; }
         if (!validateStep(3)) return;
+        if (!pricing || pricingLoading) {
+            setOrderError("Aguarde a confirmação do total antes de criar o pedido.");
+            return;
+        }
         placingRef.current = true;
         setPlacing(true);
         setOrderError("");
@@ -203,6 +236,7 @@ export default function Checkout() {
                     Obrigada por escolher a D'Helenas. Seu pedido{" "}
                     <strong className="text-foreground">{order?.order_number}</strong> foi recebido e o pagamento foi confirmado.
                 </p>
+                <p className="mt-4 text-sm text-muted-foreground">Acompanhe o status e as informações de entrega em Meus pedidos.</p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8">
                     <Link to="/minha-conta/pedidos" className="btn-gold">Ver meus pedidos</Link>
                     <Link to="/" className="btn-outline">Voltar ao início</Link>
@@ -310,7 +344,7 @@ export default function Checkout() {
                                 shippingMethod={currentShipping?.method}
                                 shippingQuoteId={currentShipping?.quoteId}
                                 shippingCost={currentShipping?.cost}
-                                freeShipping={hasFreeShipping}
+                                freeShipping={pricing ? pricing.shipping_cost === 0 : hasFreeShipping}
                                 onQuoteLoading={setQuoteLoading}
                                 onShippingSelect={(s) => {
                                     setShipping(s.method === "melhor_envio" ? { ...s, contextKey: shippingKey } : s);
@@ -339,7 +373,9 @@ export default function Checkout() {
                                 <div className="space-y-3" role="radiogroup" aria-label="Forma de pagamento">
                                     <PayOption selected={paymentMethod === "credito"} disabled={!paymentMethods.enabled?.credit_card} onClick={() => setPaymentMethod("credito")} icon={CreditCard} title="Cartão de crédito" desc={`Parcele em até ${paymentMethods?.max_installments || 6}x, conforme as opções disponíveis no cartão`} />
                                     <PayOption selected={paymentMethod === "debito"} disabled={!paymentMethods.enabled?.debit_card} onClick={() => setPaymentMethod("debito")} icon={Banknote} title="Cartão de débito" desc="Pagamento à vista" />
-                                    <PayOption selected={paymentMethod === "pix"} disabled={!paymentMethods.enabled?.pix} onClick={() => setPaymentMethod("pix")} icon={QrCode} title="Pix" desc="À vista. QR Code ou código copia e cola após a criação válida do pagamento; confirmação pelo Mercado Pago." />
+                                    <PayOption selected={paymentMethod === "pix"} disabled={!paymentMethods.enabled?.pix} onClick={() => setPaymentMethod("pix")} icon={QrCode} title="Pix" desc={paymentMethods.pix_discount?.enabled
+                                        ? "5% de desconto nos produtos sem cupom ou promoção de preço. O frete não recebe desconto Pix."
+                                        : "À vista. QR Code ou código copia e cola após a criação válida do pagamento; confirmação pelo Mercado Pago."} />
                                     {!paymentMethods.enabled?.pix && !paymentMethods.enabled?.credit_card && !paymentMethods.enabled?.debit_card && (
                                         <div className="p-4 border border-amber-500/30 bg-amber-500/5 text-sm text-amber-700">
                                             Nenhum método de pagamento disponível. Verifique a configuração do Mercado Pago no admin.
@@ -348,6 +384,8 @@ export default function Checkout() {
                                 </div>
                             ) : null}
                             {errors.payment && <p className="text-[11px] text-[hsl(var(--rose))]">{errors.payment}</p>}
+                            {pricingLoading && <p role="status" className="text-sm text-muted-foreground">Conferindo descontos e total...</p>}
+                            {pricingError && <p role="alert" className="text-sm text-red-700">{pricingError} <button type="button" onClick={() => setPricingRetry(value => value + 1)} className="underline min-h-11">Tentar novamente</button></p>}
                             <div className="p-4 bg-[hsl(var(--bone))] text-xs text-muted-foreground leading-relaxed">
                                 <p>Ao confirmar, seu pedido será criado. O pagamento pelo Mercado Pago será iniciado na próxima tela.</p>
                                 <p className="mt-1">Você verá o valor final confirmado antes de pagar.</p>
@@ -361,7 +399,7 @@ export default function Checkout() {
                         {step < STEPS.length - 1 ? (
                             <button onClick={next} className="btn-gold">Continuar</button>
                         ) : (
-                            <button onClick={finish} disabled={placing} className="btn-gold">
+                            <button onClick={finish} disabled={placing || pricingLoading || !pricing} className="btn-gold">
                                 {placing ? <><Loader2 className="w-4 h-4 animate-spin" /> Criando pedido...</> : "Confirmar pedido"}
                             </button>
                         )}
@@ -384,20 +422,23 @@ export default function Checkout() {
                                     <div className="flex-1 text-sm">
                                         <p className="font-medium leading-tight">{l.product.name}</p>
                                         <p className="text-[11px] text-muted-foreground">{COLOR_SWATCHES[l.colorId]?.name} · {l.size} · {l.qty}x</p>
-                                        <p className="text-sm mt-1">{formatBRL((l.product.salePrice ?? l.product.price) * l.qty)}</p>
+                                        <p className="text-sm mt-1">{formatBRL(pricing?.items?.find(item => item.product_id === l.productId && item.color_id === l.colorId && item.size === l.size)?.subtotal ?? (l.product.salePrice ?? l.product.price) * l.qty)}</p>
                                     </div>
                                 </div>
                             ))}
                         </div>
                         <div className="pt-4 border-t border-border space-y-2 text-sm">
-                            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatBRL(subtotal)}</span></div>
-                            {couponDiscount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Cupom ({couponCode})</span><span className="text-[hsl(var(--rose))]">- {formatBRL(couponDiscount)}</span></div>}
+                            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal dos produtos</span><span>{formatBRL(pricing?.subtotal ?? subtotal)}</span></div>
+                            {(pricing?.discount_breakdown?.coupon ?? couponDiscount) > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Cupom ({couponCode})</span><span className="text-[hsl(var(--rose))]">- {formatBRL(pricing?.discount_breakdown?.coupon ?? couponDiscount)}</span></div>}
+                            {pricing?.discount_breakdown?.promotion > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Promoção</span><span>- {formatBRL(pricing.discount_breakdown.promotion)}</span></div>}
+                            {pricing?.discount_breakdown?.pix > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Desconto Pix (5%)</span><span>- {formatBRL(pricing.discount_breakdown.pix)}</span></div>}
+                            {paymentMethod === "pix" && paymentMethods?.pix_discount?.enabled && ['coupon', 'price_promotion'].includes(pricing?.pix_discount_reason) && <p className="text-xs text-muted-foreground">O cupom ou preço promocional foi mantido. O desconto Pix não é acumulável.</p>}
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Frete</span>
-                                <span>{currentShipping ? (shippingCost === 0 ? "Grátis" : formatBRL(shippingCost)) : "Selecione a entrega"}</span>
+                                <span>{currentShipping ? ((pricing?.shipping_cost ?? shippingCost) === 0 ? "Grátis" : formatBRL(pricing?.shipping_cost ?? shippingCost)) : "Selecione a entrega"}</span>
                             </div>
                             <div className="flex justify-between pt-3 border-t border-border text-base font-medium">
-                                <span>{currentShipping ? "Total estimado" : "Total parcial"}</span><span>{formatBRL(total)}</span>
+                                <span>{pricing ? "Total do pedido" : paymentMethod ? "Total em conferência" : currentShipping ? "Total estimado" : "Total parcial"}</span><span>{paymentMethod && !pricing ? "—" : formatBRL(pricing?.total ?? total)}</span>
                             </div>
                         </div>
                     </div>

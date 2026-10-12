@@ -1,4 +1,5 @@
 import { pool, withTransaction } from './config/db.js';
+import { checkoutCents, checkoutDiscount, assertCheckoutPriceAcknowledged } from './lib/checkoutDiscount.js';
 import { validateCoupon, logAudit, sendOrderNotifications } from './services.js';
 import * as melhorEnvio from './services/melhorEnvio.js';
 import { restoreStock } from './afterSalesService.js';
@@ -11,7 +12,11 @@ import { getPixCapability } from './lib/pixAvailability.js';
 import { getMercadoPagoReadiness } from './services/mercadoPago.js';
 
 // ─── placeOrder: atomic order creation ──────────────────────────────
-export async function placeOrder(userId, body, idempotencyKey) {
+export async function placeOrder(userId, body, idempotencyKey, {
+    transaction = withTransaction, notify = sendOrderNotifications,
+    quoteShipping = melhorEnvio.calculateShipping, pixReadiness = getMercadoPagoReadiness,
+    env = process.env,
+} = {}) {
     const normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
     const idempotencyFingerprint = createOrderRequestFingerprint(body);
     const { items, coupon_code, payment_method, customer } = body;
@@ -24,7 +29,7 @@ export async function placeOrder(userId, body, idempotencyKey) {
         throw Object.assign(new Error('Forma de pagamento inválida'), { status: 400 });
     }
 
-    return withTransaction(async (client) => {
+    return transaction(async (client) => {
         const { rows: paymentSettings } = await client.query("SELECT value FROM settings WHERE key = 'payments'");
         const paymentConfig = paymentSettings[0]?.value || {};
         if ((payment_method === 'pix' && paymentConfig.pix_enabled === false)
@@ -32,7 +37,7 @@ export async function placeOrder(userId, body, idempotencyKey) {
             || (payment_method === 'debito' && paymentConfig.debit_card_enabled === false)) {
             throw Object.assign(new Error('Forma de pagamento indisponível'), { status: 409 });
         }
-        if (payment_method === 'pix' && !getPixCapability(paymentConfig, getMercadoPagoReadiness()).enabled) {
+        if (payment_method === 'pix' && !getPixCapability(paymentConfig, pixReadiness()).enabled) {
             throw Object.assign(new Error('Pix indisponível no momento. Escolha outra forma de pagamento.'), { status: 409 });
         }
         // Serialize retries for this user/key before checking or applying stock
@@ -63,7 +68,7 @@ export async function placeOrder(userId, body, idempotencyKey) {
             // Resolve price and stock exclusively from the locked catalog row.
             const colors = product.colors || [];
             const { color, currentStock, quantity, unitPrice, itemSubtotal } = resolveCatalogLine(product, { colorId, size, qty });
-            subtotal += itemSubtotal;
+            subtotal = (checkoutCents(subtotal) + checkoutCents(itemSubtotal)) / 100;
 
             // Update stock in colors JSONB
             reserveVariantStock(product, color, size, quantity);
@@ -82,6 +87,7 @@ export async function placeOrder(userId, body, idempotencyKey) {
                 product_sku: product.sku,
                 product_image: product.images?.[0] || null,
                 product_category: product.category || '',
+                price_promotion: Number(product.sale_price) > 0 && Number(product.sale_price) < Number(product.price),
                 color_id: colorId,
                 color_name: color.name,
                 size,
@@ -110,10 +116,6 @@ export async function placeOrder(userId, body, idempotencyKey) {
             couponId = couponResult.couponId;
         }
 
-        // ── Server-side promotion validation (highest priority active promo) ──
-        // The frontend cannot be trusted for the final discount. Backend recalculates.
-        let promoDiscount = 0;
-        let appliedPromo = null;
         const { rows: activePromos } = await client.query(
             `SELECT * FROM look_promotions
              WHERE active = true
@@ -121,51 +123,11 @@ export async function placeOrder(userId, body, idempotencyKey) {
                AND (valid_from IS NULL OR valid_from <= now())
              ORDER BY priority DESC, created_at DESC`
         );
-
-        for (const promo of activePromos) {
-            let eligible = false;
-
-            // Check min_items (for look discounts)
-            if (promo.min_items && promo.min_items > 0) {
-                eligible = items.length >= promo.min_items;
-            } else {
-                eligible = true;
-            }
-
-            // Check min_value
-            if (eligible && promo.min_value && Number(promo.min_value) > 0) {
-                eligible = subtotal >= Number(promo.min_value);
-            }
-
-            // Check applicable_category
-            if (eligible && promo.applicable_category) {
-                eligible = orderItems.some(item => {
-                    const prodCats = item.product_category || '';
-                    return prodCats.toLowerCase().includes(promo.applicable_category.toLowerCase());
-                });
-            }
-
-            if (eligible) {
-                appliedPromo = promo;
-                if (Number(promo.discount_percent) > 0) {
-                    promoDiscount = (subtotal * Number(promo.discount_percent)) / 100;
-                } else if (Number(promo.discount_fixed) > 0) {
-                    promoDiscount = Number(promo.discount_fixed);
-                }
-                break; // Only apply highest priority promo
-            }
-        }
-
-        // Add promo discount (promotions don't stack with each other, but may stack with coupon)
-        if (appliedPromo && !appliedPromo.stacks_with_coupon) {
-            // If promo doesn't stack, use the larger of the two
-            if (promoDiscount > discount) {
-                discount = promoDiscount;
-            }
-        } else if (appliedPromo) {
-            discount += promoDiscount;
-        }
-        discount = Math.min(discount, subtotal); // Never exceed subtotal
+        const pricing = checkoutDiscount({ subtotal, lines: orderItems, couponCode: coupon_code,
+            couponDiscount: discount, promotions: activePromos, paymentMethod: payment_method,
+            paymentConfig, env });
+        discount = pricing.discount;
+        const appliedPromo = pricing.appliedPromo;
 
         // Calculate shipping exclusively from the server-side cart and product
         // dimensions.  Prices, carrier and delivery time supplied by the
@@ -202,7 +164,7 @@ export async function placeOrder(userId, body, idempotencyKey) {
                 throw Object.assign(new Error('Melhor Envio não está ativado'), { status: 503 });
             }
             const packages = buildShippingPackages(orderItems);
-            const options = await melhorEnvio.calculateShipping({
+            const options = await quoteShipping({
                 fromPostalCode: originPostalCode,
                 toPostalCode: destinationPostalCode,
                 products: packages,
@@ -218,6 +180,8 @@ export async function placeOrder(userId, body, idempotencyKey) {
         }
 
         const total = calculateServerOrderTotal(subtotal, discount, shippingCost);
+        assertCheckoutPriceAcknowledged(body.expected_pricing,
+            { subtotal, discount, shipping_cost: shippingCost, total }, pricing.discount_breakdown.pix > 0);
 
         // Serialize numbering across distinct customers and coupons as well.
         await client.query("SELECT pg_advisory_xact_lock(hashtext('checkout:order-number'))");
@@ -237,6 +201,9 @@ export async function placeOrder(userId, body, idempotencyKey) {
             discount: Number(discount.toFixed(2)),
             shipping_cost: Number(shippingCost.toFixed(2)),
             total: Number(total.toFixed(2)),
+            discount_breakdown: pricing.discount_breakdown,
+            pix_discount_percentage: pricing.pix_discount_percentage,
+            pix_discount_reason: pricing.pix_discount_reason,
             coupon_code: coupon_code || null,
             promotion: appliedPromo ? { name: appliedPromo.name, title: appliedPromo.title, discount_percent: Number(appliedPromo.discount_percent) } : null,
             shipping_method,
@@ -289,7 +256,7 @@ export async function placeOrder(userId, body, idempotencyKey) {
         return { order, created: true };
     }).then(async ({ order, created }) => {
         // Fire notifications (async — don't block or fail the order)
-        if (created) sendOrderNotifications(order.id, 'order_created').catch(() => {});
+        if (created) notify(order.id, 'order_created').catch(() => {});
         return order;
     });
 }

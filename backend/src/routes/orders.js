@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { previewCheckout } from '../lib/checkoutPreview.js';
+import { pixDiscountOffer } from '../lib/checkoutDiscount.js';
 import { pool, withTransaction } from '../config/db.js';
 import { auth, requireAdmin, requireSupabaseAdmin } from '../middleware.js';
 import { placeOrder, cancelOrder } from '../orderService.js';
@@ -133,6 +135,13 @@ router.patch('/orders/:id/status', auth, requireAdmin, async (req, res, next) =>
     } catch (err) { next(err); }
 });
 
+// Read-only pricing: catalog, discounts and provider quote are recalculated.
+// No order, payment, coupon usage or stock movement is created here.
+router.post('/checkout/preview', auth, couponLimiter, async (req, res, next) => {
+    try { res.json(await previewCheckout(req.body, req.user?.id || null)); }
+    catch (error) { next(error); }
+});
+
 // ─── COUPONS ───────────────────────────────────────────────────────
 
 // POST /api/coupons/validate
@@ -252,6 +261,7 @@ router.get('/payments/methods', auth, async (req, res) => {
 
         res.json({
             available: { ...types, pix: pix.available },
+            pix_discount: pixDiscountOffer(payConfig),
             pix_capability: { source: pix.source, reason: pix.reason, listed_by_payment_methods: types.pix },
             method_listing_status: methodListingStatus,
             enabled: {

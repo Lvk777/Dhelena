@@ -70,7 +70,7 @@ const INTEGRATION_DEFS = [
         key: "email",
         name: "E-mail Transacional",
         icon: Mail,
-        description: "Envio de e-mails de pedidos, recuperação de senha e notificações.",
+        description: "E-mails de pedidos e notificações. Cadastro e recuperação de senha usam o serviço de e-mail do Supabase Auth.",
         fields: [
             { key: "resend_api_key", label: "Resend API Key", type: "text", placeholder: "NUNCA exibido — digite para definir", sensitive: true },
             { key: "email_from", label: "E-mail remetente", type: "email", placeholder: "contato@dhelenas.com.br", sensitive: false },

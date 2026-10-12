@@ -1,4 +1,5 @@
 import { effectiveSizes, stockForSize } from './variantStock.js';
+import { checkoutCents } from './checkoutDiscount.js';
 
 function invalid(message, status = 400) {
     return Object.assign(new Error(message), { status });
@@ -19,15 +20,20 @@ export function resolveCatalogLine(product, { colorId, size, qty }) {
         throw invalid(`Estoque insuficiente para ${product.name} (${color.name}, ${size}). Disponível: ${currentStock}`, 409);
     }
 
-    const unitPrice = Number(product.sale_price || product.price);
-    if (!Number.isFinite(unitPrice) || unitPrice < 0) throw invalid('Preço de catálogo inválido', 500);
-    return { color, currentStock, quantity, unitPrice, itemSubtotal: unitPrice * quantity };
+    const catalogPrice = Number(product.sale_price || product.price);
+    if (!Number.isFinite(catalogPrice) || catalogPrice < 0) throw invalid('Preço de catálogo inválido', 500);
+    const unitPrice = checkoutCents(catalogPrice) / 100;
+    const lineCents = checkoutCents(unitPrice) * quantity;
+    if (!Number.isSafeInteger(lineCents)) throw invalid('Preço de catálogo inválido', 500);
+    return { color, currentStock, quantity, unitPrice, itemSubtotal: lineCents / 100 };
 }
 
 export function calculateServerOrderTotal(subtotal, discount, shippingCost) {
     const values = [subtotal, discount, shippingCost].map(Number);
     if (values.some(value => !Number.isFinite(value) || value < 0)) throw invalid('Totais do pedido inválidos', 500);
-    return Number((values[0] - values[1] + values[2]).toFixed(2));
+    const cents = checkoutCents(subtotal) - checkoutCents(discount) + checkoutCents(shippingCost);
+    if (!Number.isSafeInteger(cents) || cents < 0) throw invalid('Totais do pedido inválidos', 500);
+    return cents / 100;
 }
 
 export function calculateCheckoutShippingCost(quotePrice, subtotal, discount, freeEnabled, freeThreshold) {
@@ -35,5 +41,5 @@ export function calculateCheckoutShippingCost(quotePrice, subtotal, discount, fr
     if (values.some(value => !Number.isFinite(value) || value < 0)) throw invalid('Cotação ou subtotal inválido');
     const threshold = Number(freeThreshold);
     return freeEnabled === true && Number.isFinite(threshold) && threshold > 0
-        && values[1] - values[2] >= threshold ? 0 : values[0];
+        && checkoutCents(subtotal) - checkoutCents(discount) >= checkoutCents(threshold) ? 0 : checkoutCents(quotePrice) / 100;
 }

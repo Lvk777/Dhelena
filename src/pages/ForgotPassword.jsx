@@ -3,22 +3,24 @@ import { Link } from "react-router-dom";
 import { client } from "@/api/apiClient";
 import { Loader2, Mail, ArrowLeft } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
+import { requestPasswordRecovery, RECOVERY_ACCEPTED_MESSAGE } from "@/lib/passwordRecovery";
 
 export default function ForgotPassword() {
     const [email, setEmail] = useState("");
     const [loading, setLoading] = useState(false);
     const [sent, setSent] = useState(false);
+    const [error, setError] = useState("");
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
+        setError("");
         try {
-            await client.auth.resetPasswordRequest(email);
-        } catch {
-            // Always show success
+            const result = await requestPasswordRecovery(email, value => client.auth.resetPasswordRequest(value));
+            setSent(result.accepted);
+            if (!result.accepted) setError(result.message);
         } finally {
             setLoading(false);
-            setSent(true);
         }
     };
 
@@ -34,10 +36,11 @@ export default function ForgotPassword() {
         >
             {sent ? (
                 <p className="text-sm text-foreground text-center leading-relaxed">
-                    Se existir uma conta com este e-mail, você receberá um link de redefinição em instantes.
+                    {RECOVERY_ACCEPTED_MESSAGE}
                 </p>
             ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
                     <div>
                         <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">E-mail</label>
                         <div className="relative">
