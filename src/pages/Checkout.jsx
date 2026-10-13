@@ -13,6 +13,7 @@ import { track } from "@/lib/analytics";
 import ShippingStep from "@/components/checkout/ShippingStep";
 import PixPaymentScreen from "@/components/checkout/PixPaymentScreen";
 import CardPaymentBrick from "@/components/checkout/CardPaymentBrick";
+import PaymentMethodChange from '@/components/checkout/PaymentMethodChange';
 import { selectedDelivery, selectedDeliveryCost, shippingContextKey } from "@/lib/shippingSelection";
 import { deliveryEstimateLabel, DELIVERY_BUSINESS_DAYS_NOTE } from '@/lib/deliveryEstimate';
 
@@ -42,6 +43,7 @@ export default function Checkout() {
     const [errors, setErrors] = useState(/** @type {Record<string, any>} */ ({}));
     const [orderError, setOrderError] = useState("");
     const [paymentScreen, setPaymentScreen] = useState(null); // null | 'pix' | 'card'
+    const [cardAttempted, setCardAttempted] = useState(false);
     const [pricingPreview, setPricingPreview] = useState(null);
     const [pricingLoading, setPricingLoading] = useState(false);
     const [pricingError, setPricingError] = useState("");
@@ -252,7 +254,8 @@ export default function Checkout() {
     if (paymentScreen === "pix" && order) {
         return (
             <div className="container-boutique py-14">
-                <PixPaymentScreen order={order} onApproved={onPaymentApproved} />
+                <PixPaymentScreen order={order} onApproved={onPaymentApproved} onAttempt={() => setCardAttempted(true)} />
+                <PaymentMethodChange order={order} blocked={cardAttempted} onChanged={updated => { setOrder(updated); setPaymentMethod(updated.payment_method); setPaymentScreen(updated.payment_method === 'pix' ? 'pix' : 'card'); }} />
                 <div className="text-center mt-8">
                     <Link to="/minha-conta/pedidos" className="text-sm text-muted-foreground hover:text-foreground">
                         Ver meus pedidos
@@ -264,18 +267,20 @@ export default function Checkout() {
 
     // ─── Card payment screen ───
     if (paymentScreen === "card" && order) {
-        const isDebit = paymentMethod === "debito";
+        const isDebit = order.payment_method === "debito";
         return (
             <div className="container-boutique py-14">
                 <CardPaymentBrick
                     order={order}
                     publicKey={paymentMethods?.public_key}
                     amount={order.total}
-                    maxInstallments={isDebit ? 1 : (paymentMethods?.max_installments || 6)}
+                    maxInstallments={isDebit ? 1 : (paymentMethods?.max_installments || 1)}
                     isDebit={isDebit}
                     onApproved={onPaymentApproved}
                     onRejected={() => {}}
+                    onAttempt={() => setCardAttempted(true)}
                 />
+                <PaymentMethodChange order={order} blocked={cardAttempted} onChanged={updated => { setOrder(updated); setPaymentMethod(updated.payment_method); setPaymentScreen(updated.payment_method === 'pix' ? 'pix' : 'card'); }} />
                 <div className="text-center mt-8">
                     <Link to="/minha-conta/pedidos" className="text-sm text-muted-foreground hover:text-foreground">
                         Ver meus pedidos
@@ -374,8 +379,8 @@ export default function Checkout() {
                                 </div>
                             ) : paymentMethods ? (
                                 <div className="space-y-3" role="radiogroup" aria-label="Forma de pagamento">
-                                    <PayOption selected={paymentMethod === "credito"} disabled={!paymentMethods.enabled?.credit_card} onClick={() => setPaymentMethod("credito")} icon={CreditCard} title="Cartão de crédito" desc={`Parcele em até ${paymentMethods?.max_installments || 6}x, conforme as opções disponíveis no cartão`} />
-                                    <PayOption selected={paymentMethod === "debito"} disabled={!paymentMethods.enabled?.debit_card} onClick={() => setPaymentMethod("debito")} icon={Banknote} title="Cartão de débito" desc="Pagamento à vista" />
+                                    <PayOption selected={paymentMethod === "credito"} disabled={!paymentMethods.enabled?.credit_card} onClick={() => setPaymentMethod("credito")} icon={CreditCard} title="Cartão de crédito" desc={paymentMethods.interest_free_approved ? `Até ${paymentMethods.max_installments}x sem juros, conforme disponibilidade do cartão` : 'À vista. Parcelamento sem juros sujeito à aprovação comercial.'} />
+                                    <PayOption selected={paymentMethod === "debito"} disabled={!paymentMethods.enabled?.debit_card} onClick={() => setPaymentMethod("debito")} icon={Banknote} title="Cartão de débito" desc={`À vista. ${paymentMethods.methods?.filter(method => method.payment_type_id === 'debit_card').map(method => method.name).join(', ') || 'Modalidades disponíveis na conta Mercado Pago'}`} />
                                     <PayOption selected={paymentMethod === "pix"} disabled={!paymentMethods.enabled?.pix} onClick={() => setPaymentMethod("pix")} icon={QrCode} title="Pix" desc={paymentMethods.pix_discount?.enabled
                                         ? "5% de desconto nos produtos sem cupom ou promoção de preço. O frete não recebe desconto Pix."
                                         : "À vista. QR Code ou código copia e cola após a criação válida do pagamento; confirmação pelo Mercado Pago."} />

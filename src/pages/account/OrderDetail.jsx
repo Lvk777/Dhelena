@@ -5,6 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { formatBRL, ORDER_STATUS, ORDER_TIMELINE, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
 import OrderTimeline from "@/components/checkout/OrderTimeline";
 import CustomerAfterSales from "@/components/checkout/CustomerAfterSales";
+import OrderPaymentPanel from '@/components/checkout/OrderPaymentPanel';
 import { orderDeliveryEstimateLabel, DELIVERY_BUSINESS_DAYS_NOTE } from '@/lib/deliveryEstimate';
 
 export default function OrderDetail() {
@@ -127,6 +128,8 @@ export default function OrderDetail() {
                 </div>
             </div>
 
+            <OrderPaymentPanel key={order.id} order={order} onChanged={setOrder} onRefresh={load} />
+
             {/* Payment + Delivery info */}
             <div className="grid sm:grid-cols-2 gap-6 mb-8">
                 <InfoBlock title="Pagamento">
@@ -141,7 +144,7 @@ export default function OrderDetail() {
                                 {PAYMENT_STATUS_PT[order.payment_status] || order.payment_status}
                             </span>
                         </p>
-                        {order.installments > 1 && <p className="text-muted-foreground">{order.installments}x de {formatBRL(Number(order.total) / order.installments)}</p>}
+                        {order.installments > 1 && <p className="text-muted-foreground">{order.installments} parcelas · Total {formatBRL(Number(order.total))}</p>}
                     </div>
                 </InfoBlock>
                 <InfoBlock title="Entrega">

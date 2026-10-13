@@ -15,10 +15,11 @@ import { assertFulfillmentTransition } from '../lib/afterSalesPolicy.js';
 import { applyVerifiedOrderInTransaction, recordVerifiedNonApprovedOrderInTransaction } from '../lib/paymentReconciliation.js';
 import { createPaymentDiagnostic } from '../lib/paymentDiagnostics.js';
 import { assertExpectedTransactionId, loadPaymentReconciliationPreview } from '../lib/paymentPreview.js';
-import { validateCardPaymentChoice } from '../lib/paymentChoice.js';
+import { validateCardPaymentChoice, creditInstallmentPolicy, assertSupportedInstallments } from '../lib/paymentChoice.js';
+import { changeOrderPaymentMethod } from '../lib/paymentMethodChange.js';
 import { getPixCapability } from '../lib/pixAvailability.js';
 import { payerFromOrder } from '../lib/paymentPayer.js';
-import { orderAttemptLockSql } from '../lib/orderAttemptLock.js';
+import { orderAttemptLockSql, withAttemptTransaction } from '../lib/orderAttemptLock.js';
 import { logSafeError } from '../lib/safeErrorLog.js';
 
 const router = Router();
@@ -258,7 +259,9 @@ router.get('/payments/methods', auth, async (req, res) => {
         const { rows: settingRows } = await pool.query("SELECT value FROM settings WHERE key = 'payments'");
         const payConfig = settingRows[0]?.value || {};
         const cardEnabled = payConfig.card_enabled !== false;
-        const pix = getPixCapability(payConfig, mp.getMercadoPagoReadiness());
+        const readiness = mp.getMercadoPagoReadiness();
+        const pix = getPixCapability(payConfig, readiness);
+        const cardConfigured = readiness.configured && readiness.public_key_configured;
 
         res.json({
             available: { ...types, pix: pix.available },
@@ -267,12 +270,12 @@ router.get('/payments/methods', auth, async (req, res) => {
             method_listing_status: methodListingStatus,
             enabled: {
                 pix: pix.enabled,
-                credit_card: cardEnabled && types.credit_card,
-                debit_card: cardEnabled && payConfig.debit_card_enabled !== false && types.debit_card,
+                credit_card: cardConfigured && cardEnabled && types.credit_card,
+                debit_card: cardConfigured && cardEnabled && payConfig.debit_card_enabled !== false && types.debit_card,
                 boleto: false,
             },
             methods,
-            max_installments: Math.min(12, Math.max(1, Number(payConfig.max_installments) || 6)),
+            ...creditInstallmentPolicy(payConfig),
             public_key: process.env.MERCADO_PAGO_PUBLIC_KEY || null,
             environment: mp.getMercadoPagoEnvironment(),
         });
@@ -280,6 +283,17 @@ router.get('/payments/methods', auth, async (req, res) => {
         res.status(503).json({ error: 'Não foi possível consultar as formas de pagamento no momento.' });
     }
 });
+
+// Preview and update an unstarted payment on the SAME reserved order.
+for (const preview of [true, false]) {
+    router.post(`/orders/:id/payment/method${preview ? '/preview' : ''}`, auth, async (req, res) => {
+        try {
+            const result = await changeOrderPaymentMethod(req.params.id, req.user, req.body,
+                req.headers['x-idempotency-key'], { preview });
+            res.json(result);
+        } catch (error) { res.status(error.status || 500).json({ error: publicError(error) }); }
+    });
+}
 
 // GET /api/payments/test — test MP connection (admin)
 router.get('/payments/test', auth, requireAdmin, async (req, res) => {
@@ -349,11 +363,12 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
         const payer = payerFromOrder(order, req.user);
         attemptLock = await pool.connect();
         await attemptLock.query(`SELECT pg_advisory_lock(${orderAttemptLockSql})`, [order.id]);
-        const { rows: reserved } = await pool.query(
+        const { rows: reserved } = await attemptLock.query(
             `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'pix'
              WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
-               AND mercado_pago_order_id IS NULL AND payment_attempt_started_at IS NULL RETURNING id`,
-            [order.id]);
+               AND mercado_pago_order_id IS NULL AND payment_attempt_started_at IS NULL
+               AND payment_method = 'pix' AND total = $2 RETURNING id`,
+            [order.id, order.total]);
         if (!reserved.length) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
 
         diagnostic.setStage('build_payload');
@@ -374,7 +389,7 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
         const verified = await getVerifiedPaymentForOrder(order, mp, null, result.mp_order_id);
         const internalStatus = mp.mapPaymentStatus(verified.mp_status, verified.mp_status_detail);
         diagnostic.setStage('persist_provider_ids', result.mp_order_id);
-        const outcome = await withTransaction(async client => {
+        const outcome = await withAttemptTransaction(attemptLock, async client => {
             const { rows: locked } = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [order.id]);
             const current = locked[0];
             if (current.mercado_pago_order_id && current.mercado_pago_order_id !== result.mp_order_id) {
@@ -434,8 +449,9 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
 
 // POST /api/orders/:id/payment/card — create card payment
 router.post('/orders/:id/payment/card', auth, async (req, res) => {
+    let attemptLock = null;
     try {
-        const { card_token, installments, payment_method_id, issuer_id } = req.body;
+        const { card_token, installments, payment_method_id, issuer_id, payment_type_id, bin } = req.body;
 
         if (!card_token) return res.status(400).json({ error: 'Token do cartão é obrigatório' });
         if (!payment_method_id) return res.status(400).json({ error: 'Método de pagamento é obrigatório' });
@@ -453,6 +469,8 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
         if (rows.length === 0) return res.status(404).json({ error: 'Pedido não encontrado' });
 
         const order = rows[0];
+        if (!['credito', 'debito'].includes(order.payment_method)) return res.status(409).json({ error: 'Este pedido não aceita pagamento com cartão' });
+        if (order.status === 'cancelado') return res.status(409).json({ error: 'Pedido cancelado' });
 
         // Idempotency: if already has MP order with card, return status
         if (order.mercado_pago_order_id && order.payment_provider === 'mercado_pago') {
@@ -461,23 +479,39 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
                 payment_status: order.payment_status,
                 mp_status: order.mercado_pago_status,
                 mp_status_detail: order.mercado_pago_status_detail,
+                challenge_url: (await getVerifiedPaymentForOrder(order, mp)).challenge_url,
             });
         }
         if (order.status === 'cancelado' || order.mercado_pago_order_id
             || order.payment_attempt_started_at || order.payment_status !== 'pending') {
             return res.status(409).json({ error: 'Pagamento existente ou em conciliação; não criar outra cobrança' });
         }
+        const cardReadiness = mp.getMercadoPagoReadiness();
+        if (!cardReadiness.configured || !cardReadiness.public_key_configured) {
+            return res.status(409).json({ error: 'Pagamento com cartão indisponível no momento.' });
+        }
         const methods = await mp.getPaymentMethods();
         const { rows: paymentSettings } = await pool.query("SELECT value FROM settings WHERE key = 'payments'");
         const paymentConfig = paymentSettings[0]?.value || {};
         const { paymentType, installments: requestedInstallments } = validateCardPaymentChoice(
-            order.payment_method, methods, payment_method_id, installments, paymentConfig);
+            order.payment_method, methods, payment_method_id, installments, paymentConfig, order.total);
+        if (payment_type_id !== paymentType) return res.status(400).json({ error: 'O cartão informado não corresponde à forma de pagamento escolhida.' });
+        if (paymentType === 'credit_card' && requestedInstallments > 1) {
+            if (requestedInstallments > creditInstallmentPolicy(paymentConfig).max_installments) {
+                return res.status(409).json({ error: 'Parcelamento sem juros ainda não aprovado para esta loja.' });
+            }
+            const plans = await mp.getInstallmentPlans({ bin, amount: order.total, paymentMethodId: payment_method_id, issuerId: issuer_id });
+            assertSupportedInstallments(plans, requestedInstallments, order.total);
+        }
         const payer = payerFromOrder(order, req.user);
-        const { rows: reserved } = await pool.query(
+        attemptLock = await pool.connect();
+        await attemptLock.query(`SELECT pg_advisory_lock(${orderAttemptLockSql})`, [order.id]);
+        const { rows: reserved } = await attemptLock.query(
             `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'card'
              WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
-               AND mercado_pago_order_id IS NULL AND payment_attempt_started_at IS NULL RETURNING id`,
-            [order.id]);
+               AND mercado_pago_order_id IS NULL AND payment_attempt_started_at IS NULL
+               AND payment_method = $2 AND total = $3 RETURNING id`,
+            [order.id, order.payment_method, order.total]);
         if (!reserved.length) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
 
         const idempotencyKey = `card-${order.id}`;
@@ -490,7 +524,7 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
             installments: requestedInstallments,
             paymentMethodId: payment_method_id,
             paymentType,
-            issuerId,
+            issuerId: issuer_id,
             idempotencyKey,
         });
         if (!result.mp_order_id || result.external_reference !== order.order_number) {
@@ -498,8 +532,11 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
         }
 
         const verified = await getVerifiedPaymentForOrder(order, mp, null, result.mp_order_id);
+        if (verified.payment_method_type && verified.payment_method_type !== paymentType) {
+            throw Object.assign(new Error('Tipo de pagamento do provedor exige conciliação'), { status: 409 });
+        }
         const internalStatus = mp.mapPaymentStatus(verified.mp_status, verified.mp_status_detail);
-        const persisted = await withTransaction(async client => {
+        const persisted = await withAttemptTransaction(attemptLock, async client => {
             const applied = internalStatus === 'approved'
                 ? await applyVerifiedOrderInTransaction(client, order.id, verified, 'card_response')
                 : await recordVerifiedNonApprovedOrderInTransaction(client, order.id, verified, 'card_response');
@@ -515,10 +552,18 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
             mp_status: verified.mp_status,
             mp_status_detail: verified.mp_status_detail,
             installments: result.installments,
+            challenge_url: verified.challenge_url,
         });
     } catch (err) {
         console.error('[Payment Card] Provider status:', err.status || 500);
         res.status(err.status || 500).json({ error: 'Não foi possível confirmar o pagamento; solicite conciliação' });
+    } finally {
+        if (attemptLock) {
+            let unlockError;
+            try { await attemptLock.query(`SELECT pg_advisory_unlock(${orderAttemptLockSql})`, [req.params.id]); }
+            catch (error) { unlockError = error; logSafeError('payment_card_unlock_failed', error); }
+            finally { attemptLock.release(unlockError); }
+        }
     }
 });
 
@@ -594,6 +639,7 @@ router.get('/orders/:id/payment/status', auth, async (req, res) => {
             mp_status: mpData.mp_status,
             mp_status_detail: mpData.mp_status_detail,
             payment_method: order.payment_method,
+            challenge_url: mpData.challenge_url,
         });
     } catch (err) {
         res.status(err.status || 500).json({ error: publicError(err) });

@@ -284,6 +284,11 @@ const functions = {
                 return apiFetch(`/orders/${args.orderId}/payment/pix`, { method: 'POST', body: JSON.stringify(args) });
             case 'createCardPayment':
                 return apiFetch(`/orders/${args.orderId}/payment/card`, { method: 'POST', body: JSON.stringify(args) });
+            case 'previewPaymentMethodChange':
+                return apiFetch(`/orders/${args.orderId}/payment/method/preview`, { method: 'POST', body: JSON.stringify({ payment_method: args.payment_method }) });
+            case 'changePaymentMethod':
+                return apiFetch(`/orders/${args.orderId}/payment/method`, { method: 'POST', headers: { 'X-Idempotency-Key': args.idempotencyKey },
+                    body: JSON.stringify({ payment_method: args.payment_method, expected_pricing: args.expected_pricing }) });
             case 'getPaymentStatus':
                 return apiFetch(`/orders/${args.orderId}/payment/status`);
             case 'getPaymentReconciliationPreview': {

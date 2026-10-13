@@ -7,6 +7,7 @@
 import crypto from 'crypto';
 import { normalizePayer, omitEmptyOptional } from '../lib/paymentPayer.js';
 import { safeApplicationId } from '../lib/mercadoPagoWebhookLog.js';
+import { safeChallengeUrl } from '../lib/paymentChallenge.js';
 
 const BASE_URL = 'https://api.mercadopago.com';
 
@@ -41,6 +42,7 @@ async function mpFetch(path, options = {}) {
     const method = (fetchOptions.method || 'GET').toUpperCase();
     const idempotencyHeaders = method === 'GET' ? {} : { 'X-Idempotency-Key': idempotencyKey || crypto.randomUUID() };
     const res = await fetch(url, {
+        signal: AbortSignal.timeout(15000),
         ...fetchOptions,
         headers: {
             'Authorization': `Bearer ${token}`,
@@ -91,6 +93,15 @@ export async function getPaymentMethods() {
             max_installments: m.max_allowed_installments || 1,
             accreditation_days: m.accreditation_days || 0,
         }));
+}
+
+export async function getInstallmentPlans({ bin, amount, paymentMethodId, issuerId }) {
+    if (!/^\d{6,8}$/.test(String(bin || ''))) throw Object.assign(new Error('Identificação do cartão necessária para validar parcelas.'), { status: 400 });
+    const params = new URLSearchParams({ bin: String(bin), amount: Number(amount).toFixed(2), payment_method_id: paymentMethodId });
+    if (issuerId) params.set('issuer.id', String(issuerId));
+    const plans = await mpFetch(`/v1/payment_methods/installments?${params}`);
+    if (!Array.isArray(plans)) throw Object.assign(new Error('Parcelamento indisponível.'), { status: 503 });
+    return plans;
 }
 
 // ─── Get available payment types (pix, credit_card, debit_card, etc) ───
@@ -180,6 +191,10 @@ export async function createCardPayment({ orderId, orderNumber, total, payer, ca
         description: `Pedido ${orderNumber}`,
     };
 
+    if (process.env.CARD_3DS_ENABLED === 'true') {
+        body.config = { online: { transaction_security: { validation: 'on_fraud_risk', liability_shift: 'required' } } };
+    }
+
     const data = await mpFetch('/v1/orders', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -195,6 +210,7 @@ export async function createCardPayment({ orderId, orderNumber, total, payer, ca
         mp_status_detail: payment.status_detail,
         external_reference: data.external_reference,
         installments: payment.installments || installments,
+        challenge_url: safeChallengeUrl(payment.payment_method?.transaction_security?.url),
     };
 }
 
@@ -350,6 +366,8 @@ function orderResource(data) {
         transaction_currency_id: payment.currency_id || payment.currency || null,
         external_reference: data.external_reference,
         application_id: safeApplicationId(data.integration_data?.application_id),
+        challenge_url: safeChallengeUrl(payment.payment_method?.transaction_security?.url),
+        payment_method_type: payment.payment_method?.type || null,
     };
 }
 
@@ -481,6 +499,9 @@ export function mapPaymentStatus(mpStatus, statusDetail = null) {
         'approved': 'approved',
         'partially_refunded': 'partially_refunded',
         'rejected': 'rejected',
+        'failed': 'rejected',
+        'canceled': 'rejected',
+        'expired': 'rejected',
         'cancelled': 'rejected',
         'refunded': 'refunded',
         'charged_back': 'refunded',

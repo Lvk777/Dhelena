@@ -58,9 +58,9 @@ export default function PaymentsTab({ data, onChange }) {
             </AdminFormSection>
 
             <AdminFormSection title="Parcelamento">
-                <AdminInput label="Número máximo de parcelas" type="number" min={1} max={12} value={data.max_installments} onChange={(v) => set("max_installments", Math.min(12, Math.max(1, parseInt(v) || 1)))} />
+                <AdminInput label="Número máximo de parcelas" type="number" min={1} max={6} value={data.max_installments} onChange={(v) => set("max_installments", Math.min(6, Math.max(1, parseInt(v) || 1)))} />
                 <AdminInput label="Parcelas sem juros" type="number" value={data.interest_free_installments} onChange={(v) => set("interest_free_installments", parseInt(v) || 0)} />
-                <div />
+                <p className="text-xs text-muted-foreground">Parcelamento exige aprovação comercial no backend e opção sem juros confirmada para o cartão. O cadastro deste valor não ativa a oferta.</p>
             </AdminFormSection>
 
             <AdminFormSection title="Métodos de pagamento no checkout" description="Pix usa a configuração da Orders API; cartões usam a lista de métodos do Mercado Pago.">

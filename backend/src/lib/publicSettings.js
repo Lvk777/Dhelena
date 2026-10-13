@@ -1,5 +1,6 @@
 import { httpsOrigin, instagramLink, whatsappLink, validEmail, validCnpjFormat } from './navigation.js';
 import { preparationPolicy } from './deliveryEstimate.js';
+import { creditInstallmentPolicy } from './paymentChoice.js';
 
 export const PUBLIC_SETTING_FIELDS = {
     general: ['store_name', 'trade_name', 'company_name', 'cnpj', 'email', 'phone', 'whatsapp', 'logo', 'logo_dark', 'public_address', 'business_hours', 'external_link_origins'],
@@ -18,6 +19,15 @@ export function publicSetting(row) {
     for (const field of fields) if (Object.hasOwn(row.value || {}, field)) value[field] = row.value[field];
     // Derived from the running backend, never from a browser-supplied flag.
     if (row.key === 'shipping') value.preparation = preparationPolicy(row.value);
+    if (row.key === 'store') {
+        const policy = creditInstallmentPolicy(row.value);
+        value.max_installments = policy.max_installments;
+        value.interest_free_installments = policy.max_installments;
+        if (!policy.interest_free_approved && typeof value.top_bar_text === 'string') {
+            value.top_bar_text = value.top_bar_text.split(/\s*[·|]\s*/)
+                .filter(part => !/parcel|sem juros|\d+\s*x\b/i.test(part)).join(' · ');
+        }
+    }
     return { id: row.id, key: row.key, value, is_public: true };
 }
 
