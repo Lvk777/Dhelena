@@ -37,6 +37,10 @@ async function fixture(t, method, state = 'pending') {
             Object.assign(order, { payment_method: args[0], discount: args[1], total: args[2], snapshot: JSON.parse(args[3]) });
             return { rows: [structuredClone(order)] };
         }
+        if (sql.startsWith('UPDATE orders SET snapshot')) {
+            order.snapshot.payment_context = JSON.parse(args[1]);
+            return { rows: [] };
+        }
         if (sql.includes('payment_attempt_started_at = now()')) {
             if (order.payment_attempt_started_at || order.mercado_pago_order_id || order.status === 'cancelado'
                 || order.payment_status !== 'pending' || (sql.includes("payment_method = 'pix'") && order.payment_method !== 'pix')
@@ -81,7 +85,8 @@ async function fixture(t, method, state = 'pending') {
     };
     t.mock.method(pool, 'query', q); t.mock.method(pool, 'connect', connect);
     t.mock.method(pg.Pool.prototype, 'query', q); t.mock.method(pg.Pool.prototype, 'connect', connect);
-    const resource = () => ({ id: 'ORD-MOCK', external_reference: order.order_number, total_amount: providerTotal, currency: 'BRL',
+    const resource = () => ({ id: 'ORD-MOCK', integration_data: { application_id: '12345' }, user_id: '67890', type: 'online',
+        external_reference: order.order_number, total_amount: providerTotal, currency: 'BRL',
         status: providerState === 'approved' ? 'processed' : providerState, status_detail: providerState === 'approved' ? 'accredited' : providerState === 'failed' ? 'failed' : 'pending_challenge',
         transactions: { payments: [{ id: 'PAY-MOCK', amount: '114.95', status: providerState === 'approved' ? 'processed' : providerState,
             status_detail: providerState === 'approved' ? 'accredited' : providerState === 'failed' ? 'failed' : 'pending_challenge',

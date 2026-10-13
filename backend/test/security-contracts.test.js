@@ -484,7 +484,11 @@ test('Mercado Pago webhook signature uses the signed data.id and rejects tamperi
     else process.env.MERCADO_PAGO_WEBHOOK_SECRET = previousSecret;
 });
 
-test('Express preserves Mercado Pago query and signature headers; valid signed request passes 401 gate', async () => {
+test('Express preserves Mercado Pago query and signature headers; valid signed request passes 401 gate', async t => {
+    for (const [key, value] of Object.entries({ MERCADO_PAGO_MODE: 'test', MERCADO_PAGO_ACCESS_TOKEN: 'synthetic-only' })) {
+        const old = process.env[key]; process.env[key] = value;
+        t.after(() => { if (old === undefined) delete process.env[key]; else process.env[key] = old; });
+    }
     const prior = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
     process.env.MERCADO_PAGO_WEBHOOK_SECRET = 'local-webhook-test-secret';
     const app = express();

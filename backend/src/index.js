@@ -21,6 +21,7 @@ import securityRoutes from './routes/security.js';
 import sitemapRoutes from './routes/sitemap.js';
 import webhookRoutes from './routes/webhooks.js';
 import melhorEnvioOAuthRoutes from './routes/melhorEnvioOAuth.js';
+import { createOrderWebhookWorker } from './services/mercadoPagoWebhookQueue.js';
 
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -166,9 +167,11 @@ app.use(async (req, res, next) => {
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3001;
+const orderWebhookWorker = createOrderWebhookWorker();
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[D'Helenas API] Running on port ${PORT}`);
     ensureInitialized();
+    orderWebhookWorker.start();
 });
 
 let shuttingDown = false;
@@ -177,6 +180,7 @@ async function shutdown(signal) {
     shuttingDown = true;
     console.log(`[API] ${signal} received; closing HTTP server`);
     server.close(async () => {
+        await orderWebhookWorker.stop();
         try { await pool.end(); } catch { /* pool may not have connected yet */ }
         process.exit(0);
     });

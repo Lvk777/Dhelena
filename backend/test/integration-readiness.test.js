@@ -5,7 +5,7 @@ import { getMercadoPagoMode, getMercadoPagoEnvironment, getMercadoPagoReadiness 
 import { createMelhorEnvioTokenManager, MELHOR_ENVIO_USER_AGENT_FALLBACK } from '../src/services/melhorEnvioToken.js';
 
 const KEYS = [
-    'MERCADO_PAGO_MODE', 'MERCADO_PAGO_ACCESS_TOKEN', 'MERCADO_PAGO_WEBHOOK_SECRET',
+    'MERCADO_PAGO_MODE', 'MERCADO_PAGO_ACCESS_TOKEN', 'MERCADO_PAGO_WEBHOOK_SECRET', 'MERCADO_PAGO_APPLICATION_ID',
     'MELHOR_ENVIO_MODE', 'MELHOR_ENVIO_TOKEN_MODE', 'MELHOR_ENVIO_TOKEN',
     'MELHOR_ENVIO_CLIENT_ID', 'MELHOR_ENVIO_CLIENT_SECRET', 'MELHOR_ENVIO_REDIRECT_URI',
     'MELHOR_ENVIO_WEBHOOK_SECRET', 'MELHOR_ENVIO_USER_AGENT', 'INTEGRATION_ENCRYPTION_KEY',
@@ -66,12 +66,17 @@ test('Mercado Pago mode is explicit and APP_USR is not environment evidence', as
         assert.equal(getMercadoPagoReadiness().configured, false);
     });
     for (const [mode, label] of [['test', 'Teste'], ['production', 'Produção']]) {
-        await withEnv({ MERCADO_PAGO_MODE: mode, MERCADO_PAGO_ACCESS_TOKEN: 'APP_USR-private' }, () => {
+        await withEnv({ MERCADO_PAGO_MODE: mode, MERCADO_PAGO_ACCESS_TOKEN: 'APP_USR-private',
+            MERCADO_PAGO_WEBHOOK_SECRET: 'synthetic-signature-key', MERCADO_PAGO_APPLICATION_ID: '12345' }, () => {
             assert.equal(getMercadoPagoMode(), mode);
             assert.equal(getMercadoPagoEnvironment(), label);
             assert.equal(getMercadoPagoReadiness().configured, true);
         });
     }
+    await withEnv({ MERCADO_PAGO_MODE: 'production', MERCADO_PAGO_ACCESS_TOKEN: 'APP_USR-private',
+        MERCADO_PAGO_WEBHOOK_SECRET: 'synthetic-signature-key' }, () => {
+        assert.equal(getMercadoPagoReadiness().configured, false);
+    });
 });
 
 test('Melhor Envio prefers valid encrypted Sandbox OAuth token and reports only state', async () => {

@@ -20,6 +20,7 @@ import { changeOrderPaymentMethod } from '../lib/paymentMethodChange.js';
 import { getPixCapability } from '../lib/pixAvailability.js';
 import { payerFromOrder } from '../lib/paymentPayer.js';
 import { orderAttemptLockSql, withAttemptTransaction } from '../lib/orderAttemptLock.js';
+import { paymentAttemptContext, bindPaymentAttempt } from '../lib/mercadoPagoContext.js';
 import { logSafeError } from '../lib/safeErrorLog.js';
 import installmentRoutes from './installments.js';
 import { readInstallmentSettings, publicInstallmentPolicy } from '../lib/installmentSettings.js';
@@ -366,6 +367,7 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
         }
         // Validate locally before reserving the financial attempt.
         const payer = payerFromOrder(order, req.user);
+        const paymentContext = paymentAttemptContext();
         attemptLock = await pool.connect();
         await attemptLock.query(`SELECT pg_advisory_lock(${orderAttemptLockSql})`, [order.id]);
         const { rows: reserved } = await attemptLock.query(
@@ -375,6 +377,7 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
                AND payment_method = 'pix' AND total = $2 RETURNING id`,
             [order.id, order.total]);
         if (!reserved.length) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
+        await attemptLock.query("UPDATE orders SET snapshot = jsonb_set(COALESCE(snapshot,'{}'::jsonb),'{payment_context}',$2::jsonb) WHERE id = $1", [order.id, JSON.stringify(paymentContext)]);
 
         diagnostic.setStage('build_payload');
         const idempotencyKey = `pix-${order.id}`;
@@ -395,6 +398,7 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
         const internalStatus = mp.mapPaymentStatus(verified.mp_status, verified.mp_status_detail);
         diagnostic.setStage('persist_provider_ids', result.mp_order_id);
         const outcome = await withAttemptTransaction(attemptLock, async client => {
+            await bindPaymentAttempt(client, order, verified);
             const { rows: locked } = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [order.id]);
             const current = locked[0];
             if (current.mercado_pago_order_id && current.mercado_pago_order_id !== result.mp_order_id) {
@@ -517,6 +521,7 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
             assertSupportedInstallments(plans, requestedInstallments, order.total, { paymentMethodId: payment_method_id, issuerId: issuer_id });
         }
         const payer = payerFromOrder(order, req.user);
+        const paymentContext = paymentAttemptContext();
         attemptLock = await pool.connect();
         await attemptLock.query(`SELECT pg_advisory_lock(${orderAttemptLockSql})`, [order.id]);
         if (managedConfig && paymentType === 'credit_card') {
@@ -548,6 +553,7 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
         }
 
         const idempotencyKey = `card-${order.id}`;
+        await attemptLock.query("UPDATE orders SET snapshot = jsonb_set(COALESCE(snapshot,'{}'::jsonb),'{payment_context}',$2::jsonb) WHERE id = $1", [order.id, JSON.stringify(paymentContext)]);
         attemptReserved = true;
         const result = await mp.createCardPayment({
             orderId: order.id,
@@ -571,6 +577,7 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
         }
         const internalStatus = mp.mapPaymentStatus(verified.mp_status, verified.mp_status_detail);
         const persisted = await withAttemptTransaction(attemptLock, async client => {
+            await bindPaymentAttempt(client, order, verified);
             const applied = internalStatus === 'approved'
                 ? await applyVerifiedOrderInTransaction(client, order.id, verified, 'card_response')
                 : await recordVerifiedNonApprovedOrderInTransaction(client, order.id, verified, 'card_response');

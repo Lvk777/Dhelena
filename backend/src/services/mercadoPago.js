@@ -8,11 +8,14 @@ import crypto from 'crypto';
 import { normalizePayer, omitEmptyOptional } from '../lib/paymentPayer.js';
 import { safeApplicationId } from '../lib/mercadoPagoWebhookLog.js';
 import { safeChallengeUrl } from '../lib/paymentChallenge.js';
+import { activePaymentContext } from '../lib/mercadoPagoContext.js';
 
 const BASE_URL = 'https://api.mercadopago.com';
 
 function getAccessToken() {
-    const token = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+    const context = activePaymentContext();
+    if (getMercadoPagoMode() === 'production' && !context) throw Object.assign(new Error('Contexto produtivo incompleto'), { status: 503 });
+    const token = context?.accessToken || process.env.MERCADO_PAGO_ACCESS_TOKEN;
     if (!token) throw Object.assign(new Error('MERCADO_PAGO_ACCESS_TOKEN não configurado'), { status: 500 });
     return token;
 }
@@ -23,11 +26,12 @@ export function getMercadoPagoMode() {
 }
 
 export function getMercadoPagoReadiness() {
+    const context = activePaymentContext();
     return {
         mode: getMercadoPagoMode(),
-        configured: !!process.env.MERCADO_PAGO_ACCESS_TOKEN && getMercadoPagoMode() !== 'INDETERMINADO',
+        configured: !!context,
         public_key_configured: !!process.env.MERCADO_PAGO_PUBLIC_KEY,
-        webhook_configured: !!process.env.MERCADO_PAGO_WEBHOOK_SECRET,
+        webhook_configured: !!context,
     };
 }
 
@@ -36,9 +40,10 @@ export function getMercadoPagoEnvironment() {
 }
 
 async function mpFetch(path, options = {}) {
-    const token = getAccessToken();
+    const { credentialContext, ...requestOptions } = options;
+    const token = credentialContext?.accessToken || getAccessToken();
     const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
-    const { idempotencyKey, onResponse, ...fetchOptions } = options;
+    const { idempotencyKey, onResponse, ...fetchOptions } = requestOptions;
     const method = (fetchOptions.method || 'GET').toUpperCase();
     const idempotencyHeaders = method === 'GET' ? {} : { 'X-Idempotency-Key': idempotencyKey || crypto.randomUUID() };
     const res = await fetch(url, {
@@ -63,7 +68,7 @@ async function mpFetch(path, options = {}) {
 // ─── Test connection ──────────────────────────────────────────
 export async function testConnection() {
     try {
-        const token = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+        const token = getAccessToken();
         if (!token) return { connected: false, error: 'Access Token não configurado' };
 
         const data = await mpFetch('/users/me');
@@ -367,6 +372,9 @@ function orderResource(data) {
         transaction_currency_id: payment.currency_id || payment.currency || null,
         external_reference: data.external_reference,
         application_id: safeApplicationId(data.integration_data?.application_id),
+        user_id: safeApplicationId(data.user_id),
+        resource_type: data.type || null,
+        live_mode: typeof data.live_mode === 'boolean' ? data.live_mode : null,
         challenge_url: safeChallengeUrl(payment.payment_method?.transaction_security?.url),
         payment_method_type: payment.payment_method?.type || null,
         payment_method_id: payment.payment_method?.id || null,
@@ -376,9 +384,19 @@ function orderResource(data) {
     };
 }
 
-export async function getOrderStatus(mpOrderId) {
-    const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}`);
+export async function getOrderStatus(mpOrderId, credentialContext) {
+    const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}`, { credentialContext });
     return orderResource(data);
+}
+
+// Orders API sandbox uses a test seller's APP_USR token, not a TEST token.
+// The official seller identity is independent of unsigned notification live_mode.
+export async function getWebhookCredentialIdentity(credentialContext) {
+    const data = await mpFetch('/users/me', { credentialContext, signal: AbortSignal.timeout(10000) });
+    if (!safeApplicationId(data.id) || !Array.isArray(data.tags)) {
+        throw Object.assign(new Error('Identidade do ambiente não comprovada'), { code: 'credential_identity_unverified' });
+    }
+    return { userId: String(data.id), mode: data.tags.includes('test_user') ? 'test' : 'production' };
 }
 
 // ─── Validate webhook signature ───────────────────────────────
@@ -443,10 +461,11 @@ export function validateWebhookSignature(req) {
 }
 
 // After-sales uses Orders API only. Return a limited shape without payer or credentials.
-export async function getRefundableOrder(mpOrderId) {
-    const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}`);
+export async function getRefundableOrder(mpOrderId, credentialContext) {
+    const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}`, { credentialContext });
     const payments = data.transactions?.payments || [];
     return {
+        provider_resource: orderResource(data),
         id: data.id,
         external_reference: data.external_reference,
         total_amount: data.total_amount,
