@@ -12,10 +12,9 @@ export default function StoreTab({ data, onChange }) {
             <AdminFormSection title="Barra superior" icon={ShoppingBag}>
                 <AdminTextarea label="Texto da barra superior" value={data.top_bar_text} onChange={(v) => set("top_bar_text", v)} rows={2} full description="Aparece no topo da loja pública; confirme as condições comerciais antes de publicar" placeholder="Mensagem aprovada para a barra superior" />
             </AdminFormSection>
-            <AdminFormSection title="Frete e parcelamento">
+            <AdminFormSection title="Frete">
                 <p className="text-sm text-muted-foreground">Frete grátis a partir de R$ 499 após descontos. Configuração aplicada no servidor.</p>
-                <AdminInput label="Quantidade máxima de parcelas" type="number" value={data.max_installments} onChange={(v) => set("max_installments", parseInt(v) || 1)} />
-                <AdminInput label="Parcelas sem juros" type="number" value={data.interest_free_installments} onChange={(v) => set("interest_free_installments", parseInt(v) || 0)} description="Número de parcelas sem juros no cartão" />
+                <p className="text-sm">Parcelamento e juros são administrados em Configurações → Pagamentos → Parcelamento e Juros.</p>
                 <div />
             </AdminFormSection>
             <AdminFormSection title="Controle de estoque">

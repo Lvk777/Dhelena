@@ -47,7 +47,7 @@ export function classifyCardBrickError(error) {
 
 // Cleanup also covers controllers resolving after timeout/navigation/StrictMode.
 export function mountCardBrick({ publicKey, amount, isDebit, maxInstallments, containerId,
-    onReady, onError, onSubmit, onIssue = (_issue) => {}, loadSdk = loadMercadoPagoSdk, timeoutMs = 20000 }) {
+    onReady, onError, onSubmit, onBinChange = (_bin) => {}, onIssue = (_issue) => {}, loadSdk = loadMercadoPagoSdk, timeoutMs = 20000 }) {
     let disposed = false;
     let ready = false;
     let controller;
@@ -73,10 +73,10 @@ export function mountCardBrick({ publicKey, amount, isDebit, maxInstallments, co
             initialization: { amount: Number(amount) },
             customization: { paymentMethods: {
                 types: { excluded: isDebit ? ['credit_card', 'prepaid_card'] : ['debit_card', 'prepaid_card'] },
-                minInstallments: 1, maxInstallments: isDebit ? 1 : Math.min(6, Math.max(1, maxInstallments || 1)),
+                minInstallments: 1, maxInstallments: isDebit ? 1 : Math.min(12, Math.max(1, maxInstallments || 1)),
             }, visual: { style: { theme: 'default' } } },
             callbacks: { onReady: () => { if (!disposed && !ready) { ready = true; clearTimeout(timer); onReady(); } },
-                onError: handleError, onSubmit: (form, additional) => {
+                onError: handleError, onBinChange: bin => { if (!disposed) onBinChange(bin); }, onSubmit: (form, additional) => {
                     if (disposed) return Promise.reject(new Error('Formulário encerrado.'));
                     return onSubmit(form, additional);
                 } },

@@ -97,9 +97,10 @@ export async function getPaymentMethods() {
 
 export async function getInstallmentPlans({ bin, amount, paymentMethodId, issuerId }) {
     if (!/^\d{6,8}$/.test(String(bin || ''))) throw Object.assign(new Error('Identificação do cartão necessária para validar parcelas.'), { status: 400 });
-    const params = new URLSearchParams({ bin: String(bin), amount: Number(amount).toFixed(2), payment_method_id: paymentMethodId });
+    const params = new URLSearchParams({ bin: String(bin), amount: Number(amount).toFixed(2) });
+    if (paymentMethodId) params.set('payment_method_id', paymentMethodId);
     if (issuerId) params.set('issuer.id', String(issuerId));
-    const plans = await mpFetch(`/v1/payment_methods/installments?${params}`);
+    const plans = await mpFetch(`/v1/payment_methods/installments?${params}`, { signal: AbortSignal.timeout(10000) });
     if (!Array.isArray(plans)) throw Object.assign(new Error('Parcelamento indisponível.'), { status: 503 });
     return plans;
 }
@@ -368,6 +369,10 @@ function orderResource(data) {
         application_id: safeApplicationId(data.integration_data?.application_id),
         challenge_url: safeChallengeUrl(payment.payment_method?.transaction_security?.url),
         payment_method_type: payment.payment_method?.type || null,
+        payment_method_id: payment.payment_method?.id || null,
+        payment_installments: payment.payment_method?.installments ?? null,
+        payment_installment_amount: payment.payment_method?.installment_amount ?? null,
+        payment_issuer_id: payment.payment_method?.issuer_id ?? null,
     };
 }
 

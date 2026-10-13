@@ -1,3 +1,4 @@
+import { strictCents } from './installmentPolicy.js';
 const EXPECTED_CURRENCY = 'BRL';
 
 function mismatch(field) {
@@ -25,6 +26,14 @@ export function verifyPaymentResourceForOrder(order, resource) {
     if (resource.currency_id !== EXPECTED_CURRENCY) throw mismatch('currency');
     if (resource.transaction_currency_id && resource.transaction_currency_id !== EXPECTED_CURRENCY) throw mismatch('transaction_currency');
     if (resource.payment_count !== 1) throw mismatch('payment_count');
+    const offer = order.snapshot?.card_installment_offer;
+    if (offer) {
+        if (resource.payment_method_type !== 'credit_card' || resource.payment_method_id !== offer.payment_method_id) throw mismatch('card_method');
+        if (Number(resource.payment_installments) !== offer.installments) throw mismatch('installments');
+        if (strictCents(resource.payment_installment_amount) !== strictCents(offer.installment_amount)) throw mismatch('installment_amount');
+        if (resource.payment_issuer_id != null && String(resource.payment_issuer_id) !== offer.issuer_id) throw mismatch('issuer');
+        if (strictCents(offer.original_amount) !== expected) throw mismatch('offer_original_amount');
+    }
     if (!resource.mp_payment_id || (order.mercado_pago_payment_id && resource.mp_payment_id !== order.mercado_pago_payment_id)) throw mismatch('mp_payment_id');
     if (!resource.order_status || !resource.transaction_status) throw mismatch('status');
     if (resource.mp_status !== resource.transaction_status || resource.mp_status_detail !== resource.transaction_status_detail) throw mismatch('transaction_status');

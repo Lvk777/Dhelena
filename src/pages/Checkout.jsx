@@ -275,6 +275,7 @@ export default function Checkout() {
                     publicKey={paymentMethods?.public_key}
                     amount={order.total}
                     maxInstallments={isDebit ? 1 : (paymentMethods?.max_installments || 1)}
+                    installmentPolicyManaged={paymentMethods?.installment_policy_managed}
                     isDebit={isDebit}
                     onApproved={onPaymentApproved}
                     onRejected={() => {}}

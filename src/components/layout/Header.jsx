@@ -4,6 +4,7 @@ import { Search, Heart, User, ShoppingBag, Menu, X, ShieldCheck } from "lucide-r
 import { useStore } from "@/context/StoreContext";
 import { useAuth } from "@/lib/AuthContext";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
+import { base44 } from '@/api/base44Client';
 
 const NAV = [
     { label: "Início", to: "/" },
@@ -21,6 +22,7 @@ export default function Header() {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
     const [q, setQ] = useState("");
+    const [installmentMessage, setInstallmentMessage] = useState('');
     const { cartCount, favorites, setCartOpen } = useStore();
     const { isAuthenticated, user } = useAuth();
     const { settings } = usePublicSettings();
@@ -35,6 +37,10 @@ export default function Header() {
     }, []);
 
     useEffect(() => { setMobileOpen(false); }, [location.pathname, location.search]);
+    useEffect(() => { let active = true;
+        base44.functions.invoke('getPublicInstallmentPolicy').then(p => { if (active) setInstallmentMessage(p.commercial_message || ''); }).catch(() => {});
+        return () => { active = false; };
+    }, []);
 
     const submitSearch = (e) => {
         e.preventDefault();
@@ -50,6 +56,7 @@ export default function Header() {
             {settings.store.top_bar_text && <div className="bg-[hsl(var(--rose))] text-white text-[10px] tracking-[0.3em] uppercase text-center py-2 px-4">
                 {settings.store.top_bar_text}
             </div>}
+            {installmentMessage && <p className="text-xs text-center px-4 py-2 bg-[hsl(var(--bone))]">{installmentMessage}</p>}
 
             <header className={`sticky top-0 z-50 transition-all duration-500 ${scrolled ? "bg-background/95 backdrop-blur-md shadow-[0_1px_0_0_rgba(0,0,0,0.04)]" : "bg-background"}`}>
                 <div className="container-boutique">

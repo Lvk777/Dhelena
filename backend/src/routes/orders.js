@@ -21,8 +21,12 @@ import { getPixCapability } from '../lib/pixAvailability.js';
 import { payerFromOrder } from '../lib/paymentPayer.js';
 import { orderAttemptLockSql, withAttemptTransaction } from '../lib/orderAttemptLock.js';
 import { logSafeError } from '../lib/safeErrorLog.js';
+import installmentRoutes from './installments.js';
+import { readInstallmentSettings, publicInstallmentPolicy } from '../lib/installmentSettings.js';
+import { effectiveInstallmentPolicy, installmentOffers, confirmInstallmentOffer, installmentVersion, installmentSettingsLock, installmentError } from '../lib/installmentPolicy.js';
 
 const router = Router();
+router.use(installmentRoutes);
 const publicError = error => Number.isInteger(error?.status) && error.status >= 400 && error.status < 500
     ? (error.message || 'Requisição inválida') : 'Operação indisponível';
 const COUPON_MUTABLE_FIELDS = new Set([
@@ -262,6 +266,7 @@ router.get('/payments/methods', auth, async (req, res) => {
         const readiness = mp.getMercadoPagoReadiness();
         const pix = getPixCapability(payConfig, readiness);
         const cardConfigured = readiness.configured && readiness.public_key_configured;
+        const installmentConfig = await readInstallmentSettings();
 
         res.json({
             available: { ...types, pix: pix.available },
@@ -275,7 +280,7 @@ router.get('/payments/methods', auth, async (req, res) => {
                 boleto: false,
             },
             methods,
-            ...creditInstallmentPolicy(payConfig),
+            ...(installmentConfig ? publicInstallmentPolicy(installmentConfig) : creditInstallmentPolicy(payConfig)),
             public_key: process.env.MERCADO_PAGO_PUBLIC_KEY || null,
             environment: mp.getMercadoPagoEnvironment(),
         });
@@ -450,6 +455,7 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
 // POST /api/orders/:id/payment/card — create card payment
 router.post('/orders/:id/payment/card', auth, async (req, res) => {
     let attemptLock = null;
+    let attemptReserved = false, financialExists = false;
     try {
         const { card_token, installments, payment_method_id, issuer_id, payment_type_id, bin } = req.body;
 
@@ -469,6 +475,7 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
         if (rows.length === 0) return res.status(404).json({ error: 'Pedido não encontrado' });
 
         const order = rows[0];
+        financialExists = !!order.mercado_pago_order_id || !!order.payment_attempt_started_at;
         if (!['credito', 'debito'].includes(order.payment_method)) return res.status(409).json({ error: 'Este pedido não aceita pagamento com cartão' });
         if (order.status === 'cancelado') return res.status(409).json({ error: 'Pedido cancelado' });
 
@@ -493,10 +500,16 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
         const methods = await mp.getPaymentMethods();
         const { rows: paymentSettings } = await pool.query("SELECT value FROM settings WHERE key = 'payments'");
         const paymentConfig = paymentSettings[0]?.value || {};
+        const managedConfig = await readInstallmentSettings();
+        const managedPolicy = managedConfig ? effectiveInstallmentPolicy(managedConfig, mp.getMercadoPagoEnvironment()) : null;
         const { paymentType, installments: requestedInstallments } = validateCardPaymentChoice(
-            order.payment_method, methods, payment_method_id, installments, paymentConfig, order.total);
+            order.payment_method, methods, payment_method_id, installments, { ...paymentConfig, ...(managedPolicy ? { max_installments: managedPolicy.max_installments } : {}) }, order.total);
         if (payment_type_id !== paymentType) return res.status(400).json({ error: 'O cartão informado não corresponde à forma de pagamento escolhida.' });
-        if (paymentType === 'credit_card' && requestedInstallments > 1) {
+        let confirmedOffer = null;
+        if (paymentType === 'credit_card' && managedConfig && requestedInstallments > 1) {
+            const plans = await mp.getInstallmentPlans({ bin, amount: order.total, paymentMethodId: payment_method_id, issuerId: issuer_id });
+            confirmedOffer = confirmInstallmentOffer(installmentOffers(plans, managedConfig, order.total), req.body.expected_offer, payment_method_id, issuer_id, requestedInstallments);
+        } else if (paymentType === 'credit_card' && requestedInstallments > 1) {
             if (requestedInstallments > creditInstallmentPolicy(paymentConfig).max_installments) {
                 return res.status(409).json({ error: 'Parcelamento sem juros ainda não aprovado para esta loja.' });
             }
@@ -506,15 +519,36 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
         const payer = payerFromOrder(order, req.user);
         attemptLock = await pool.connect();
         await attemptLock.query(`SELECT pg_advisory_lock(${orderAttemptLockSql})`, [order.id]);
-        const { rows: reserved } = await attemptLock.query(
-            `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'card'
-             WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
-               AND mercado_pago_order_id IS NULL AND payment_attempt_started_at IS NULL
-               AND payment_method = $2 AND total = $3 RETURNING id`,
-            [order.id, order.payment_method, order.total]);
-        if (!reserved.length) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
+        if (managedConfig && paymentType === 'credit_card') {
+            // Serialize policy changes with reservation; persist the immutable provider offer before any financial request.
+            const reserved = await withAttemptTransaction(attemptLock, async client => {
+                await client.query(`SELECT pg_advisory_xact_lock(${installmentSettingsLock})`);
+                const current = await readInstallmentSettings(client);
+                if (!current || installmentVersion(current) !== installmentVersion(managedConfig)
+                    || (requestedInstallments > 1 && effectiveInstallmentPolicy(current, mp.getMercadoPagoEnvironment()).max_installments < requestedInstallments)) throw installmentError('As condições de parcelamento mudaram. Consulte novamente antes de confirmar.');
+                const { rows: currentMethods } = await client.query("SELECT value FROM settings WHERE key = 'payments' FOR SHARE");
+                validateCardPaymentChoice(order.payment_method, methods, payment_method_id, requestedInstallments,
+                    { ...(currentMethods[0]?.value || {}), max_installments: effectiveInstallmentPolicy(current, mp.getMercadoPagoEnvironment()).max_installments }, order.total);
+                return client.query(`UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'card',
+                    snapshot = jsonb_set(COALESCE(snapshot,'{}'::jsonb),'{card_installment_offer}',$4::jsonb)
+                    WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
+                    AND mercado_pago_order_id IS NULL AND payment_attempt_started_at IS NULL
+                    AND payment_method = $2 AND total = $3 RETURNING id`, [order.id, order.payment_method, order.total, JSON.stringify(confirmedOffer)]);
+            });
+            if (!reserved.rows.length) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
+            order.snapshot = { ...order.snapshot, card_installment_offer: confirmedOffer };
+        } else {
+            const { rows: reserved } = await attemptLock.query(
+                `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'card'
+                 WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
+                   AND mercado_pago_order_id IS NULL AND payment_attempt_started_at IS NULL
+                   AND payment_method = $2 AND total = $3 RETURNING id`,
+                [order.id, order.payment_method, order.total]);
+            if (!reserved.length) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
+        }
 
         const idempotencyKey = `card-${order.id}`;
+        attemptReserved = true;
         const result = await mp.createCardPayment({
             orderId: order.id,
             orderNumber: order.order_number,
@@ -556,7 +590,8 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
         });
     } catch (err) {
         console.error('[Payment Card] Provider status:', err.status || 500);
-        res.status(err.status || 500).json({ error: 'Não foi possível confirmar o pagamento; solicite conciliação' });
+        res.status(err.status || 500).json({ attempt_started: attemptReserved || financialExists,
+            error: Number.isInteger(err.status) && err.status >= 400 && err.status < 500 && !err.mpError ? err.message : 'Não foi possível confirmar o pagamento; solicite conciliação' });
     } finally {
         if (attemptLock) {
             let unlockError;

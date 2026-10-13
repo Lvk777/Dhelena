@@ -298,6 +298,18 @@ const functions = {
             }
             case 'getPaymentMethods':
                 return apiFetch('/payments/methods');
+            case 'getInstallmentSettings':
+                return apiFetch('/admin/payments/installments');
+            case 'saveInstallmentSettings':
+                return apiFetch('/admin/payments/installments', { method: 'PATCH', body: JSON.stringify(args) });
+            case 'simulateInstallments':
+                return apiFetch('/admin/payments/installments/simulate', { method: 'POST', body: JSON.stringify(args) });
+            case 'approveInstallments':
+                return apiFetch('/admin/payments/installments/approve', { method: 'POST', body: JSON.stringify(args) });
+            case 'getInstallmentOffers':
+                return apiFetch(`/orders/${args.orderId}/payment/installments`, { method: 'POST', body: JSON.stringify({ bin: args.bin }) });
+            case 'getPublicInstallmentPolicy':
+                return apiFetch('/payments/installment-policy');
             case 'getOrderEvents':
                 return apiFetch(`/orders/${args.orderId}/events`);
             case 'getAfterSales':

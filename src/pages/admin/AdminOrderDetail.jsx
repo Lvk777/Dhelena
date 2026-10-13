@@ -6,6 +6,7 @@ import { formatBRL, ORDER_STATUS, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATU
 import OrderTimeline from "@/components/checkout/OrderTimeline";
 import AdminAfterSales from "@/components/admin/AdminAfterSales";
 import PaymentReconciliationPreview from "@/components/admin/PaymentReconciliationPreview";
+import CardFinancingSummary from '@/components/checkout/CardFinancingSummary';
 import { orderDeliveryEstimateLabel } from '@/lib/deliveryEstimate';
 
 const STATUS_OPTIONS = Object.entries(ORDER_STATUS)
@@ -147,6 +148,7 @@ export default function AdminOrderDetail() {
                                 <span className={PAYMENT_STATUS_COLORS[order.payment_status] || ""}>{PAYMENT_STATUS_PT[order.payment_status] || order.payment_status}</span>
                             } />
                             <InfoRow label="Valor" value={formatBRL(Number(order.total))} />
+                            <CardFinancingSummary order={order} />
                             <InfoRow label="Parcelas" value={order.installments ? `${order.installments}x` : "—"} />
                             <InfoRow label="ID Mercado Pago" value={order.mercado_pago_order_id || order.mercado_pago_payment_id || "—"} />
                             <InfoRow label="Data pagamento" value={order.paid_at ? new Date(order.paid_at).toLocaleString("pt-BR") : "—"} />

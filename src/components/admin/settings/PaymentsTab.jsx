@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { CreditCard, Loader2, Check, X, QrCode, Banknote } from "lucide-react";
 import AdminFormSection from "@/components/admin/AdminFormSection";
-import AdminInput from "@/components/admin/AdminInput";
 import AdminToggle from "@/components/admin/AdminToggle";
 import { base44 } from "@/api/base44Client";
+import InstallmentsModule from './InstallmentsModule';
 
 export default function PaymentsTab({ data, onChange }) {
     const [testing, setTesting] = useState(false);
@@ -57,11 +57,7 @@ export default function PaymentsTab({ data, onChange }) {
                 </div>
             </AdminFormSection>
 
-            <AdminFormSection title="Parcelamento">
-                <AdminInput label="Número máximo de parcelas" type="number" min={1} max={6} value={data.max_installments} onChange={(v) => set("max_installments", Math.min(6, Math.max(1, parseInt(v) || 1)))} />
-                <AdminInput label="Parcelas sem juros" type="number" value={data.interest_free_installments} onChange={(v) => set("interest_free_installments", parseInt(v) || 0)} />
-                <p className="text-xs text-muted-foreground">Parcelamento exige aprovação comercial no backend e opção sem juros confirmada para o cartão. O cadastro deste valor não ativa a oferta.</p>
-            </AdminFormSection>
+            <InstallmentsModule />
 
             <AdminFormSection title="Métodos de pagamento no checkout" description="Pix usa a configuração da Orders API; cartões usam a lista de métodos do Mercado Pago.">
                 <div className="sm:col-span-2">

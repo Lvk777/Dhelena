@@ -25,7 +25,7 @@ export function validateCardPaymentChoice(orderMethod, methods, paymentMethodId,
         throw invalid('Valor não aceito por este cartão');
     }
     const requestedInstallments = Number(installments ?? 1);
-    const maxInstallments = Math.min(6, Math.max(1, Number(config.max_installments) || 6));
+    const maxInstallments = Math.min(12, Math.max(1, Number(config.max_installments) || 6));
     if (!Number.isInteger(requestedInstallments) || requestedInstallments < 1 || requestedInstallments > maxInstallments) {
         throw invalid('Parcelamento indisponível');
     }

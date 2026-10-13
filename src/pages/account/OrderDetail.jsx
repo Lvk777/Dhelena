@@ -6,6 +6,7 @@ import { formatBRL, ORDER_STATUS, ORDER_TIMELINE, PAYMENT_LABELS, SHIPPING_LABEL
 import OrderTimeline from "@/components/checkout/OrderTimeline";
 import CustomerAfterSales from "@/components/checkout/CustomerAfterSales";
 import OrderPaymentPanel from '@/components/checkout/OrderPaymentPanel';
+import CardFinancingSummary from '@/components/checkout/CardFinancingSummary';
 import { orderDeliveryEstimateLabel, DELIVERY_BUSINESS_DAYS_NOTE } from '@/lib/deliveryEstimate';
 
 export default function OrderDetail() {
@@ -144,7 +145,8 @@ export default function OrderDetail() {
                                 {PAYMENT_STATUS_PT[order.payment_status] || order.payment_status}
                             </span>
                         </p>
-                        {order.installments > 1 && <p className="text-muted-foreground">{order.installments} parcelas · Total {formatBRL(Number(order.total))}</p>}
+                        {!order.snapshot?.card_installment_offer && order.installments > 1 && <p className="text-muted-foreground">{order.installments} parcelas · Total {formatBRL(Number(order.total))}</p>}
+                        <CardFinancingSummary order={order} />
                     </div>
                 </InfoBlock>
                 <InfoBlock title="Entrega">

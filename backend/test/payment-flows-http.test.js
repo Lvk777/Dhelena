@@ -4,6 +4,7 @@ import express from 'express';
 import pg from 'pg';
 import orderRouter from '../src/routes/orders.js';
 import { pool } from '../src/config/db.js';
+import { installmentDefaults, makeInstallmentApproval } from '../src/lib/installmentPolicy.js';
 
 const methods = [{ id: 'visa', name: 'Visa', status: 'active', payment_type_id: 'credit_card' },
     { id: 'debelo', name: 'Elo Débito', status: 'active', payment_type_id: 'debit_card' }];
@@ -24,10 +25,12 @@ async function fixture(t, method, state = 'pending') {
     let financialPosts = 0; let providerState = state; let updateCount = 0; let lockTail = Promise.resolve();
     let createError = null; let providerTotal = '114.95'; let installmentRate = 0; let connectionCount = 0;
     const queries = []; const payloads = [];
+    let managed = null, offeredCosts = null;
     const q = async (sql, args = []) => {
         queries.push(sql);
         if (sql === 'SELECT 1' || ['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql)) return { rows: [] };
         if (sql.includes('FROM orders')) return { rows: args.length < 2 || args[1] === order.user_id ? [structuredClone(order)] : [] };
+        if (sql.includes("key = 'credit_installments'")) return { rows: managed ? [{ value: structuredClone(managed) }] : [] };
         if (sql.includes('FROM settings')) return { rows: [{ value: { pix_enabled: true, card_enabled: true, debit_card_enabled: true, max_installments: 6, interest_free_installments: 6, pix_discount: 5 } }] };
         if (sql.includes('to_regclass')) return { rows: [{ relation: null }] };
         if (sql.startsWith('UPDATE orders SET payment_method')) {
@@ -41,6 +44,7 @@ async function fixture(t, method, state = 'pending') {
                 || (sql.includes('total = $3') && Number(order.total) !== Number(args[2]))
                 || (sql.includes('total = $2') && Number(order.total) !== Number(args[1]))) return { rows: [] };
             order.payment_attempt_started_at = 'reserved'; order.payment_attempt_method = method === 'pix' ? 'pix' : 'card';
+            if (sql.includes('jsonb_set')) order.snapshot.card_installment_offer = JSON.parse(args[3]);
             return { rows: [{ id: order.id }] };
         }
         if (sql.includes("UPDATE orders SET payment_provider = 'mercado_pago'")) {
@@ -63,6 +67,7 @@ async function fixture(t, method, state = 'pending') {
         connectionCount++;
         let releaseLock;
         return { async query(sql, args) {
+            if (sql.includes('credit-installment-settings')) return { rows: [] };
             if (sql.includes('pg_advisory_lock(') || sql.includes('pg_advisory_xact_lock(')) {
                 const previous = lockTail;
                 lockTail = new Promise(resolve => { releaseLock = resolve; });
@@ -81,6 +86,9 @@ async function fixture(t, method, state = 'pending') {
         transactions: { payments: [{ id: 'PAY-MOCK', amount: '114.95', status: providerState === 'approved' ? 'processed' : providerState,
             status_detail: providerState === 'approved' ? 'accredited' : providerState === 'failed' ? 'failed' : 'pending_challenge',
             payment_method: { type: method === 'pix' ? 'bank_transfer' : method === 'debito' ? 'debit_card' : 'credit_card',
+                id: method === 'debito' ? 'debelo' : 'visa', issuer_id: '123',
+                installments: payloads.at(-1)?.transactions.payments[0].payment_method.installments || 1,
+                installment_amount: offeredCosts?.[0]?.installment_amount,
                 qr_code: method === 'pix' ? 'MOCK-QR' : null,
                 transaction_security: providerState === 'action_required' ? { url: 'https://www.mercadopago.com.br/auth/card/validation/pages/mock' } : undefined } }] } });
     global.fetch = async (url, options = {}) => {
@@ -89,9 +97,9 @@ async function fixture(t, method, state = 'pending') {
         if (path === '/v1/payment_methods') return { ok: true, json: async () => methods };
         if (path === '/v1/payment_methods/installments') {
             assert.equal(new URL(url).searchParams.get('amount'), '114.95');
-            assert.equal(new URL(url).searchParams.get('issuer.id'), '123');
+            if (new URL(url).searchParams.has('issuer.id')) assert.equal(new URL(url).searchParams.get('issuer.id'), '123');
             return { ok: true, json: async () => [{ payment_method_id: 'visa', payment_type_id: 'credit_card', issuer: { id: '123' },
-                payer_costs: [{ installments: 6, installment_rate: installmentRate, total_amount: '114.95' }] }] };
+                payer_costs: offeredCosts || [{ installments: 6, installment_rate: installmentRate, total_amount: '114.95' }] }] };
         }
         if (path === '/v1/orders' && options.method === 'POST') {
             financialPosts++; payloads.push(JSON.parse(options.body));
@@ -120,6 +128,8 @@ async function fixture(t, method, state = 'pending') {
     return { order, request, card, queries, payloads, setProviderState: value => { providerState = value; },
         setCreateError: value => { createError = value; }, setProviderTotal: value => { providerTotal = value; },
         setInstallmentRate: value => { installmentRate = value; },
+        setManaged: value => { managed = value ? { ...value, module_version: 1 } : null; },
+        setOfferedCosts: value => { offeredCosts = value; },
         get financialPosts() { return financialPosts; }, get updateCount() { return updateCount; },
         get connectionCount() { return connectionCount; } };
 }
@@ -194,6 +204,45 @@ test('six installments require commercial gate AND official zero-rate plan befor
     f.setInstallmentRate(0);
     assert.equal((await f.request('card', installments)).status, 200);
     assert.equal(f.payloads[0].transactions.payments[0].payment_method.installments, 6); assert.equal(f.financialPosts, 1);
+});
+
+function managedConfig() {
+    const config = { ...installmentDefaults, enabled: true };
+    return { ...config, approval: makeInstallmentApproval(config, 'Teste', 'admin') };
+}
+test('managed 12x with buyer interest is confirmed and frozen once; retry ignores later configuration changes', async t => {
+    const f = await fixture(t, 'credito', 'approved'); f.setManaged(managedConfig());
+    f.setOfferedCosts([{ installments: 12, installment_rate: 20, total_amount: 137.94, installment_amount: 11.50 }]);
+    const preview = await (await f.request('installments', { bin: '54808328' })).json();
+    assert.equal(preview.offers[0].buyer_total, 137.94);
+    const body = { ...f.card, installments: 12, bin: '54808328', expected_offer: preview.offers[0] };
+    const responses = await Promise.all([f.request('card', body), f.request('card', body)]);
+    assert.ok(responses.some(r => r.status === 200)); assert.equal(f.financialPosts, 1);
+    assert.equal(f.payloads[0].total_amount, '114.95'); // Never add provider financing twice.
+    assert.equal(f.order.total, 114.95); assert.equal(f.order.snapshot.card_installment_offer.buyer_total, 137.94);
+    f.setManaged({ ...managedConfig(), enabled: false });
+    assert.equal((await f.request('card', body)).status, 200); assert.equal(f.financialPosts, 1);
+    assert.equal(f.order.snapshot.card_installment_offer.installments, 12);
+    assert.equal(f.queries.some(sql => /UPDATE products|stock_movements|coupon_usages/.test(sql)), false);
+});
+test('managed stale or altered quote never reserves inventory, consumes a coupon or starts a charge', async t => {
+    const f = await fixture(t, 'credito'); f.setManaged(managedConfig());
+    f.setOfferedCosts([{ installments: 12, installment_rate: 20, total_amount: 137.94, installment_amount: 11.50 }]);
+    const preview = await (await f.request('installments', { bin: '54808328' })).json();
+    const body = { ...f.card, installments: 12, bin: '54808328', expected_offer: { ...preview.offers[0], buyer_total: 114.95 } };
+    const rejected = await f.request('card', body); assert.equal(rejected.status, 409);
+    assert.equal((await rejected.json()).attempt_started, false);
+    const connect = pool.connect;
+    t.mock.method(pool, 'connect', async () => { f.setManaged({ ...managedConfig(), min_installment_amount: 20 }); return connect(); });
+    assert.equal((await f.request('card', { ...body, expected_offer: preview.offers[0] })).status, 409);
+    assert.equal(f.financialPosts, 0); assert.equal(f.order.payment_attempt_started_at, undefined);
+    assert.equal(f.order.coupon_code, 'KEEP'); assert.equal(f.order.discount, 5);
+});
+test('managed credit settings never permit Elo Debit installments or alter Pix totals', async t => {
+    const f = await fixture(t, 'debito'); f.setManaged(managedConfig());
+    assert.equal((await f.request('card', { ...f.card, installments: 12 })).status, 400);
+    assert.equal((await f.request('installments', { bin: '54808328' })).status, 409);
+    assert.equal((await f.request('card', f.card)).status, 200); assert.equal(f.payloads[0].total_amount, '114.95');
 });
 
 test('wrong provider amount requires reconciliation and cannot approve or reset the reservation', async t => {
