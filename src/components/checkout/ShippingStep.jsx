@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Truck, Store, Loader2, AlertCircle } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL } from "@/data/products";
+import { deliveryEstimateLabel } from '@/lib/deliveryEstimate';
 
 export default function ShippingStep({ cep, products, quoteContextKey, shippingMethod, shippingQuoteId, shippingCost, onShippingSelect, onQuoteLoading, pickupEnabled, pickupName, pickupTime, pickupAddress, pickupInstructions, freeShipping }) {
     const [loading, setLoading] = useState(false);
@@ -57,7 +58,7 @@ export default function ShippingStep({ cep, products, quoteContextKey, shippingM
                 onClick={() => onShippingSelect({ method: "melhor_envio", cost: Number(opt.price), carrier: opt.company, serviceName: opt.name, deliveryTime: opt.delivery_time, quoteId: opt.id })}
                 className={`w-full flex items-center gap-4 p-5 border text-left min-h-14 ${selected ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))]/5" : "border-border hover:border-foreground/40"}`}>
                 <Truck className="w-5 h-5 text-[hsl(var(--gold))] shrink-0" />
-                <span className="flex-1"><span className="block text-sm font-medium">{opt.company} · {opt.name}</span><span className="block text-xs text-muted-foreground">{opt.delivery_time ? `${opt.delivery_time} dias úteis` : "Prazo não informado"}</span></span>
+                <span className="flex-1"><span className="block text-sm font-medium">{opt.company} · {opt.name}</span><span className="block text-xs text-muted-foreground">{deliveryEstimateLabel(opt)}</span></span>
                 <span className="text-sm font-medium">{freeShipping ? "Grátis" : formatBRL(opt.price)}</span><SelectionDot selected={selected} />
             </button>;
         })}

@@ -38,6 +38,10 @@ export function validateSettingValue(key, value) {
         if (value.whatsapp && !whatsappLink(value.whatsapp)) invalid('WhatsApp inválido.');
         if (value.external_link_origins !== undefined && (!Array.isArray(value.external_link_origins) || value.external_link_origins.length > 20 || value.external_link_origins.some(origin => !httpsOrigin(origin)))) invalid('Informe apenas origens HTTPS autorizadas, sem caminho ou credenciais.');
     }
+    if (key === 'shipping' && value.melhor_envio_extra_days != null
+        && (!Number.isInteger(value.melhor_envio_extra_days) || value.melhor_envio_extra_days < 0 || value.melhor_envio_extra_days > 365)) {
+        invalid('Preparação deve ser um número inteiro de dias úteis entre 0 e 365.');
+    }
     if (key === 'social') {
         if (value.instagram && !instagramLink(value.instagram)) invalid('Instagram inválido.');
         if (value.whatsapp && !whatsappLink(value.whatsapp)) invalid('WhatsApp inválido.');

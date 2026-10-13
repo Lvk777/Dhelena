@@ -14,6 +14,7 @@ import ShippingStep from "@/components/checkout/ShippingStep";
 import PixPaymentScreen from "@/components/checkout/PixPaymentScreen";
 import CardPaymentBrick from "@/components/checkout/CardPaymentBrick";
 import { selectedDelivery, selectedDeliveryCost, shippingContextKey } from "@/lib/shippingSelection";
+import { deliveryEstimateLabel } from '@/lib/deliveryEstimate';
 
 const STEPS = ["Identificação", "Endereço", "Entrega", "Pagamento"];
 
@@ -96,15 +97,15 @@ export default function Checkout() {
     const freeShippingFromCoupon = couponResult?.valid && couponResult.freeShipping;
     const freeShippingThreshold = Number(publicSettings?.shipping?.free_shipping_threshold);
     const freeShippingEnabled = publicSettings?.shipping?.free_shipping_enabled !== false;
-    const pickupEnabled = publicSettings?.shipping?.pickup_enabled;
+    const pickupEnabled = publicSettings?.shipping?.pickup_enabled === true;
     const pickupName = publicSettings?.shipping?.pickup_name;
     const pickupTime = publicSettings?.shipping?.pickup_time;
 
     const hasFreeShipping = freeShippingFromCoupon || (freeShippingEnabled && Number.isFinite(freeShippingThreshold)
         && freeShippingThreshold > 0 && subtotal - couponDiscount >= freeShippingThreshold);
     // Only a selected service can contribute a shipping amount.
-    const currentShipping = selectedDelivery(shipping, shippingKey);
-    const shippingCost = selectedDeliveryCost(shipping, shippingKey, hasFreeShipping);
+    const currentShipping = selectedDelivery(shipping, shippingKey, pickupEnabled);
+    const shippingCost = selectedDeliveryCost(shipping, shippingKey, hasFreeShipping, pickupEnabled);
 
     const total = subtotal - couponDiscount + (shippingCost ?? 0);
     const previewKey = JSON.stringify({ userId: user?.id, request: {
@@ -180,6 +181,7 @@ export default function Checkout() {
             shipping_method: currentShipping?.method,
             shipping_quote_id: currentShipping?.quoteId,
             coupon_code: couponCode || "",
+            expected_delivery_estimate: pricing?.delivery_estimate || null,
             expected_pricing: pricing ? { subtotal: pricing.subtotal, discount: pricing.discount,
                 shipping_cost: pricing.shipping_cost, total: pricing.total } : null,
         });
@@ -211,6 +213,7 @@ export default function Checkout() {
             }
         } catch (e) {
             setOrderError(e.response?.data?.error || e.message || "Erro ao finalizar pedido");
+            setPricingRetry(value => value + 1);
         } finally {
             placingRef.current = false;
             setPlacing(false);
@@ -437,6 +440,7 @@ export default function Checkout() {
                                 <span className="text-muted-foreground">Frete</span>
                                 <span>{currentShipping ? ((pricing?.shipping_cost ?? shippingCost) === 0 ? "Grátis" : formatBRL(pricing?.shipping_cost ?? shippingCost)) : "Selecione a entrega"}</span>
                             </div>
+                            {pricing?.delivery_estimate && <p className="text-xs text-muted-foreground">{deliveryEstimateLabel(pricing)}</p>}
                             <div className="flex justify-between pt-3 border-t border-border text-base font-medium">
                                 <span>{pricing ? "Total do pedido" : paymentMethod ? "Total em conferência" : currentShipping ? "Total estimado" : "Total parcial"}</span><span>{paymentMethod && !pricing ? "—" : formatBRL(pricing?.total ?? total)}</span>
                             </div>

@@ -21,7 +21,8 @@ export default function GeneralTab({ data, onChange }) {
                 <AdminInput label="WhatsApp" value={data.whatsapp} onChange={(v) => set("whatsapp", v)} placeholder="(11) 99999-9999" full />
             </AdminFormSection>
             <AdminFormSection title="Atendimento público">
-                <AdminTextarea label="Endereço público da boutique" value={data.public_address || ''} onChange={v => set('public_address', v)} full rows={3} />
+                <AdminTextarea label="Endereço físico do fornecedor" value={data.public_address || ''} onChange={v => set('public_address', v)} full rows={3} />
+                <p className="sm:col-span-2 text-xs text-muted-foreground">Informe a localização legal confirmada do fornecedor. Este campo não habilita retirada presencial ou visitação e não é preenchido automaticamente com a origem dos envios.</p>
                 <AdminTextarea label="Horários de funcionamento" value={data.business_hours || ''} onChange={v => set('business_hours', v)} full rows={3} />
                 <AdminTextarea label="Origens HTTPS autorizadas para links externos" value={(data.external_link_origins || []).join('\n')} onChange={v => set('external_link_origins', v.split('\n'))} full rows={3} placeholder="https://dominio-autorizado.com" />
             </AdminFormSection>

@@ -8,6 +8,8 @@ import { usePublicSettings } from "@/context/PublicSettingsContext";
 import { COLOR_SWATCHES, formatBRL, stockFor } from "@/data/products";
 import ProductCard from "@/components/ProductCard";
 import { track } from "@/lib/analytics";
+import { deliveryEstimateLabel } from '@/lib/deliveryEstimate';
+import { publishedPolicyText } from '@/lib/policyContent';
 import PositionBanner from "@/components/PositionBanner";
 import useSEO from "@/lib/useSEO";
 import { base44 } from "@/api/base44Client";
@@ -238,7 +240,7 @@ export default function ProductDetail() {
                                 />
                                 <button type="submit" disabled={shippingLoading} className="btn-outline px-6 disabled:opacity-50">{shippingLoading ? "Calculando..." : "Calcular"}</button>
                             </form>
-                            {frete?.options?.map((option) => <p key={option.id} className="text-sm text-muted-foreground mt-3 flex items-center gap-2"><Check className="w-4 h-4 text-[hsl(var(--gold))]" strokeWidth={1.5} /> {option.company} · {option.name} · {isFreeShipping(price * qty) ? "Grátis" : formatBRL(option.price)} · {option.delivery_time} dias úteis</p>)}
+                            {frete?.options?.map((option) => <p key={option.id} className="text-sm text-muted-foreground mt-3 flex items-center gap-2"><Check className="w-4 h-4 text-[hsl(var(--gold))]" strokeWidth={1.5} /> {option.company} · {option.name} · {isFreeShipping(price * qty) ? "Grátis" : formatBRL(option.price)} · {deliveryEstimateLabel(option)}</p>)}
                             {frete?.erro && <p className="text-sm text-[hsl(var(--rose))] mt-3">{frete.erro}</p>}
                         </div>
                     </div>
@@ -254,7 +256,7 @@ export default function ProductDetail() {
                         {settings.policies?.shipping_policy ? <span className="whitespace-pre-line">{settings.policies.shipping_policy}</span> : <Link to="/politica-de-entrega" className="underline">Consulte as condições de entrega. Opções e prazos são confirmados pela cotação para seu CEP.</Link>}
                     </Accordion>
                     <Accordion id="trocas" title="Trocas e devoluções" open={openAcc} setOpen={setOpenAcc}>
-                        {settings.policies?.return_policy ? <span className="whitespace-pre-line">{settings.policies.return_policy}</span> : <Link to="/trocas-e-devolucoes" className="underline">Consulte a política de trocas e devoluções.</Link>}
+                        {publishedPolicyText(settings.policies?.return_policy) ? <span className="whitespace-pre-line">{publishedPolicyText(settings.policies.return_policy)}</span> : <Link to="/trocas-e-devolucoes" className="underline">Consulte a política de trocas e devoluções.</Link>}
                     </Accordion>
                 </div>
 

@@ -1,4 +1,5 @@
 import { pool } from '../config/db.js';
+import { withDeliveryEstimate } from './deliveryEstimate.js';
 import { validateCoupon } from '../services.js';
 import { checkoutCents, checkoutDiscount } from './checkoutDiscount.js';
 import { resolveCatalogLine, calculateCheckoutShippingCost, calculateServerOrderTotal } from './orderPricing.js';
@@ -43,6 +44,7 @@ export async function previewCheckout(body, userId = null, { db = pool, quoteShi
     const pricing = checkoutDiscount({ subtotal, lines, couponCode: coupon_code, couponDiscount: coupon?.discount || 0,
         promotions, paymentMethod: payment_method, paymentConfig: settings.payments, env });
     let shippingCost = 0;
+    let deliveryEstimate = null;
     if (shipping_method === 'retirada') {
         if (settings.shipping?.pickup_enabled !== true) throw invalid('Retirada indisponível');
     } else {
@@ -53,12 +55,13 @@ export async function previewCheckout(body, userId = null, { db = pool, quoteShi
         if (destination.length !== 8) throw invalid('CEP de entrega inválido');
         const options = await quoteShipping({ fromPostalCode: origin, toPostalCode: destination,
             products: buildShippingPackages(lines), totalValue: subtotal - pricing.discount });
-        const quote = selectShippingQuote(options, shipping_quote_id);
+        const quote = withDeliveryEstimate(selectShippingQuote(options, shipping_quote_id), settings.shipping, env);
+        deliveryEstimate = quote.delivery_estimate;
         shippingCost = calculateCheckoutShippingCost(quote.price, subtotal, pricing.discount,
             settings.shipping.free_shipping_enabled, settings.shipping.free_shipping_threshold);
     }
     return { subtotal, discount: pricing.discount, discount_breakdown: pricing.discount_breakdown,
         pix_discount_reason: pricing.pix_discount_reason, pix_discount_percentage: pricing.pix_discount_percentage,
-        shipping_cost: shippingCost, total: calculateServerOrderTotal(subtotal, pricing.discount, shippingCost),
+        shipping_cost: shippingCost, delivery_estimate: deliveryEstimate, total: calculateServerOrderTotal(subtotal, pricing.discount, shippingCost),
         items: lines.map(({ product_id, color_id, size, quantity, unit_price, subtotal }) => ({ product_id, color_id, size, quantity, unit_price, subtotal })) };
 }

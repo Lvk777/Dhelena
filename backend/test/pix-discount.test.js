@@ -73,6 +73,41 @@ test('Pix offer stays off without its explicit operator gate and approved percen
     assert.equal(pixDiscountOffer({ pix_discount: 5 }, enabled).enabled, true);
 });
 
+test('disabled pickup rejects preview and final order without consuming stock or coupons', async () => {
+    const f = fixture({ shipping: { pickup_enabled: false } });
+    await assert.rejects(f.preview(request()), { status: 400 });
+    await assert.rejects(f.place(request()), { status: 400 });
+    assert.equal(f.state.products[0].colors[0].stock.M, 3);
+    assert.equal(f.state.orders.length, 0);
+    assert.equal(f.state.movements.length, 0);
+    assert.equal(f.state.usages.length, 0);
+});
+
+test('approved business-day total is identical in checkout preview and final order snapshot', async () => {
+    const f = fixture({ env: { SHIPPING_PREPARATION_ENABLED: 'true' }, shipping: { pickup_enabled: false, melhor_envio_extra_days: 2 } });
+    const body = request({ shipping_method: 'melhor_envio', shipping_quote_id: 1, delivery_time: 1 });
+    const preview = await f.preview(body);
+    const order = await f.place({ ...body, expected_pricing: ack(preview), expected_delivery_estimate: preview.delivery_estimate });
+    assert.equal(preview.delivery_estimate.total_business_days, 5);
+    assert.deepEqual(order.snapshot.delivery_estimate, preview.delivery_estimate);
+    assert.equal(order.snapshot.shipping_delivery_time, 5);
+    assert.equal(order.total, preview.total);
+});
+
+test('a changed delivery promise rolls back the order and allows a fresh preview', async () => {
+    const f = fixture({ env: { SHIPPING_PREPARATION_ENABLED: 'true' }, shipping: { pickup_enabled: false, melhor_envio_extra_days: 2 } });
+    const body = request({ shipping_method: 'melhor_envio', shipping_quote_id: 1 });
+    const preview = await f.preview(body);
+    f.settings.shipping.melhor_envio_extra_days = 3;
+    await assert.rejects(f.place({ ...body, expected_pricing: ack(preview), expected_delivery_estimate: preview.delivery_estimate }), { status: 409 });
+    assert.equal(f.state.orders.length, 0);
+    assert.equal(f.state.products[0].colors[0].stock.M, 3);
+    const refreshed = await f.preview(body);
+    assert.equal(refreshed.delivery_estimate.total_business_days, 6);
+    const order = await f.place({ ...body, expected_pricing: ack(refreshed), expected_delivery_estimate: refreshed.delivery_estimate });
+    assert.equal(order.snapshot.shipping_delivery_time, 6);
+});
+
 test('5% Pix applies only to products and leaves paid freight unchanged', async () => {
     const f = fixture();
     const result = await f.preview(request({ shipping_method: 'melhor_envio', shipping_quote_id: 1, total: 1, shipping_cost: 0 }));

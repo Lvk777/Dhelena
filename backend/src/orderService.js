@@ -1,4 +1,5 @@
 import { pool, withTransaction } from './config/db.js';
+import { withDeliveryEstimate, assertDeliveryEstimateAcknowledged } from './lib/deliveryEstimate.js';
 import { checkoutCents, checkoutDiscount, assertCheckoutPriceAcknowledged } from './lib/checkoutDiscount.js';
 import { validateCoupon, logAudit, sendOrderNotifications } from './services.js';
 import * as melhorEnvio from './services/melhorEnvio.js';
@@ -137,6 +138,7 @@ export async function placeOrder(userId, body, idempotencyKey, {
         let shippingCarrier = null;
         let shippingServiceName = null;
         let shippingDeliveryTime = null;
+        let deliveryEstimate = null;
         let shippingPackages = [];
         const { rows: shipSettings } = await client.query("SELECT value FROM settings WHERE key = 'shipping'");
         const shipConfig = shipSettings[0]?.value || {};
@@ -170,11 +172,13 @@ export async function placeOrder(userId, body, idempotencyKey, {
                 products: packages,
                 totalValue: subtotal - discount,
             });
-            const quote = selectShippingQuote(options, shipping_quote_id);
+            const quote = withDeliveryEstimate(selectShippingQuote(options, shipping_quote_id), shipConfig, env);
             shippingQuoteId = String(quote.id);
             shippingCarrier = quote.company || null;
             shippingServiceName = quote.service || quote.name || null;
-            shippingDeliveryTime = Number.isInteger(Number(quote.delivery_time)) ? Number(quote.delivery_time) : null;
+            deliveryEstimate = quote.delivery_estimate;
+            assertDeliveryEstimateAcknowledged(body.expected_delivery_estimate, deliveryEstimate);
+            shippingDeliveryTime = deliveryEstimate.total_business_days;
             shippingPackages = Array.isArray(quote.packages) ? quote.packages : [];
             shippingCost = calculateCheckoutShippingCost(quote.price, subtotal, discount, freeEnabled, shipConfig.free_shipping_threshold);
         }
@@ -211,6 +215,7 @@ export async function placeOrder(userId, body, idempotencyKey, {
             shipping_carrier: shippingCarrier,
             shipping_service_name: shippingServiceName,
             shipping_delivery_time: shippingDeliveryTime,
+            delivery_estimate: deliveryEstimate,
             shipping_packages: shippingPackages,
             payment_method,
             shipping_address,

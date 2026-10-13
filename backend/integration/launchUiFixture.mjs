@@ -3,6 +3,7 @@
 import express from 'express';
 import { previewCheckout } from '../src/lib/checkoutPreview.js';
 import { validateCoupon } from '../src/services.js';
+import { withDeliveryEstimate } from '../src/lib/deliveryEstimate.js';
 if (process.env.NODE_ENV !== 'test') throw new Error('Synthetic UI fixture requires NODE_ENV=test');
 const app = express();
 app.use((req, res, next) => {
@@ -21,8 +22,8 @@ const item = { id, name: 'Peça sintética', price: 199.90, status: 'published',
     weight: 0.3, package_height: 10, package_width: 15, package_length: 20 };
 const user = { id: '22222222-2222-4222-8222-222222222222', email: 'synthetic@example.invalid',
     full_name: 'Cliente sintética', phone: '11999999999', cpf: '11144477735', role: 'customer' };
-const settings = { general: { store_name: "D'Helenas" }, store: { top_bar_text: 'ENSAIO LOCAL — PAGAMENTOS SIMULADOS' },
-    maintenance: { maintenance_mode: false }, shipping: { pickup_enabled: true, pickup_name: 'Retirada sintética',
+const settings = { general: { store_name: "D'Helenas", email: 'synthetic@example.invalid', phone: '(11) 99999-9999' }, store: { top_bar_text: 'ENSAIO LOCAL — PAGAMENTOS SIMULADOS' },
+    maintenance: { maintenance_mode: false }, shipping: { pickup_enabled: false, pickup_name: 'Retirada sintética',
         free_shipping_enabled: true, free_shipping_threshold: 499, melhor_envio_enabled: true },
     payments: { pix_enabled: true, pix_discount: 5 }, address: { cep: '01001000' }, policies: {}, social: {}, seo: {} };
 const coupon = { id: 'fixture', code: 'FIXTURE', active: true, discount_type: 'percentage', discount_value: 1, min_order_value: 0 };
@@ -34,7 +35,7 @@ const db = { query: async (sql, values = []) => {
     if (sql.includes('FROM look_promotions')) return { rows: [] };
     return { rows: [{ count: 0 }] };
 } };
-const options = { db, env: { PIX_DISCOUNT_ENABLED: 'true' },
+const options = { db, env: { PIX_DISCOUNT_ENABLED: 'true', SHIPPING_PREPARATION_ENABLED: process.env.SHIPPING_PREPARATION_ENABLED },
     quoteShipping: async () => [{ id: 1, price: 20, company: 'Transportadora sintética', name: 'Mock', delivery_time: 3 }] };
 app.get('/health', (req, res) => res.json({ synthetic: true }));
 app.get('/api/settings', (req, res) => res.json(Object.entries(settings)
@@ -48,7 +49,7 @@ app.patch('/api/auth/me', (req, res) => { for (const key of ['full_name', 'phone
 app.post('/api/auth/forgot-password', (req, res) => res.status(503).json({ error: 'Synthetic email outage' }));
 app.get('/api/payments/methods', (req, res) => res.json({ enabled: { pix: true, credit_card: true, debit_card: true },
     max_installments: 6, public_key: null, environment: 'Mock', pix_discount: { enabled: true, percentage: 5 } }));
-app.post('/api/shipping/quote', (req, res) => res.json({ options: [{ id: 1, price: 20, company: 'Transportadora sintética', name: 'Mock', delivery_time: 3 }] }));
+app.post('/api/shipping/quote', (req, res) => res.json({ options: [withDeliveryEstimate({ id: 1, price: 20, company: 'Transportadora sintética', name: 'Mock', delivery_time: 3 }, settings.shipping, options.env)] }));
 app.post('/api/checkout/preview', async (req, res, next) => { try { res.json(await previewCheckout(req.body, user.id, options)); } catch (error) { next(error); } });
 app.post('/api/coupons/validate', async (req, res) => res.json(await validateCoupon(req.body.code, user.id, 199.90, [], { db })));
 app.post('/api/look-promotions/validate', (req, res) => res.json({ promotion: null, discount: 0 }));

@@ -52,12 +52,13 @@ export default function Contact() {
                 <div>
                     <h2 className="font-heading text-3xl tracking-[0.03em]">Fale com a boutique</h2>
                     <div className="gold-rule mt-5" />
+                    {settings.shipping?.pickup_enabled === false && <p className="mt-6 text-sm text-muted-foreground leading-relaxed">A D’Helenas é uma loja exclusivamente on-line. Não oferecemos retirada presencial de pedidos.</p>}
                     <div className="mt-8 space-y-6">
                         {whatsapp && <ContactRow icon={MessageCircle} label="WhatsApp" value="Conversar com a boutique" link={whatsapp} />}
                         {phone && <ContactRow icon={Phone} label="Telefone" value={phone} link={`tel:${phone.replace(/[^+\d]/g, '')}`} />}
                         {email && <ContactRow icon={Mail} label="E-mail" value={email} link={`mailto:${encodeURIComponent(email)}`} />}
                         {instagram && <ContactRow icon={Instagram} label="Instagram" value="Instagram da boutique" link={instagram} />}
-                        {general.public_address && <ContactRow icon={MapPin} label="Boutique" value={general.public_address} />}
+                        {general.public_address && <ContactRow icon={MapPin} label="Endereço do fornecedor" value={general.public_address} />}
                     </div>
                     {general.business_hours && <div className="mt-10 p-6 border border-border bg-[hsl(var(--bone))]">
                         <p className="text-[11px] uppercase tracking-[0.22em] text-foreground mb-2">Horário de atendimento</p>

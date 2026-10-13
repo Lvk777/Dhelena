@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { withDeliveryEstimate } from '../lib/deliveryEstimate.js';
 import { previewCheckout } from '../lib/checkoutPreview.js';
 import { pixDiscountOffer } from '../lib/checkoutDiscount.js';
 import { pool, withTransaction } from '../config/db.js';
@@ -691,7 +692,7 @@ router.post('/shipping/quote', async (req, res) => {
             totalValue,
         });
 
-        res.json({ options });
+        res.json({ options: options.map(option => withDeliveryEstimate(option, shipConfig)) });
     } catch (err) {
         logSafeError('shipping_quote_failed', err);
         res.status(err.status || 500).json({ error: publicError(err) });
