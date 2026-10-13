@@ -57,6 +57,22 @@ test('supported credit plans must be interest-free and exactly match the server 
     assert.throws(() => assertSupportedInstallments([{ payer_costs: [{ installments: 6, installment_rate: 10, total_amount: '214.85' }] }], 6, 214.85));
 });
 
+test('installment lookup must match both card brand and issuer, with an explicit zero rate', () => {
+    const choice = { paymentMethodId: 'master', issuerId: '12749' };
+    const plan = { payment_method_id: 'master', payment_type_id: 'credit_card', issuer: { id: '12749' },
+        payer_costs: [{ installments: 6, installment_rate: 0, total_amount: 50 }] };
+    assert.doesNotThrow(() => assertSupportedInstallments([plan], 6, 50, choice));
+    for (const incompatible of [{ ...plan, payment_method_id: 'visa' }, { ...plan, issuer: { id: 'other' } },
+        { ...plan, payment_type_id: 'debit_card' }, { ...plan, issuer: undefined }]) {
+        assert.throws(() => assertSupportedInstallments([incompatible], 6, 50, choice), { status: 409 });
+    }
+    for (const rate of [null, undefined, '', 14.32]) {
+        assert.throws(() => assertSupportedInstallments([{ ...plan, payer_costs: [{ installments: 6, installment_rate: rate, total_amount: 50 }] }], 6, 50, choice), { status: 409 });
+    }
+    // Actual TEST observation: R$50 turns into R$57.16 for 6x, so it is not zero-interest.
+    assert.throws(() => assertSupportedInstallments([{ ...plan, payer_costs: [{ installments: 6, installment_rate: 14.32, total_amount: 57.16 }] }], 6, 50, choice), { status: 409 });
+});
+
 test('public storefront does not promise the CMS installment text before commercial activation', t => {
     const previous = process.env.CREDIT_INSTALLMENTS_APPROVED;
     delete process.env.CREDIT_INSTALLMENTS_APPROVED;

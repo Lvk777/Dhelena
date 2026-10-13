@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mountCardBrick, loadMercadoPagoSdk, safeChallengeUrl } from '../../src/lib/cardBrick.js';
+import { mountCardBrick, loadMercadoPagoSdk, safeChallengeUrl, classifyCardBrickError } from '../../src/lib/cardBrick.js';
 import { safeChallengeUrl as backendChallenge } from '../src/lib/paymentChallenge.js';
 
 test('correct cardPayment Brick mounts for credit and debit with distinct restrictions and unique containers', async () => {
@@ -74,4 +74,76 @@ test('challenge iframe accepts only the official Brazilian HTTPS authentication 
     }
     const official = 'https://www.mercadopago.com.br/auth/card/validation/pages/mock';
     assert.equal(backendChallenge(official), safeChallengeUrl(official));
+});
+
+for (const [scenario, cause] of [
+    ['invalid card number', 'missing_payment_information'],
+    ['incomplete card', 'incomplete_fields'],
+    ['unsupported BIN', 'no_payment_method_for_provided_bin'],
+    ['excluded brand/type', 'payment_method_not_in_allowed_types'],
+    ['invalid expiry', 'incomplete_fields'],
+    ['invalid CVV', 'incomplete_fields'],
+]) test(`${scenario}: SDK validation keeps the controller, container and correction path alive`, async t => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    let callbacks; let creates = 0; let unmounts = 0; let ready = 0; let submits = 0;
+    const issues = [];
+    const mounted = mountCardBrick({ publicKey: 'mock', amount: 50, maxInstallments: 6, containerId: 'stable-input-container',
+        loadSdk: async () => ({ bricks: () => ({ create: async (_type, id, settings) => {
+            assert.equal(id, 'stable-input-container'); creates++; callbacks = settings.callbacks;
+            callbacks.onReady(); return { unmount: () => unmounts++ };
+        } }) }), onReady: () => ready++, onError: assert.fail, onIssue: issue => issues.push(issue),
+        onSubmit: async () => submits++ });
+    await mounted.started;
+    for (let input = 0; input < 3; input++) callbacks.onError({ type: 'non_critical', cause, message: 'Synthetic invalid field' });
+    callbacks.onReady(); // A repeated ready event cannot reset React or its form.
+    t.mock.timers.tick(60000);
+    assert.equal(creates, 1); assert.equal(unmounts, 0); assert.equal(ready, 1);
+    assert.ok(issues.every(issue => issue.category === 'validation' && issue.critical === false));
+    await callbacks.onSubmit({ token: 'mock-corrected-card' }, { paymentTypeId: 'credit_card' });
+    assert.equal(submits, 1); mounted.dispose(); assert.equal(unmounts, 1);
+});
+
+test('tokenization and communication errors are recoverable without remounting secure fields', async () => {
+    let callbacks; let unmounts = 0; const categories = [];
+    const mounted = mountCardBrick({ amount: 50, containerId: 'stable', onReady: () => {}, onError: assert.fail,
+        onIssue: issue => categories.push(issue.category), onSubmit: async () => {},
+        loadSdk: async () => ({ bricks: () => ({ create: async (_type, _id, settings) => {
+            callbacks = settings.callbacks; callbacks.onReady(); return { unmount: () => unmounts++ };
+        } }) }) });
+    await mounted.started;
+    for (const cause of ['card_token_creation_failed', 'secure_fields_card_token_creation_failed',
+        'get_card_bin_payment_methods_failed', 'get_payment_installments_failed']) callbacks.onError({ type: 'non_critical', cause });
+    assert.deepEqual(categories, ['tokenization', 'tokenization', 'communication', 'communication']);
+    assert.equal(unmounts, 0); mounted.dispose();
+});
+
+for (const cause of ['incorrect_initialization', 'container_not_found', 'fields_setup_failed', 'fields_setup_failed_after_3_tries']) {
+    test(`critical ${cause} closes only the broken form and prevents submission`, async () => {
+        let callbacks; let unmounts = 0; let errors = 0; let submits = 0;
+        const mounted = mountCardBrick({ amount: 50, containerId: 'broken', onReady: () => {}, onError: () => errors++,
+            onSubmit: async () => submits++, loadSdk: async () => ({ bricks: () => ({ create: async (_type, _id, settings) => {
+                callbacks = settings.callbacks; callbacks.onReady(); return { unmount: () => unmounts++ };
+            } }) }) });
+        await mounted.started; callbacks.onError({ type: 'critical', cause });
+        assert.equal(errors, 1); assert.equal(unmounts, 1);
+        await assert.rejects(callbacks.onSubmit({}, {}), /encerrado/); assert.equal(submits, 0);
+    });
+}
+
+test('non-critical pre-ready error does not mark the form ready or suppress real startup timeout', async t => {
+    t.mock.timers.enable({ apis: ['setTimeout'] }); let callbacks; let errors = 0; let ready = 0;
+    const mounted = mountCardBrick({ amount: 50, containerId: 'not-ready', onReady: () => ready++, onError: () => errors++,
+        onSubmit: async () => {}, loadSdk: async () => ({ bricks: () => ({ create: async (_type, _id, settings) => {
+            callbacks = settings.callbacks; return { unmount: () => {} };
+        } }) }) });
+    await mounted.started; callbacks.onError({ type: 'non_critical', cause: 'get_payment_methods_failed' });
+    assert.equal(ready, 0); assert.equal(errors, 0); t.mock.timers.tick(20001); assert.equal(errors, 1);
+    callbacks.onReady(); assert.equal(ready, 0);
+});
+
+test('error classification never retains PAN, CVV, SDK message or raw provider data', () => {
+    const event = { type: 'non_critical', cause: 'missing_payment_information', message: 'synthetic PAN and CVV', raw: { token: 'mock-private' } };
+    assert.deepEqual(classifyCardBrickError(event), { category: 'validation', cause: 'missing_payment_information', critical: false });
+    assert.equal(classifyCardBrickError({ type: 'critical', cause: 'new_fatal_sdk_error' }).critical, true);
+    assert.equal(classifyCardBrickError({ type: 'non_critical', cause: 'new_sdk_error' }).critical, false);
 });

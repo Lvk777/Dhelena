@@ -90,7 +90,8 @@ async function fixture(t, method, state = 'pending') {
         if (path === '/v1/payment_methods/installments') {
             assert.equal(new URL(url).searchParams.get('amount'), '114.95');
             assert.equal(new URL(url).searchParams.get('issuer.id'), '123');
-            return { ok: true, json: async () => [{ payer_costs: [{ installments: 6, installment_rate: installmentRate, total_amount: '114.95' }] }] };
+            return { ok: true, json: async () => [{ payment_method_id: 'visa', payment_type_id: 'credit_card', issuer: { id: '123' },
+                payer_costs: [{ installments: 6, installment_rate: installmentRate, total_amount: '114.95' }] }] };
         }
         if (path === '/v1/orders' && options.method === 'POST') {
             financialPosts++; payloads.push(JSON.parse(options.body));

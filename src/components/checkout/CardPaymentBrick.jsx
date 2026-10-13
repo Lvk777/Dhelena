@@ -10,9 +10,15 @@ export default function CardPaymentBrick({ order, publicKey, amount, maxInstallm
     callbacks.current = { onApproved, onRejected, onAttempt };
     const submitted = useRef(false);
     const [retry, setRetry] = useState(0);
-    const containerId = `mp-card-${instanceId}-${isDebit ? 'debit' : 'credit'}-${retry}`;
+    const payableAmount = Number(amount);
+    const allowedInstallments = isDebit ? 1 : Math.min(6, Math.max(1, Number(maxInstallments) || 1));
+    // Only initialization changes replace this DOM node; field edits/errors do not.
+    const orderIdentity = String(order.id).replace(/[^a-zA-Z0-9_-]/g, '');
+    const containerId = `mp-card-${instanceId}-${orderIdentity}-${isDebit ? 'debit' : 'credit'}-${Math.round(payableAmount * 100)}-${allowedInstallments}-${retry}`;
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [loadError, setLoadError] = useState('');
+    const [sdkNotice, setSdkNotice] = useState('');
     const [processing, setProcessing] = useState(false);
     const [result, setResult] = useState(null);
     const [checking, setChecking] = useState(false);
@@ -29,10 +35,16 @@ export default function CardPaymentBrick({ order, publicKey, amount, maxInstallm
     };
 
     useEffect(() => {
-        setLoading(true); setError('');
-        const mounted = mountCardBrick({ publicKey, amount, maxInstallments, isDebit, containerId,
-            onReady: () => setLoading(false),
-            onError: message => { setError(message); setLoading(false); },
+        setLoading(true); setError(''); setLoadError(''); setSdkNotice('');
+        const mounted = mountCardBrick({ publicKey, amount: payableAmount, maxInstallments: allowedInstallments, isDebit, containerId,
+            onReady: () => { setLoading(false); setLoadError(''); },
+            onError: message => { setLoadError(message); setLoading(false); },
+            onIssue: issue => {
+                // Validation belongs to the SDK's inline field messages.
+                setSdkNotice(issue.category === 'validation' ? '' : issue.category === 'tokenization'
+                    ? 'Não foi possível validar o cartão agora. Confira os campos e tente novamente.'
+                    : 'Não foi possível consultar os dados do cartão agora. Corrija os campos ou tente novamente em instantes.');
+            },
             onSubmit: async (form, additional) => {
                 if (submitted.current) throw new Error('Pagamento já enviado. Consulte o status do pedido.');
                 const expectedType = isDebit ? 'debit_card' : 'credit_card';
@@ -56,7 +68,7 @@ export default function CardPaymentBrick({ order, publicKey, amount, maxInstallm
             },
         });
         return () => mounted.dispose();
-    }, [order.id, publicKey, amount, maxInstallments, isDebit, containerId, retry]);
+    }, [order.id, publicKey, payableAmount, allowedInstallments, isDebit, containerId, retry]);
 
     useEffect(() => {
         if (!result || !['pending', 'in_process'].includes(result.payment_status)) return;
@@ -69,12 +81,12 @@ export default function CardPaymentBrick({ order, publicKey, amount, maxInstallm
             <h2 className="font-heading text-2xl tracking-[0.03em]">Pagamento com cartão de {isDebit ? 'débito' : 'crédito'}</h2>
             <p className="mt-4 text-sm text-muted-foreground">Pedido <strong>{order.order_number}</strong></p>
             <p className="text-2xl font-heading mt-2">{formatBRL(Number(amount))}</p>
-            <p className="text-sm text-muted-foreground">{isDebit ? 'Pagamento à vista, nas modalidades aceitas para este cartão.' : maxInstallments > 1 ? `Até ${maxInstallments}x sem juros, conforme disponibilidade do cartão.` : 'Pagamento à vista. Parcelamento sujeito à aprovação comercial e disponibilidade.'}</p>
+            <p className="text-sm text-muted-foreground">{isDebit ? 'Pagamento à vista, nas modalidades aceitas para este cartão.' : maxInstallments > 1 ? 'Informe o cartão para consultar as opções de parcelas disponíveis.' : 'Pagamento à vista. Parcelamento sujeito à aprovação comercial e disponibilidade.'}</p>
         </div>
-        {error && <div role="alert" className="flex gap-2 p-4 border border-destructive/30 text-destructive text-sm mb-4"><AlertCircle className="w-4 h-4 shrink-0" /><p>{error}</p></div>}
+        {(loadError || error || sdkNotice) && <div role="alert" className="flex gap-2 p-4 border border-destructive/30 text-destructive text-sm mb-4"><AlertCircle className="w-4 h-4 shrink-0" /><p>{loadError || error || sdkNotice}</p></div>}
         {loading && !result && <div role="status" className="flex flex-col items-center py-12"><Loader2 className="w-8 h-8 animate-spin" /><p className="mt-4">Carregando formulário de cartão...</p></div>}
-        <div key={containerId} id={containerId} hidden={!!result || !!error || processing} />
-        {error && !submitted.current && <button type="button" className="btn-outline min-h-11" onClick={() => setRetry(value => value + 1)}>Tentar carregar novamente</button>}
+        <div key={containerId} id={containerId} hidden={!!result || !!loadError || processing} />
+        {loadError && !submitted.current && <button type="button" className="btn-outline min-h-11" onClick={() => setRetry(value => value + 1)}>Tentar carregar novamente</button>}
         {processing && <p role="status" className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Confirmando pagamento...</p>}
         {result?.payment_status === 'approved' && <p role="status" className="text-green-700 flex items-center gap-2"><Check />Pagamento aprovado!</p>}
         {result && result.payment_status !== 'approved' && <div className="space-y-4">

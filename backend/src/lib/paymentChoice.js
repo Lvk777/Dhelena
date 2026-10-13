@@ -35,9 +35,13 @@ export function validateCardPaymentChoice(orderMethod, methods, paymentMethodId,
     return { paymentType, installments: requestedInstallments };
 }
 
-export function assertSupportedInstallments(plans, requested, total) {
-    const costs = plans.flatMap(plan => Array.isArray(plan.payer_costs) ? plan.payer_costs : []);
+export function assertSupportedInstallments(plans, requested, total, { paymentMethodId, issuerId } = {}) {
+    const compatible = plans.filter(plan => (!paymentMethodId || plan.payment_method_id === paymentMethodId)
+        && (!issuerId || String(plan.issuer?.id) === String(issuerId))
+        && (!plan.payment_type_id || plan.payment_type_id === 'credit_card'));
+    const costs = compatible.flatMap(plan => Array.isArray(plan.payer_costs) ? plan.payer_costs : []);
     const selected = costs.find(cost => Number(cost.installments) === requested
+        && cost.installment_rate !== null && cost.installment_rate !== undefined && cost.installment_rate !== ''
         && Number(cost.installment_rate) === 0 && cost.total_amount != null
         && checkoutCents(cost.total_amount) === checkoutCents(total));
     if (!selected) throw invalid('Parcelamento sem juros não disponível neste cartão. Escolha outra opção.', 409);

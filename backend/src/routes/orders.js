@@ -501,7 +501,7 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
                 return res.status(409).json({ error: 'Parcelamento sem juros ainda não aprovado para esta loja.' });
             }
             const plans = await mp.getInstallmentPlans({ bin, amount: order.total, paymentMethodId: payment_method_id, issuerId: issuer_id });
-            assertSupportedInstallments(plans, requestedInstallments, order.total);
+            assertSupportedInstallments(plans, requestedInstallments, order.total, { paymentMethodId: payment_method_id, issuerId: issuer_id });
         }
         const payer = payerFromOrder(order, req.user);
         attemptLock = await pool.connect();
