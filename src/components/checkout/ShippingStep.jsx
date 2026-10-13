@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Truck, Store, Loader2, AlertCircle } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL } from "@/data/products";
-import { deliveryEstimateLabel } from '@/lib/deliveryEstimate';
+import { deliveryEstimateLabel, DELIVERY_BUSINESS_DAYS_NOTE } from '@/lib/deliveryEstimate';
 
 export default function ShippingStep({ cep, products, quoteContextKey, shippingMethod, shippingQuoteId, shippingCost, onShippingSelect, onQuoteLoading, pickupEnabled, pickupName, pickupTime, pickupAddress, pickupInstructions, freeShipping }) {
     const [loading, setLoading] = useState(false);
@@ -62,6 +62,7 @@ export default function ShippingStep({ cep, products, quoteContextKey, shippingM
                 <span className="text-sm font-medium">{freeShipping ? "Grátis" : formatBRL(opt.price)}</span><SelectionDot selected={selected} />
             </button>;
         })}
+        {!loading && options.some(opt => opt.delivery_estimate?.total_business_days != null) && <p className="text-xs text-muted-foreground">{DELIVERY_BUSINESS_DAYS_NOTE}</p>}
     </div>;
 }
 

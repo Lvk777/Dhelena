@@ -11,6 +11,7 @@ import { useActivePromotions, PromotionStrip } from "@/components/PromoComponent
 import PositionBanner from "@/components/PositionBanner";
 import { base44 } from "@/api/base44Client";
 import { selectedDeliveryCost, shippingContextKey } from "@/lib/shippingSelection";
+import { deliveryEstimateLabel, DELIVERY_BUSINESS_DAYS_NOTE } from '@/lib/deliveryEstimate';
 
 export default function Cart() {
     const { cart, clearCart, removeFromCart, updateQty, showToast, couponCode, couponResult, couponLoading, applyCoupon: applyCouponCtx, clearCoupon } = useStore();
@@ -174,8 +175,9 @@ export default function Cart() {
                         {shippingError && <p role="alert" className="text-xs text-destructive">{shippingError}</p>}
                         {shippingOptions.length > 0 && <div role="radiogroup" aria-label="Opções de frete" className="space-y-2">
                             {shippingOptions.map((option) => <button key={option.id} type="button" role="radio" aria-checked={String(frete?.quoteId) === String(option.id) && shipping !== null}
-                                onClick={() => setFrete({ method: "melhor_envio", quoteId: option.id, cost: Number(option.price), contextKey: quoteKey })} className={`w-full text-left border p-3 text-sm min-h-11 ${String(frete?.quoteId) === String(option.id) && shipping !== null ? "border-[hsl(var(--gold))] bg-background" : "border-border"}`}>
+                                onClick={() => setFrete({ method: "melhor_envio", quoteId: option.id, cost: Number(option.price), contextKey: quoteKey, delivery_estimate: option.delivery_estimate })} className={`w-full text-left border p-3 text-sm min-h-11 ${String(frete?.quoteId) === String(option.id) && shipping !== null ? "border-[hsl(var(--gold))] bg-background" : "border-border"}`}>
                                 {option.company} · {option.name} · {freeShippingFromCoupon || isFreeShipping(subtotal - discount) ? "Grátis" : formatBRL(option.price)}
+                                <span className="block text-xs text-muted-foreground mt-1">{deliveryEstimateLabel(option)}</span>
                             </button>)}
                         </div>}
 
@@ -183,6 +185,7 @@ export default function Cart() {
                             <Row label="Subtotal" value={formatBRL(subtotal)} />
                             {discount > 0 && <Row label="Desconto" value={`- ${formatBRL(discount)}`} accent />}
                             <Row label="Frete" value={shipping === null ? "Informe seu CEP para calcular" : shipping === 0 ? "Grátis" : formatBRL(shipping)} />
+                            {shipping !== null && frete?.delivery_estimate && <div className="text-xs text-muted-foreground space-y-2"><p>{deliveryEstimateLabel(frete)}</p>{frete.delivery_estimate.total_business_days != null && <p>{DELIVERY_BUSINESS_DAYS_NOTE}</p>}</div>}
                             <div className="flex justify-between pt-4 border-t border-border text-base font-medium">
                                 <span>{shipping === null ? "Total parcial" : "Total estimado"}</span>
                                 <span>{formatBRL(total)}</span>

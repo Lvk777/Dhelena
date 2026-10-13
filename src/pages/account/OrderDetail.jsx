@@ -5,6 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { formatBRL, ORDER_STATUS, ORDER_TIMELINE, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
 import OrderTimeline from "@/components/checkout/OrderTimeline";
 import CustomerAfterSales from "@/components/checkout/CustomerAfterSales";
+import { orderDeliveryEstimateLabel, DELIVERY_BUSINESS_DAYS_NOTE } from '@/lib/deliveryEstimate';
 
 export default function OrderDetail() {
     const { id } = useParams();
@@ -150,7 +151,8 @@ export default function OrderDetail() {
                             {SHIPPING_LABELS[order.shipping_method] || order.shipping_method || "—"}
                         </p>
                         {order.shipping_carrier && <p className="text-muted-foreground">{order.shipping_carrier} · {order.shipping_service_name}</p>}
-                        {order.shipping_delivery_time && <p className="text-muted-foreground">{order.shipping_delivery_time} dia(s) úteis</p>}
+                        <p className="text-muted-foreground">{orderDeliveryEstimateLabel(order)}</p>
+                        {order.snapshot?.delivery_estimate?.total_business_days != null && <p className="text-xs text-muted-foreground">{DELIVERY_BUSINESS_DAYS_NOTE}</p>}
                         {order.tracking_code && (
                             <p className="text-muted-foreground">Rastreio: {order.tracking_code}</p>
                         )}

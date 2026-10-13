@@ -14,7 +14,7 @@ import ShippingStep from "@/components/checkout/ShippingStep";
 import PixPaymentScreen from "@/components/checkout/PixPaymentScreen";
 import CardPaymentBrick from "@/components/checkout/CardPaymentBrick";
 import { selectedDelivery, selectedDeliveryCost, shippingContextKey } from "@/lib/shippingSelection";
-import { deliveryEstimateLabel } from '@/lib/deliveryEstimate';
+import { deliveryEstimateLabel, DELIVERY_BUSINESS_DAYS_NOTE } from '@/lib/deliveryEstimate';
 
 const STEPS = ["Identificação", "Endereço", "Entrega", "Pagamento"];
 
@@ -441,6 +441,7 @@ export default function Checkout() {
                                 <span>{currentShipping ? ((pricing?.shipping_cost ?? shippingCost) === 0 ? "Grátis" : formatBRL(pricing?.shipping_cost ?? shippingCost)) : "Selecione a entrega"}</span>
                             </div>
                             {pricing?.delivery_estimate && <p className="text-xs text-muted-foreground">{deliveryEstimateLabel(pricing)}</p>}
+                            {pricing?.delivery_estimate?.total_business_days != null && <p className="text-xs text-muted-foreground">{DELIVERY_BUSINESS_DAYS_NOTE}</p>}
                             <div className="flex justify-between pt-3 border-t border-border text-base font-medium">
                                 <span>{pricing ? "Total do pedido" : paymentMethod ? "Total em conferência" : currentShipping ? "Total estimado" : "Total parcial"}</span><span>{paymentMethod && !pricing ? "—" : formatBRL(pricing?.total ?? total)}</span>
                             </div>

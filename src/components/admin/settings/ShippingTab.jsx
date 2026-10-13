@@ -53,7 +53,7 @@ export default function ShippingTab({ data, onChange }) {
                     <AdminToggle label="Ativar Melhor Envio" checked={data.melhor_envio_enabled} onChange={(v) => set("melhor_envio_enabled", v)} description="Calcula frete real com transportadoras via Melhor Envio" />
                 </div>
                 <AdminInput label="Ambiente ativo" value={activeMode} disabled onChange={() => {}} />
-                <AdminInput label="Preparação proposta (dias úteis)" type="number" value={data.melhor_envio_extra_days ?? ''} onChange={(v) => set("melhor_envio_extra_days", v === '' ? null : Number(v))} placeholder="2" description="Proposta: até 2 dias úteis após a confirmação do pagamento. Só será somada e publicada após aprovação e ativação no backend." />
+                <AdminInput label="Preparação e postagem (dias úteis)" type="number" value={data.melhor_envio_extra_days ?? ''} onChange={(v) => set("melhor_envio_extra_days", v === '' ? null : Number(v))} placeholder="2" description="Condição aprovada: até 2 dias úteis após a confirmação do pagamento, incluindo a entrega efetiva à transportadora. A soma depende da ativação no backend." />
                 <div className="sm:col-span-2">
                     {testResult && (
                         <div className={`flex items-start gap-2 p-3 rounded-lg border mb-3 ${

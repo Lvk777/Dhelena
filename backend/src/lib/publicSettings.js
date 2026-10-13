@@ -1,4 +1,5 @@
 import { httpsOrigin, instagramLink, whatsappLink, validEmail, validCnpjFormat } from './navigation.js';
+import { preparationPolicy } from './deliveryEstimate.js';
 
 export const PUBLIC_SETTING_FIELDS = {
     general: ['store_name', 'trade_name', 'company_name', 'cnpj', 'email', 'phone', 'whatsapp', 'logo', 'logo_dark', 'public_address', 'business_hours', 'external_link_origins'],
@@ -15,6 +16,8 @@ export function publicSetting(row) {
     if (!fields || row.is_public !== true) return null;
     const value = {};
     for (const field of fields) if (Object.hasOwn(row.value || {}, field)) value[field] = row.value[field];
+    // Derived from the running backend, never from a browser-supplied flag.
+    if (row.key === 'shipping') value.preparation = preparationPolicy(row.value);
     return { id: row.id, key: row.key, value, is_public: true };
 }
 

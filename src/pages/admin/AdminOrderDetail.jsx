@@ -6,6 +6,7 @@ import { formatBRL, ORDER_STATUS, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATU
 import OrderTimeline from "@/components/checkout/OrderTimeline";
 import AdminAfterSales from "@/components/admin/AdminAfterSales";
 import PaymentReconciliationPreview from "@/components/admin/PaymentReconciliationPreview";
+import { orderDeliveryEstimateLabel } from '@/lib/deliveryEstimate';
 
 const STATUS_OPTIONS = Object.entries(ORDER_STATUS)
     .filter(([key]) => ['em_separacao', 'enviado', 'em_transporte', 'saiu_entrega', 'entregue'].includes(key))
@@ -162,7 +163,7 @@ export default function AdminOrderDetail() {
                         <div className="grid sm:grid-cols-2 gap-3 text-sm">
                             <InfoRow label="Transportadora" value={order.shipping_carrier || snapshot.shipping_carrier || "—"} />
                             <InfoRow label="Serviço" value={order.shipping_service_name || snapshot.shipping_service_name || SHIPPING_LABELS[order.shipping_method] || "—"} />
-                            <InfoRow label="Prazo" value={order.shipping_delivery_time ? `${order.shipping_delivery_time} dia(s) úteis` : "—"} />
+                            <InfoRow label="Prazo" value={orderDeliveryEstimateLabel(order)} />
                             <InfoRow label="Código rastreio" value={order.tracking_code || "—"} />
                             <InfoRow label="Status envio" value={order.shipping_status || "—"} />
                             <InfoRow label="ID Melhor Envio" value={order.melhor_envio_shipment_id || "—"} />

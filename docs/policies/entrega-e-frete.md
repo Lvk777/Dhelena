@@ -1,6 +1,6 @@
 # Política de Entrega e Frete
 
-> MINUTA PARA APROVAÇÃO — 13/10/2026. O prazo de preparação abaixo é uma proposta, ainda não anunciada no site.
+> Condição de preparação e postagem aprovada pelo responsável em 13/10/2026. Publicação desta política autorizada no mesmo pedido; as demais políticas permanecem minutas.
 
 **D’Helenas Boutique**
 
@@ -20,7 +20,9 @@ Eventuais promoções de frete grátis serão apresentadas no site e aplicadas a
 
 ## 3. Preparação e envio
 
-Os pedidos são preparados após a confirmação do pagamento. O prazo proposto para preparação e postagem é de até **2 dias úteis**, contados a partir do primeiro dia útil seguinte à confirmação do pagamento.
+Os pedidos são preparados após a confirmação do pagamento. O prazo para preparação e postagem é de até **2 dias úteis**, contados a partir do primeiro dia útil seguinte à confirmação do pagamento.
+
+Esse prazo inclui a entrega efetiva do pacote à transportadora, respeitando o horário de corte da modalidade escolhida; não se limita à separação ou embalagem do produto.
 
 O prazo total estimado apresentado no checkout soma a preparação e o transporte da modalidade escolhida. A contagem considera dias úteis, sem sábados, domingos e feriados aplicáveis. O transporte é contado a partir do primeiro dia útil seguinte à postagem, conforme as regras da transportadora.
 
