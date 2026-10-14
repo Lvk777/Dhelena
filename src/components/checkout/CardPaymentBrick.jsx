@@ -34,6 +34,7 @@ export default function CardPaymentBrick({ order, publicKey, amount, maxInstallm
         try {
             const next = await base44.functions.invoke('getPaymentStatus', { orderId: order.id });
             setResult(next);
+            if (next.reconciliation_required) setError(next.status_message || 'Este pagamento precisa de conciliação. Entre em contato com o atendimento antes de uma nova tentativa.');
             if (next.payment_status === 'approved') callbacks.current.onApproved?.(next);
         } catch { setError('Não foi possível consultar o pagamento. Confira novamente em Meus pedidos.'); }
         finally { setChecking(false); }
@@ -98,10 +99,10 @@ export default function CardPaymentBrick({ order, publicKey, amount, maxInstallm
     }, [order.id, publicKey, payableAmount, allowedInstallments, installmentPolicyManaged, isDebit, containerId, retry]);
 
     useEffect(() => {
-        if (!result || !['pending', 'in_process'].includes(result.payment_status)) return;
+        if (!result || result.reconciliation_required || !['pending', 'in_process'].includes(result.payment_status)) return;
         const timer = setInterval(() => { checkStatus(); }, 10000);
         return () => clearInterval(timer);
-    }, [result?.payment_status, order.id]);
+    }, [result?.payment_status, result?.reconciliation_required, order.id]);
 
     return <div>
         <div className="text-center mb-6">

@@ -40,6 +40,11 @@ export default function PixPaymentScreen({ order, onApproved, onAttempt = () => 
         pollRef.current = setInterval(async () => {
             try {
                 const res = await base44.functions.invoke("getPaymentStatus", { orderId: order.id });
+                if (res.reconciliation_required) {
+                    setError(res.status_message || 'Este pagamento precisa de conciliação. Entre em contato com o atendimento antes de uma nova tentativa.');
+                    clearInterval(pollRef.current);
+                    return;
+                }
                 setStatus(res.payment_status || "pending");
                 setStatusDetail(res.mp_status_detail || "");
 

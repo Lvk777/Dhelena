@@ -13,6 +13,10 @@ async function fixture(t, method, state = 'pending') {
     const oldFetch = global.fetch;
     for (const [key, value] of Object.entries({ MERCADO_PAGO_ACCESS_TOKEN: 'mock-only', MERCADO_PAGO_PUBLIC_KEY: 'mock-public',
         MERCADO_PAGO_MODE: 'test', MERCADO_PAGO_WEBHOOK_SECRET: 'mock-secret',
+        MERCADO_PAGO_APPLICATION_ID: '12345',
+        MERCADO_PAGO_TEST_ACCESS_TOKEN: 'mock-only', MERCADO_PAGO_TEST_WEBHOOK_SECRET: 'mock-secret',
+        MERCADO_PAGO_TEST_APPLICATION_ID: '12345', MERCADO_PAGO_PRODUCTION_ACCESS_TOKEN: 'synthetic-production-only',
+        MERCADO_PAGO_PRODUCTION_WEBHOOK_SECRET: 'mock-secret', MERCADO_PAGO_PRODUCTION_APPLICATION_ID: '54321',
         CREDIT_INSTALLMENTS_APPROVED: 'false', CARD_3DS_ENABLED: 'false', PIX_DISCOUNT_ENABLED: 'false' })) {
         const previous = process.env[key]; process.env[key] = value;
         t.after(() => { if (previous === undefined) delete process.env[key]; else process.env[key] = previous; });
@@ -24,7 +28,7 @@ async function fixture(t, method, state = 'pending') {
             items: [{ price_promotion: false }], discount_breakdown: { coupon: 5, promotion: 0, pix: 0 } } };
     let financialPosts = 0; let providerState = state; let updateCount = 0; let lockTail = Promise.resolve();
     let createError = null; let providerTotal = '114.95'; let installmentRate = 0; let connectionCount = 0;
-    const queries = []; const payloads = [];
+    const queries = []; const payloads = []; const officialReads = [];
     let managed = null, offeredCosts = null;
     const q = async (sql, args = []) => {
         queries.push(sql);
@@ -99,6 +103,10 @@ async function fixture(t, method, state = 'pending') {
     global.fetch = async (url, options = {}) => {
         if (!String(url).startsWith('https://api.mercadopago.com')) return oldFetch(url, options);
         const path = new URL(url).pathname;
+        if (path === '/users/me' || path.startsWith('/v1/orders/')) {
+            officialReads.push({ path, method: options.method || 'GET', original_context: options.headers.Authorization === 'Bearer mock-only' });
+        }
+        if (path === '/users/me') return { ok: true, json: async () => ({ id: 67890, tags: ['test_user'] }) };
         if (path === '/v1/payment_methods') return { ok: true, json: async () => methods };
         if (path === '/v1/payment_methods/installments') {
             assert.equal(new URL(url).searchParams.get('amount'), '114.95');
@@ -130,7 +138,7 @@ async function fixture(t, method, state = 'pending') {
     });
     const card = { card_token: 'mock-token', payment_method_id: method === 'debito' ? 'debelo' : 'visa',
         payment_type_id: method === 'debito' ? 'debit_card' : 'credit_card', issuer_id: '123', installments: 1, total: 0.01 };
-    return { order, request, card, queries, payloads, setProviderState: value => { providerState = value; },
+    return { order, request, card, queries, payloads, officialReads, setProviderState: value => { providerState = value; },
         setCreateError: value => { createError = value; }, setProviderTotal: value => { providerTotal = value; },
         setInstallmentRate: value => { installmentRate = value; },
         setManaged: value => { managed = value ? { ...value, module_version: 1 } : null; },
@@ -255,6 +263,21 @@ test('wrong provider amount requires reconciliation and cannot approve or reset 
     assert.equal((await f.request('card', f.card)).status, 409);
     assert.equal(f.order.payment_status, 'pending'); assert.equal(f.order.paid_at, undefined);
     assert.equal((await f.request('card', f.card)).status, 409); assert.equal(f.financialPosts, 1);
+});
+
+test('HTTP status after TEST to production switch still sends only the original TEST credential; repeated concurrent GETs do not charge or change stock/coupons', async t => {
+    const f = await fixture(t, 'credito', 'action_required');
+    assert.equal((await f.request('card', f.card)).status, 200);
+    process.env.MERCADO_PAGO_MODE = 'production'; f.officialReads.length = 0;
+    const results = await Promise.all([f.request('status', {}, 'owner', 'GET'), f.request('status', {}, 'owner', 'GET')]);
+    for (const response of results) {
+        const result = await response.json(); assert.equal(response.status, 200);
+        assert.equal(result.mp_status, 'action_required'); assert.equal(result.reconciliation_required, false);
+    }
+    assert.ok(f.officialReads.length >= 4);
+    assert.ok(f.officialReads.every(r => r.original_context && r.method === 'GET'));
+    assert.equal(f.financialPosts, 1);
+    assert.equal(f.queries.some(sql => /UPDATE products|stock_movements|coupon_usages/.test(sql)), false);
 });
 
 test('HTTP change preview, ownership, idempotency and competing card creation use one locked order', async t => {

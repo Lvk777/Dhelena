@@ -13,6 +13,7 @@ import * as me from '../services/melhorEnvio.js';
 import { operateShipping, shippingEnvironment } from '../services/shippingOperations.js';
 import { buildShippingPackages } from '../lib/shipping.js';
 import { getVerifiedPaymentForOrder } from '../lib/paymentVerification.js';
+import { readPaymentStatus } from '../services/paymentStatus.js';
 import { assertFulfillmentTransition } from '../lib/afterSalesPolicy.js';
 import { applyVerifiedOrderInTransaction, recordVerifiedNonApprovedOrderInTransaction } from '../lib/paymentReconciliation.js';
 import { createPaymentDiagnostic } from '../lib/paymentDiagnostics.js';
@@ -492,13 +493,7 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
 
         // Idempotency: if already has MP order with card, return status
         if (order.mercado_pago_order_id && order.payment_provider === 'mercado_pago') {
-            return res.json({
-                order_id: order.id,
-                payment_status: order.payment_status,
-                mp_status: order.mercado_pago_status,
-                mp_status_detail: order.mercado_pago_status_detail,
-                challenge_url: (await getVerifiedPaymentForOrder(order, mp)).challenge_url,
-            });
+            return res.json({ order_id: order.id, ...await readPaymentStatus(order) });
         }
         if (order.status === 'cancelado' || order.mercado_pago_order_id
             || order.payment_attempt_started_at || order.payment_status !== 'pending') {
@@ -676,20 +671,7 @@ router.get('/orders/:id/payment/status', auth, async (req, res) => {
 
         const order = rows[0];
 
-        const mpData = await getVerifiedPaymentForOrder(order, mp);
-        const internalStatus = mp.mapPaymentStatus(mpData.mp_status, mpData.mp_status_detail);
-
-        const result = await withTransaction(client => internalStatus === 'approved'
-            ? applyVerifiedOrderInTransaction(client, order.id, mpData, 'status_poll')
-            : recordVerifiedNonApprovedOrderInTransaction(client, order.id, mpData, 'status_poll'));
-
-        res.json({
-            payment_status: result.payment_status,
-            mp_status: mpData.mp_status,
-            mp_status_detail: mpData.mp_status_detail,
-            payment_method: order.payment_method,
-            challenge_url: mpData.challenge_url,
-        });
+        res.json(await readPaymentStatus(order));
     } catch (err) {
         res.status(err.status || 500).json({ error: publicError(err) });
     }
