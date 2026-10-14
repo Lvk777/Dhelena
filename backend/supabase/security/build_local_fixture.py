@@ -63,7 +63,11 @@ for constraint in sorted(
 # pg_constraint does not contain partial unique indexes. The original metadata
 # snapshot omitted pg_indexes; use the checked-in non-destructive index DDL to
 # reproduce application invariants. This is NOT proof of production index parity.
+# This fixture represents the captured pre-015 schema. Newer migrations may
+# index columns absent from that snapshot and must be tested separately.
 for migration in sorted((Path(__file__).parents[2] / "migrations").glob("*.sql")):
+    if int(migration.name.split("_", 1)[0]) >= 15:
+        continue
     for statement in re.findall(r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+[^;]+;", migration.read_text(encoding="utf-8"), re.I):
         print(statement)
 
