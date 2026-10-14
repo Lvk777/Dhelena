@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Search, Heart, User, ShoppingBag, Menu, X, ShieldCheck } from "lucide-react";
+import { Search, Heart, User, ShoppingBag, Menu, X } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { useAuth } from "@/lib/AuthContext";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
@@ -124,12 +124,6 @@ export default function Header() {
                                 <Link to={isAuthenticated ? "/minha-conta" : "/login"} className="p-2 text-foreground/80 hover:text-foreground transition-colors hidden sm:block" aria-label="Minha conta">
                                     <User className="w-[18px] h-[18px]" strokeWidth={1.25} />
                                 </Link>
-                                {user?.role === "admin" && (
-                                    <Link to="/admin" className="p-2 text-[hsl(var(--gold))] hover:text-foreground transition-colors hidden sm:flex items-center gap-1" title="Painel Administrativo" aria-label="Admin">
-                                        <ShieldCheck className="w-[18px] h-[18px]" strokeWidth={1.5} />
-                                        <span className="text-[10px] uppercase tracking-wider font-semibold hidden md:inline">Admin</span>
-                                    </Link>
-                                )}
                                 <button onClick={() => setCartOpen(true)} className="p-2 text-foreground/80 hover:text-foreground transition-colors relative" aria-label="Sacola">
                                     <ShoppingBag className="w-[18px] h-[18px]" strokeWidth={1.25} />
                                     {cartCount > 0 && (
@@ -179,12 +173,6 @@ export default function Header() {
                             <Link to={isAuthenticated ? "/minha-conta" : "/login"} className="py-4 border-b border-border/60 text-sm uppercase tracking-[0.18em] text-foreground/80 hover:text-foreground flex items-center justify-between">
                                 {isAuthenticated ? "Minha Conta" : "Entrar / Cadastrar"}
                             </Link>
-                            {user?.role === "admin" && (
-                                <Link to="/admin" className="py-4 border-b border-border/60 text-sm uppercase tracking-[0.18em] text-[hsl(var(--gold))] font-medium flex items-center gap-2">
-                                    <ShieldCheck className="w-4 h-4" />
-                                    Painel Admin
-                                </Link>
-                            )}
                         </nav>
                         <div className="mt-auto px-6 py-6 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                             Moda que conecta histórias

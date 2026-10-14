@@ -4,12 +4,17 @@
  */
 
 import { supabase } from './supabaseClient.js';
+import { createSupabaseAuthFlow } from '../lib/supabaseAuthFlow.js';
+import { createSessionFence } from '../lib/sessionFence.js';
 import { buildPlaceOrderRequest } from './orderRequest.js';
 import { resolveApiBase, apiUrl } from './apiBase.js';
 
 const API_BASE = resolveApiBase(import.meta.env.VITE_API_URL, import.meta.env.PROD);
 const TOKEN_KEY = 'dhelena_access_token';
 const USER_KEY = 'dhelena_auth_user';
+const sessionFence = createSessionFence();
+if (supabase) supabase.auth.onAuthStateChange((event, session) => event === 'INITIAL_SESSION'
+    ? sessionFence.initialize(session?.user?.id || null) : sessionFence.observe(session?.user?.id || null));
 
 // ─── Token & user storage ──────────────────────────────────────────
 function getToken() { return localStorage.getItem(TOKEN_KEY); }
@@ -22,24 +27,27 @@ function createApiError(message, status, data) {
     return Object.assign(new Error(message), { status, response: data === undefined ? undefined : { data } });
 }
 
-// ─── Sync Supabase session → localStorage token ────────────────────
-// Only sync when supabase has a session; don't clear JWT token on sign-out events
-if (supabase) {
-    supabase.auth.onAuthStateChange((event, session) => {
-        if (session?.access_token) {
-            setToken(session.access_token);
-        }
-        // Don't clear JWT token on SIGNED_OUT — the JWT auth path is independent
-    });
-}
-
 // ─── Core fetch wrapper ────────────────────────────────────────────
 async function apiFetch(path, options = {}) {
-    const token = getToken();
+    const startedBy = sessionFence.capture();
+    let token = getToken();
+    let identity = null;
+    if (supabase) {
+        const { data, error } = await supabase.auth.getSession();
+        sessionFence.assert(startedBy);
+        token = error ? null : data?.session?.access_token || null;
+        identity = data?.session?.user?.id || null;
+        setToken(token);
+    }
     const headers = { 'Content-Type': 'application/json', ...options.headers };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const res = await fetch(apiUrl(API_BASE, path), { ...options, headers });
+    sessionFence.assert(startedBy);
+    if (supabase && identity) {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session?.user?.id !== identity) throw createApiError('Sua sessão mudou. Recarregue a página.', 401);
+    }
 
     if (res.status === 401) {
         setToken(null);
@@ -117,6 +125,7 @@ function makeEntity(name) {
 
 // ─── Auth (Supabase when configured, Express JWT fallback) ──────────
 const auth = {
+    providerStatus: () => apiFetch('/auth/capabilities'),
     async me() {
         // When supabase is configured, try its session first;
         // fall back to JWT token from localStorage if no supabase session
@@ -162,7 +171,7 @@ const auth = {
         const data = await apiFetch('/auth/login', {
             method: 'POST',
             body: JSON.stringify({ email, password }),
-        });
+        }).catch(error => { if (error.status === 401) throw createApiError('E-mail ou senha inválidos.', 401); throw error; });
         setToken(data.token);
         setStoredUser(data.user);
         return data.user;
@@ -233,6 +242,9 @@ const auth = {
         }
         return apiFetch('/auth/reset-password', { method: 'POST', body: JSON.stringify({ resetToken, newPassword }) });
     },
+    async securityInfo() { const user = await auth.me(); return { email: user.email, pending_email: null, password_provider: true, local_mode: true, email_change_supported: false }; },
+    changePassword(data) { return apiFetch('/auth/change-password', { method: 'POST', body: JSON.stringify(data) }); },
+    recoveryReady() { return !supabase && !!new URLSearchParams(window.location.search).get('token'); },
     logout(redirectUrl) {
         if (supabase) supabase.auth.signOut();
         setToken(null);
@@ -255,6 +267,9 @@ const auth = {
 };
 
 // ─── Backend functions ─────────────────────────────────────────────
+if (supabase) Object.assign(auth, createSupabaseAuthFlow({ supabase, api: apiFetch,
+    origin: window.location.origin, storage: sessionStorage, location: window.location, history: window.history,
+    setToken, setUser: setStoredUser }));
 const functions = {
     async invoke(name, args) {
         switch (name) {
@@ -420,6 +435,8 @@ const entities = /** @type {Record<string, ReturnType<typeof makeEntity>>} */ (n
 
 // ─── Custom analytics endpoints ───────────────────────────────────
 const custom = {
+    readAdminAccess: () => apiFetch('/admin/access'),
+    changeAdminAccess: (id, grant) => apiFetch(`/admin/access/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ grant }) }),
     submitContact: data => apiFetch('/contact', { method: 'POST', body: JSON.stringify(data) }),
     activePromotions: () => apiFetch('/look-promotions'),
     adminPromotions: () => apiFetch('/look-promotions/admin'),

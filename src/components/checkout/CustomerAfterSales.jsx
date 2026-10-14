@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
 
 const showDate = value => value ? new Date(value).toLocaleString('pt-BR') : '—';
 
 export default function CustomerAfterSales({ order, onChanged }) {
+    const dialogs = useBoutiqueDialogs();
     const [data, setData] = useState(null);
     const [itemId, setItemId] = useState('');
     const [quantity, setQuantity] = useState(1);
@@ -19,7 +21,7 @@ export default function CustomerAfterSales({ order, onChanged }) {
 
     const selected = order.items?.find(item => item.id === itemId);
     const cancelUnpaid = async () => {
-        if (!window.confirm('Cancelar este pedido sem pagamento? O estoque será liberado.')) return;
+        if (!await dialogs.confirm({ title: 'Cancelar pedido', message: 'Cancelar este pedido sem pagamento? O estoque será liberado.', confirmLabel: 'Cancelar pedido' })) return;
         setBusy(true);
         setError('');
         try {

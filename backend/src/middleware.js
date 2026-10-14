@@ -43,7 +43,7 @@ export async function auth(req, res, next) {
     if (supabaseAdmin) {
         // ── Supabase mode: validate Supabase access token ──
         try {
-            const profile = await authenticateSupabaseProfile(supabaseAdmin, pool, token);
+            const profile = await authenticateSupabaseProfile(supabaseAdmin, pool, token, identity => { req.supabaseUserId = identity.id; });
             if (profile) {
                 req.user = profile;
                 req.authProvider = 'supabase';

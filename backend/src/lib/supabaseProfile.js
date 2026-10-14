@@ -4,6 +4,19 @@ function profileError(message, status = 503) {
     return Object.assign(new Error(message), { status });
 }
 
+async function syncConfirmedEmail(db, profile, user) {
+    const email = user.email.trim().toLowerCase();
+    if (profile.email?.toLowerCase() === email) return profile;
+    try {
+        const result = await db.query(`UPDATE profiles SET email = $1, updated_at = now() WHERE id = $2 RETURNING ${fields}`, [email, profile.id]);
+        if (!result.rows[0]) throw profileError('Perfil indisponível.');
+        return { ...result.rows[0], ...(profile.identity_linked ? { identity_linked: true } : {}) };
+    } catch (error) {
+        if (error.code === '23505') throw profileError('Alteração de e-mail exige verificação de identidade.', 409);
+        throw error;
+    }
+}
+
 // Call only with the user returned by auth.getUser(accessToken), never a
 // decoded token, request body, or user-editable metadata object.
 export async function ensureSupabaseProfile(db, user) {
@@ -12,7 +25,7 @@ export async function ensureSupabaseProfile(db, user) {
     }
     const email = user.email.trim().toLowerCase();
     const existing = await db.query(`SELECT ${fields} FROM profiles WHERE id = $1 LIMIT 1`, [user.id]);
-    if (existing.rows.length) return existing.rows[0];
+    if (existing.rows.length) return syncConfirmedEmail(db, existing.rows[0], user);
 
     const client = await db.connect();
     try {
@@ -23,6 +36,15 @@ export async function ensureSupabaseProfile(db, user) {
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`supabase-profile:${email}`]);
         const byId = await client.query(`SELECT ${fields} FROM profiles WHERE id = $1 LIMIT 1`, [user.id]);
         let profile = byId.rows[0];
+        if (!profile) {
+            const schema = await client.query("SELECT to_regclass('public.profile_auth_links') AS relation");
+            if (schema.rows[0]?.relation) {
+                const linked = await client.query(`SELECT p.id,p.email,p.full_name,p.phone,p.cpf,p.birth_date,p.role
+                    FROM profiles p JOIN profile_auth_links l ON l.profile_id = p.id WHERE l.auth_user_id = $1`, [user.id]);
+                if (linked.rows.length > 1) throw profileError('Identidade ambígua.', 409);
+                if (linked.rows[0]) profile = { ...linked.rows[0], identity_linked: true };
+            }
+        }
         if (!profile) {
             const legacy = await client.query(
                 `SELECT ${fields} FROM profiles WHERE lower(email) = $1 LIMIT 2 FOR UPDATE`, [email]);
@@ -45,6 +67,7 @@ export async function ensureSupabaseProfile(db, user) {
             }
             if (!profile) throw profileError('Perfil exige reconciliação.', 409);
         }
+        if (profile.id === user.id || profile.identity_linked) profile = await syncConfirmedEmail(client, profile, user);
         await client.query('COMMIT');
         return profile;
     } catch (error) {
@@ -55,7 +78,7 @@ export async function ensureSupabaseProfile(db, user) {
     }
 }
 
-export async function authenticateSupabaseProfile(admin, db, token) {
+export async function authenticateSupabaseProfile(admin, db, token, onVerifiedUser = () => {}) {
     const { data, error } = await admin.auth.getUser(token);
     if (error || !data?.user) {
         if (error && (!error.status || error.status >= 500)) {
@@ -63,5 +86,6 @@ export async function authenticateSupabaseProfile(admin, db, token) {
         }
         return null;
     }
+    onVerifiedUser(data.user);
     return ensureSupabaseProfile(db, data.user);
 }

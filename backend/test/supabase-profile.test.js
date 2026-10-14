@@ -9,6 +9,7 @@ function database(answers) {
     let released = false;
     const client = { async query(sql, values) {
         calls.push({ sql, values });
+        if (sql.includes("to_regclass('public.profile_auth_links')")) return { rows: [{ relation: null }] };
         if (/^(BEGIN|COMMIT|ROLLBACK|SET LOCAL|SELECT pg_advisory)/.test(sql)) return { rows: [] };
         const answer = answers.shift();
         if (answer instanceof Error) throw answer;
@@ -104,4 +105,28 @@ test('only getUser returned identity reaches provisioning', async () => {
         return { data: { user }, error: null };
     } } };
     assert.deepEqual(await authenticateSupabaseProfile(admin, db, 'validated-token'), customer);
+});
+
+test('confirmed Auth email synchronizes only the matching immutable profile without changing role or UUID', async () => {
+    const previous = { ...customer, email: 'old@example.invalid', role: 'admin', phone: 'preserved' };
+    const updated = { ...previous, email: customer.email };
+    const db = database([[previous], [updated]]);
+    assert.deepEqual(await ensureSupabaseProfile(db, { ...user, new_email: 'unconfirmed@example.invalid' }), updated);
+    const write = db.calls.find(c => c.sql.startsWith('UPDATE'));
+    assert.deepEqual(write.values, [customer.email, user.id]);
+    assert.doesNotMatch(write.sql.split('WHERE')[0], /role\s*=|\bid\s*=/);
+});
+test('an unconfirmed email never replaces the profile email', async () => {
+    const db = database([[customer]]);
+    assert.deepEqual(await ensureSupabaseProfile(db, { ...user, new_email: 'unconfirmed@example.invalid' }), customer);
+    assert.equal(db.calls.length, 1);
+});
+test('conflicting confirmed email fails closed instead of binding another account', async () => {
+    const db = database([[{ ...customer, email: 'old@example.invalid' }], Object.assign(new Error('unique conflict'), { code: '23505' })]);
+    await assert.rejects(ensureSupabaseProfile(db, user), { status: 409 });
+    assert.equal(db.calls.filter(c => c.sql.startsWith('UPDATE')).length, 1);
+});
+test('a missing profile during synchronization is unavailable and not silently authenticated', async () => {
+    const db = database([[{ ...customer, email: 'old@example.invalid' }], []]);
+    await assert.rejects(ensureSupabaseProfile(db, user), { status: 503 });
 });

@@ -7,9 +7,11 @@ import { loginLimiter, registerLimiter, forgotPasswordLimiter } from '../middlew
 import { logSecurityEvent } from '../middleware/securityLog.js';
 import { recordLoginEvent } from './security.js';
 import { normalizeBirthDate, normalizeProfileInput } from '../lib/validation.js';
+import { authCapabilities } from '../lib/authCapabilities.js';
 
 const router = Router();
 const isProduction = process.env.NODE_ENV === 'production';
+router.get('/capabilities', async (_req, res) => { res.json(await authCapabilities()); });
 
 function signToken(user) {
     return jwt.sign(
@@ -86,7 +88,39 @@ router.post('/login', loginLimiter, async (req, res, next) => {
 // GET /api/auth/me
 router.get('/me', auth, async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'Não autenticado' });
-    res.json(req.user);
+    res.json({ ...req.user, email_change_supported: req.authProvider === 'supabase'
+        && (req.supabaseUserId === req.user.id || req.user.identity_linked === true) });
+});
+
+// Preview uses only the authenticated immutable identity; never changes Auth or profiles.
+router.post('/email-change/preview', auth, async (req, res, next) => {
+    try {
+        if (!req.user) return res.status(401).json({ error: 'Autenticação necessária' });
+        if (req.authProvider !== 'supabase' || (req.supabaseUserId !== req.user.id && req.user.identity_linked !== true)) {
+            return res.status(409).json({ error: 'O vínculo seguro desta conta precisa ser concluído antes de alterar seu e-mail.' });
+        }
+        if (Object.keys(req.body || {}).some(k => k !== 'email') || typeof req.body?.email !== 'string'
+            || req.body.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(req.body.email.trim())) return res.status(400).json({ error: 'Informe um e-mail válido.' });
+        const email = req.body.email.trim().toLowerCase();
+        const conflict = await pool.query('SELECT id FROM profiles WHERE lower(email) = $1 AND id <> $2 LIMIT 1', [email, req.user.id]);
+        if (conflict.rows.length) return res.status(409).json({ error: 'Este e-mail não está disponível para alteração.' });
+        res.json({ allowed: true });
+    } catch (error) { next(error); }
+});
+
+// Development-only password change; production changes go to Supabase Auth.
+router.post('/change-password', auth, loginLimiter, async (req, res, next) => {
+    try {
+        if (isProduction) return res.status(404).json({ error: 'Use Supabase Auth.' });
+        if (!req.user) return res.status(401).json({ error: 'Autenticação necessária' });
+        const { currentPassword, newPassword } = req.body || {};
+        if (typeof newPassword !== 'string' || newPassword.length < 8 || newPassword.length > 128 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)
+            || typeof currentPassword !== 'string') return res.status(400).json({ error: 'Confira as senhas informadas.' });
+        const { rows } = await pool.query('SELECT password_hash FROM profiles WHERE id = $1', [req.user.id]);
+        if (!rows[0] || !await bcrypt.compare(currentPassword, rows[0].password_hash)) return res.status(400).json({ error: 'Confira as senhas informadas.' });
+        await pool.query('UPDATE profiles SET password_hash = $1, updated_at = now() WHERE id = $2', [await bcrypt.hash(newPassword, 10), req.user.id]);
+        res.json({ success: true });
+    } catch (error) { next(error); }
 });
 
 // PATCH /api/auth/me

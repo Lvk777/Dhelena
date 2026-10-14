@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { client } from '@/api/apiClient';
 
 const AuthContext = createContext(undefined);
@@ -9,25 +9,38 @@ export const AuthProvider = ({ children }) => {
     const [isLoadingAuth, setIsLoadingAuth] = useState(true);
     const [authError, setAuthError] = useState(null);
     const [authChecked, setAuthChecked] = useState(false);
+    const generation = useRef(0);
     const [appPublicSettings] = useState({ id: 'local', public_settings: { store_name: "D'Helenas" } });
     const [isLoadingPublicSettings] = useState(false);
 
     useEffect(() => {
-        checkUserAuth();
+        checkUserAuth(true);
+        const unsubscribe = client.auth.onSessionChange?.(event => {
+            if (event === 'SIGNED_OUT') { generation.current++; setUser(null); setIsAuthenticated(false); setAuthError(null); setIsLoadingAuth(false); setAuthChecked(true); }
+            else checkUserAuth();
+        });
+        const focus = () => checkUserAuth();
+        window.addEventListener('focus', focus);
+        const timer = setInterval(focus, 60000);
+        return () => { generation.current++; unsubscribe?.(); window.removeEventListener('focus', focus); clearInterval(timer); };
     }, []);
 
-    const checkUserAuth = async () => {
-        setIsLoadingAuth(true);
+    const checkUserAuth = async (initial = false) => {
+        const current = ++generation.current;
+        if (initial) setIsLoadingAuth(true);
         try {
             const currentUser = await client.auth.me();
+            if (current !== generation.current) return;
             setUser(currentUser);
             setIsAuthenticated(true);
-        } catch {
-            setUser(null);
-            setIsAuthenticated(false);
+            setAuthError(null);
+        } catch (error) {
+            if (current !== generation.current) return;
+            if (error.status === 401 || error.status === 403 || initial) { setUser(null); setIsAuthenticated(false); }
+            if (error.status === 401) setAuthError(null);
+            if (error.status !== 401) setAuthError({ type: 'unavailable', message: 'Não foi possível verificar sua conta. Tente novamente.' });
         } finally {
-            setIsLoadingAuth(false);
-            setAuthChecked(true);
+            if (current === generation.current) { setIsLoadingAuth(false); setAuthChecked(true); }
         }
     };
 
@@ -35,10 +48,10 @@ export const AuthProvider = ({ children }) => {
         await checkUserAuth();
     };
 
-    const logout = (shouldRedirect = true) => {
-        setUser(null);
-        setIsAuthenticated(false);
-        client.auth.logout(shouldRedirect ? window.location.href : undefined);
+    const logout = async (shouldRedirect = true) => {
+        generation.current++;
+        try { await client.auth.logout(); }
+        finally { setUser(null); setIsAuthenticated(false); setAuthError(null); if (shouldRedirect) window.location.assign('/login'); }
     };
 
     const navigateToLogin = () => {

@@ -1,5 +1,5 @@
 export const MAINTENANCE_EXEMPT_PREFIXES = [
-    '/admin', '/login', '/cadastro', '/esqueci', '/reset-password', '/api', '/health', '/webhooks',
+    '/admin', '/login', '/cadastro', '/esqueci', '/reset-password', '/auth/callback', '/minha-conta', '/api', '/health', '/webhooks',
 ];
 
 /** Returns the maintenance destination, or null when the current route remains available. */

@@ -5,8 +5,13 @@ import { safeChallengeUrl } from '@/lib/cardBrick';
 import PaymentMethodChange from './PaymentMethodChange';
 import CardPaymentBrick from './CardPaymentBrick';
 import PixPaymentScreen from './PixPaymentScreen';
+import { useAuth } from '@/lib/AuthContext';
+import { usePublicSettings } from '@/context/PublicSettingsContext';
 
 export default function OrderPaymentPanel({ order, onChanged, onRefresh }) {
+    const { user } = useAuth();
+    const { settings, loading, error: settingsError } = usePublicSettings();
+    const maintenance = user?.role !== 'admin' && (loading || settingsError || settings.maintenance.maintenance_mode === true);
     const [open, setOpen] = useState(false);
     const [methods, setMethods] = useState(null);
     const [busy, setBusy] = useState(false);
@@ -30,11 +35,12 @@ export default function OrderPaymentPanel({ order, onChanged, onRefresh }) {
     const type = { credito: 'credit_card', debito: 'debit_card', pix: 'pix' }[order.payment_method];
     const challenge = safeChallengeUrl(status?.challenge_url);
     return <div className="mb-8 space-y-4">
-        <PaymentMethodChange order={order} blocked={attempted} onChanged={updated => { setOpen(false); onChanged(updated); }} />
-        {!open && eligible && <button type="button" className="btn-gold min-h-11" disabled={busy} onClick={pay}>{busy ? 'Carregando...' : 'Pagar este pedido'}</button>}
-        {!eligible && !open && <button type="button" className="btn-outline min-h-11" disabled={busy} onClick={consult}>{busy ? 'Consultando...' : 'Consultar pagamento'}</button>}
+        {maintenance && <p className="text-sm">Novos pagamentos estão indisponíveis durante a manutenção. Você pode consultar o pagamento existente.</p>}
+        {!maintenance && <PaymentMethodChange order={order} blocked={attempted} onChanged={updated => { setOpen(false); onChanged(updated); }} />}
+        {!maintenance && !open && eligible && <button type="button" className="btn-gold min-h-11" disabled={busy} onClick={pay}>{busy ? 'Carregando...' : 'Pagar este pedido'}</button>}
+        {(maintenance || !eligible) && !open && <button type="button" className="btn-outline min-h-11" disabled={busy} onClick={consult}>{busy ? 'Consultando...' : 'Consultar pagamento'}</button>}
         {open && !methods?.enabled?.[type] && <p role="alert">Este método está indisponível no momento. Consulte o atendimento ou altere o método, se disponível.</p>}
-        {open && methods?.enabled?.[type] && (order.payment_method === 'pix'
+        {!maintenance && open && methods?.enabled?.[type] && (order.payment_method === 'pix'
             ? <PixPaymentScreen order={order} onApproved={onRefresh} onAttempt={() => setAttempted(true)} />
             : <CardPaymentBrick key={`${order.id}-${order.payment_method}`} order={order} amount={order.total} publicKey={methods.public_key}
                 maxInstallments={methods.max_installments} installmentPolicyManaged={methods.installment_policy_managed} isDebit={order.payment_method === 'debito'} onApproved={onRefresh}

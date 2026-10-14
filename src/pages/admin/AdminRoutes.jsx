@@ -18,6 +18,7 @@ const Settings = lazy(() => import("@/pages/admin/Settings"));
 const AuditLog = lazy(() => import("@/pages/admin/AuditLog"));
 const SizeGuides = lazy(() => import("@/pages/admin/SizeGuides"));
 const Integrations = lazy(() => import("@/pages/admin/Integrations"));
+const AdminAccess = lazy(() => import('@/pages/admin/AdminAccess'));
 const Promotions = lazy(() => import("@/pages/admin/Promotions"));
 const Analytics = lazy(() => import("@/pages/admin/Analytics"));
 
@@ -48,6 +49,7 @@ export default function AdminRoutes() {
                 <Route path="colecoes" element={page(AdminCollections)} />
                 <Route path="estoque" element={page(Inventory)} />
                 <Route path="clientes" element={page(Customers)} />
+                <Route path="colaboradores" element={page(AdminAccess)} />
                 <Route path="cupons" element={page(Coupons)} />
                 <Route path="banners" element={page(Banners)} />
                 <Route path="relatorios" element={page(Reports)} />

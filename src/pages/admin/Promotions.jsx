@@ -8,6 +8,7 @@ import AdminTextarea from "@/components/admin/AdminTextarea";
 import AdminToggle from "@/components/admin/AdminToggle";
 import AdminImageUploader from "@/components/admin/AdminImageUploader";
 import PromotionPreview from "@/components/admin/PromotionPreview";
+import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
 
 const PROMO_TYPES = [
     { value: "look_discount", label: "Desconto no Look" },
@@ -39,6 +40,7 @@ const WIZARD_STEPS = [
 const PROMO_TYPE_LABELS = Object.fromEntries(PROMO_TYPES.map(t => [t.value, t.label]));
 
 export default function Promotions() {
+    const dialogs = useBoutiqueDialogs();
     const [promos, setPromos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(null);
@@ -70,7 +72,7 @@ export default function Promotions() {
     };
 
     const handleDelete = async (id) => {
-        if (!confirm("Excluir esta promoção?")) return;
+        if (!await dialogs.confirm({ title: 'Excluir promoção', message: 'Excluir esta promoção? Esta ação não poderá ser desfeita.' })) return;
         await base44.entities.LookPromotion.delete(id);
         load();
     };

@@ -21,6 +21,8 @@ import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
+import AuthCallback from '@/pages/AuthCallback';
+import { BoutiqueDialogsProvider } from '@/components/BoutiqueDialogs';
 
 // Store pages
 import Home from '@/pages/Home';
@@ -83,6 +85,7 @@ const AuthenticatedApp = () => {
                             <Route path="/cadastro" element={<Register />} />
                             <Route path="/esqueci-minha-senha" element={<ForgotPassword />} />
                             <Route path="/reset-password" element={<ResetPassword />} />
+                            <Route path="/auth/callback" element={<AuthCallback />} />
 
                             {/* Maintenance page */}
                             <Route path="/em-breve" element={<ComingSoon />} />
@@ -139,8 +142,10 @@ function App() {
         <AuthProvider>
             <QueryClientProvider client={queryClientInstance}>
                 <Router>
+                    <BoutiqueDialogsProvider>
                     <ScrollToTop />
                     <AuthenticatedApp />
+                    </BoutiqueDialogsProvider>
                 </Router>
                 <Toaster />
             </QueryClientProvider>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { track } from "@/lib/analytics";
@@ -16,8 +16,12 @@ const load = (key, fallback) => {
 
 export function StoreProvider({ children }) {
     const { user, isAuthenticated } = useAuth();
+    const account = user?.id || null;
+    const currentAccount = useRef(account);
+    currentAccount.current = account;
+    const favoriteFlight = useRef(false);
     const [cart, setCart] = useState(() => load("dh_cart", []));
-    const [favorites, setFavorites] = useState(() => load("dh_favorites", []));
+    const [favorites, setFavorites] = useState([]);
     const [toast, setToast] = useState(null);
     const [cartOpen, setCartOpen] = useState(false);
     const [couponCode, setCouponCode] = useState("");
@@ -34,27 +38,15 @@ export function StoreProvider({ children }) {
 
     // Sync favorites with DB when auth state changes
     useEffect(() => {
-        if (isAuthenticated && user) {
-            const localFavs = load("dh_favorites", []);
-            base44.entities.Favorite.list().then(async (recs) => {
-                const dbIds = (recs || []).map((r) => r.product_id);
-                const toAdd = localFavs.filter((id) => !dbIds.includes(id));
-                if (toAdd.length > 0) {
-                    await base44.entities.Favorite.bulkCreate(toAdd.map((product_id) => ({ product_id })));
-                    localStorage.removeItem("dh_favorites");
-                }
-                setFavorites([...dbIds, ...toAdd]);
-            }).catch(() => setFavorites(localFavs));
-        } else {
-            setFavorites(load("dh_favorites", []));
-        }
-    }, [isAuthenticated, user]);
-
-    useEffect(() => {
-        if (!isAuthenticated) {
-            localStorage.setItem("dh_favorites", JSON.stringify(favorites));
-        }
-    }, [favorites, isAuthenticated]);
+        let active = true;
+        setFavorites([]); setCouponCode(''); setCouponResult(null);
+        // An unscoped cache must never import another customer's favorites.
+        localStorage.removeItem('dh_favorites');
+        if (isAuthenticated && account) base44.entities.Favorite.list().then(recs => {
+            if (active && currentAccount.current === account) setFavorites((recs || []).map(r => r.product_id));
+        }).catch(() => { if (active) setToast({ message: 'Não foi possível consultar seus favoritos.', type: 'error', id: Date.now() }); });
+        return () => { active = false; };
+    }, [isAuthenticated, account]);
 
     const showToast = useCallback((message, type = 'success') => {
         setToast({ message, type, id: Date.now() });
@@ -93,26 +85,27 @@ export function StoreProvider({ children }) {
 
     const clearCart = useCallback(() => setCart([]), []);
 
-    const toggleFavorite = useCallback((productId) => {
+    const toggleFavorite = useCallback(async (productId) => {
         if (!isAuthenticated) {
             showToast("Faça login para salvar seus favoritos ♡");
             return;
         }
-        setFavorites((prev) => {
-            if (prev.includes(productId)) {
-                base44.entities.Favorite.filter({ product_id: productId }).then((recs) => {
-                    recs.forEach((r) => base44.entities.Favorite.delete(r.id));
-                });
-                track('favorite', { product_id: productId });
-                showToast("Removido dos favoritos");
-                return prev.filter((id) => id !== productId);
+        if (favoriteFlight.current) return;
+        favoriteFlight.current = true;
+        try {
+            if (favorites.includes(productId)) {
+                const recs = await base44.entities.Favorite.filter({ product_id: productId });
+                if (currentAccount.current !== account) return;
+                for (const rec of recs) { if (currentAccount.current !== account) return; await base44.entities.Favorite.delete(rec.id); }
+                if (currentAccount.current === account) { setFavorites(prev => prev.filter(id => id !== productId)); showToast('Removido dos favoritos'); }
             } else {
-                base44.entities.Favorite.create({ product_id: productId });
-                showToast("Adicionado aos favoritos ♡");
-                return [...prev, productId];
+                await base44.entities.Favorite.create({ product_id: productId });
+                if (currentAccount.current === account) { setFavorites(prev => [...prev, productId]); showToast('Adicionado aos favoritos ♡'); }
             }
-        });
-    }, [isAuthenticated, showToast]);
+            track('favorite', { product_id: productId });
+        } catch { if (currentAccount.current === account) showToast('Não foi possível atualizar os favoritos.', 'error'); }
+        finally { favoriteFlight.current = false; }
+    }, [isAuthenticated, account, favorites, showToast]);
 
     const isFavorite = useCallback((productId) => favorites.includes(productId), [favorites]);
     const cartCount = cart.reduce((s, i) => s + i.qty, 0);

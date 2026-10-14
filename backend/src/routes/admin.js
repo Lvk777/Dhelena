@@ -3,8 +3,15 @@ import { pool } from '../config/db.js';
 import { auth, requireAdmin } from '../middleware.js';
 import { notificationSchemaReady } from '../services/notificationOutbox.js';
 import { orderEmailReadiness } from '../services/orderEmail.js';
+import { readAdminAccess, changeAdminAccess } from '../services/adminAccess.js';
 
 const router = Router();
+router.get('/admin/access', auth, requireAdmin, async (req,res,next) => {
+    try { res.json(await readAdminAccess({ ...req.user, authProvider: req.authProvider, identityVerified: req.supabaseUserId === req.user.id || req.user.identity_linked === true })); } catch (error) { next(error); }
+});
+router.patch('/admin/access/:id', auth, requireAdmin, async (req,res,next) => {
+    try { res.json(await changeAdminAccess({ ...req.user, authProvider: req.authProvider, identityVerified: req.supabaseUserId === req.user.id || req.user.identity_linked === true }, req.params.id, req.body)); } catch (error) { next(error); }
+});
 router.get('/notifications/readiness',auth,requireAdmin,async(req,res,next)=>{
     try {
         const {rows}=await pool.query("SELECT key,value FROM settings WHERE key IN ('emails','general')");

@@ -42,8 +42,14 @@ const COUPON_MUTABLE_FIELDS = new Set([
 // Every order endpoint is private.  Individual handlers still distinguish
 // owner from admin, but anonymous requests must consistently receive 401
 // rather than a null-user exception.
-router.use('/orders', auth, (req, res, next) => {
+router.use('/orders', auth, async (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Autenticação necessária' });
+    if (req.user.role !== 'admin' && req.method === 'POST' && /^\/[^/]+\/payment\/(pix|card|method)(\/preview)?$/.test(req.path)) {
+        try {
+            const { rows } = await pool.query("SELECT value FROM settings WHERE key = 'maintenance'");
+            if (rows[0]?.value?.maintenance_mode === true) return res.status(503).json({ error: 'Novos pagamentos indisponíveis durante a manutenção.' });
+        } catch (error) { return next(error); }
+    }
     next();
 });
 

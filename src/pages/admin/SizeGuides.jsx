@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Trash2, ChevronUp, ChevronDown, X } from "lucide-react";
 import { base44 } from '@/api/base44Client';
+import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
 
 const GUIDE_TYPES = ["Feminino padrão", "Vestidos", "Blusas", "Calças", "Conjuntos"];
 const DEFAULT_ROWS = [
@@ -12,6 +13,7 @@ const DEFAULT_ROWS = [
 ];
 
 export default function SizeGuides() {
+    const dialogs = useBoutiqueDialogs();
     const [guides, setGuides] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(null); // guide being edited
@@ -38,7 +40,7 @@ export default function SizeGuides() {
     };
 
     const handleDelete = async (id) => {
-        if (!confirm("Excluir este guia?")) return;
+        if (!await dialogs.confirm({ title: 'Excluir guia de medidas', message: 'Excluir este guia? Esta ação não poderá ser desfeita.' })) return;
         await base44.entities.SizeGuide.delete(id);
         load();
     };

@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useId } from "react";
+import EmailChange from '@/components/account/EmailChange';
 import { Loader2, Check } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
+import { validateCPF, validatePhone } from '@/lib/forms';
 
 const maskCPF = (v) => v.replace(/\D/g, "").slice(0, 11).replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2");
 const maskPhone = (v) => v.replace(/\D/g, "").slice(0, 11).replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2");
@@ -12,22 +14,28 @@ export default function Profile() {
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [saveError, setSaveError] = useState("");
+    const dirty = useRef(false);
 
     useEffect(() => {
         if (user) {
-            setForm({
+            if (!dirty.current) setForm({
                 name: user.full_name || "",
                 email: user.email || "",
                 phone: user.phone || "",
                 cpf: user.cpf || "",
                 birth_date: user.birth_date || "",
             });
+            else setForm(f => ({ ...f, email: user.email || '' }));
         }
     }, [user]);
 
-    const set = (k, v) => { setSaved(false); setSaveError(""); setForm((f) => ({ ...f, [k]: v })); };
+    const set = (k, v) => { dirty.current = true; setSaved(false); setSaveError(""); setForm((f) => ({ ...f, [k]: v })); };
 
     const save = async () => {
+        if (saving) return;
+        if (!form.name.trim() || form.phone && !validatePhone(form.phone) || form.cpf && !validateCPF(form.cpf)) {
+            setSaveError('Confira seu nome, telefone e CPF antes de salvar.'); return;
+        }
         setSaving(true);
         try {
             await base44.auth.updateMe({
@@ -36,6 +44,7 @@ export default function Profile() {
                 cpf: form.cpf,
                 birth_date: form.birth_date,
             });
+            dirty.current = false;
             await checkUserAuth();
             setSaved(true);
             setTimeout(() => setSaved(false), 3000);
@@ -64,19 +73,21 @@ export default function Profile() {
                     </button>
                     {saved && <span className="flex items-center gap-1.5 text-sm text-[hsl(var(--rose))]"><Check className="w-4 h-4" strokeWidth={1.5} /> Dados atualizados</span>}
                 </div>
-                {saveError && <p className="text-sm text-destructive mt-3">{saveError}</p>}
-                <p className="text-[11px] text-muted-foreground mt-4">O e-mail não pode ser alterado. Para atualizar, entre em contato com o suporte.</p>
+                {saveError && <p role="alert" className="text-sm text-destructive mt-3">{saveError}</p>}
+                <EmailChange />
             </div>
         </div>
     );
 }
 
 function Field({ label, value, onChange = undefined, type = "text", disabled = false, max = undefined }) {
+    const id = useId();
     return (
         <div>
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
+            <label htmlFor={id} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
             <input
                 type={type}
+                id={id}
                 value={value}
                 onChange={(e) => onChange?.(e.target.value)}
                 disabled={disabled}

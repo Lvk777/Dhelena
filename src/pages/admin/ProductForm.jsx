@@ -8,6 +8,7 @@ import ImageUploader from "@/components/ImageUploader";
 import AdminWizard from "@/components/admin/AdminWizard";
 import ProductPreview from "@/components/admin/ProductPreview";
 import { logAdminAction } from "@/lib/audit";
+import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
 
 const TAGS = [
     { key: "novo", label: "Novidade" },
@@ -29,6 +30,7 @@ const WIZARD_STEPS = [
 ];
 
 export default function ProductForm() {
+    const dialogs = useBoutiqueDialogs();
     const { id } = useParams();
     const navigate = useNavigate();
     const { categories, collections, reload } = useCatalog();
@@ -103,8 +105,8 @@ export default function ProductForm() {
         set("colors", next);
     };
 
-    const addSize = () => {
-        const ns = prompt("Nome do tamanho (ex: GG, 38, Único):");
+    const addSize = async () => {
+        const ns = await dialogs.prompt({ title: 'Adicionar tamanho', message: 'Informe o tamanho da peça.', label: 'Nome do tamanho (ex.: GG, 38, Único)', maxLength: 30, confirmLabel: 'Adicionar' });
         if (!ns) return;
         if (form.sizes.includes(ns)) return;
         const newColors = form.colors.map((c) => ({ ...c, stock: { ...c.stock, [ns]: 0 } }));

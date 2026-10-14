@@ -58,10 +58,6 @@ export default function Footer() {
                 <div className="mt-14 pt-6 border-t border-bone/15 flex flex-col sm:flex-row items-center justify-between gap-3">
                     <p className="text-[11px] tracking-wide text-bone/50">© {new Date().getFullYear()} D'Helenas. Todos os direitos reservados.</p>
                     <div className="flex items-center gap-4">
-                        <Link to="/admin" className="text-[11px] tracking-[0.1em] text-bone/40 hover:text-[hsl(var(--gold))] transition-colors">
-                            Painel Admin
-                        </Link>
-                        <span className="text-bone/20">•</span>
                         <p className="text-[11px] tracking-[0.2em] uppercase text-bone/50">Moda que conecta histórias</p>
                     </div>
                 </div>

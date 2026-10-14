@@ -4,6 +4,10 @@ import { pool, withTransaction } from '../config/db.js';
 import { auth } from '../middleware.js';
 
 const router = Router();
+router.use(['/favorites', '/addresses'], auth, (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: 'Autenticação necessária' });
+    next();
+});
 const productIdValid = v => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
 // ─── FAVORITES ─────────────────────────────────────────────────────

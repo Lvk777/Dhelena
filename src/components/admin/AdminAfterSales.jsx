@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { formatBRL } from '@/data/products';
+import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
 
 const SHIPPED = new Set(['enviado', 'em_transporte', 'saiu_entrega', 'entregue']);
 const RETURN_NEXT = {
@@ -12,6 +13,7 @@ const RETURN_NEXT = {
 const showDate = value => value ? new Date(value).toLocaleString('pt-BR') : '—';
 
 export default function AdminAfterSales({ order, onChanged }) {
+    const dialogs = useBoutiqueDialogs();
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
@@ -39,7 +41,7 @@ export default function AdminAfterSales({ order, onChanged }) {
     useEffect(() => { refresh(); }, [refresh]);
 
     const run = async (action, confirmation) => {
-        if (confirmation && !window.confirm(confirmation)) return;
+        if (confirmation && !await dialogs.confirm({ title: 'Confirmar operação', message: confirmation })) return;
         setBusy(true);
         setError('');
         try {

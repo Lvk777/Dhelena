@@ -26,7 +26,7 @@ export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthe
         if (authError.type === 'user_not_registered') {
             return <UserNotRegisteredError />;
         }
-        return unauthenticatedElement;
+        return <div role="alert" className="max-w-lg mx-auto p-8"><p>{authError.message}</p><button className="btn-outline mt-4" onClick={() => checkUserAuth()}>Tentar novamente</button></div>;
     }
 
     if (!isAuthenticated) {

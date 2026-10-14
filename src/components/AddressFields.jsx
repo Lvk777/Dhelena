@@ -1,12 +1,13 @@
-import React, { useRef } from "react";
+import React, { useRef, useId } from "react";
 import { maskCEP } from "@/lib/forms";
 import { useCepLookup } from "@/hooks/useCepLookup";
 
 const UF = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 
-export default function AddressFields({ form, set, errors = /** @type {Record<string, string>} */ ({}) }) {
+export default function AddressFields({ form, set, disabled = false, errors = /** @type {Record<string, string>} */ ({}) }) {
     const { cepStatus, lookup } = useCepLookup();
     const numberRef = useRef(null);
+    const id = useId();
 
     const handleCepChange = (v) => {
         const masked = maskCEP(v);
@@ -28,8 +29,9 @@ export default function AddressFields({ form, set, errors = /** @type {Record<st
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {/* CEP + Estado */}
             <div>
-                <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">CEP *</label>
+                <label htmlFor={id + "-cep"} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">CEP *</label>
                 <input
+                    disabled={disabled} id={id + "-cep"} aria-invalid={!!errors.cep}
                     value={form.cep || ""}
                     onChange={(e) => handleCepChange(e.target.value)}
                     placeholder="00000-000"
@@ -41,8 +43,9 @@ export default function AddressFields({ form, set, errors = /** @type {Record<st
                 {errors.cep && <p className="text-[11px] text-[hsl(var(--rose))] mt-1">{errors.cep}</p>}
             </div>
             <div>
-                <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Estado *</label>
+                <label htmlFor={id + "-state"} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Estado *</label>
                 <select
+                    disabled={disabled} id={id + "-state"} aria-invalid={!!errors.state}
                     value={form.state || "SP"}
                     onChange={(e) => set("state", e.target.value)}
                     className={`w-full border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${errClass("state")}`}
@@ -54,8 +57,9 @@ export default function AddressFields({ form, set, errors = /** @type {Record<st
 
             {/* Rua */}
             <div className="sm:col-span-2">
-                <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Rua *</label>
+                <label htmlFor={id + "-street"} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Rua *</label>
                 <input
+                    disabled={disabled} id={id + "-street"} aria-invalid={!!errors.street}
                     value={form.street || ""}
                     onChange={(e) => set("street", e.target.value)}
                     className={`w-full border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${errClass("street")}`}
@@ -65,9 +69,10 @@ export default function AddressFields({ form, set, errors = /** @type {Record<st
 
             {/* Número + Complemento */}
             <div>
-                <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Número *</label>
+                <label htmlFor={id + "-number"} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Número *</label>
                 <input
                     ref={numberRef}
+                    disabled={disabled} id={id + "-number"} aria-invalid={!!errors.number}
                     value={form.number || ""}
                     onChange={(e) => set("number", e.target.value)}
                     className={`w-full border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${errClass("number")}`}
@@ -75,8 +80,9 @@ export default function AddressFields({ form, set, errors = /** @type {Record<st
                 {errors.number && <p className="text-[11px] text-[hsl(var(--rose))] mt-1">{errors.number}</p>}
             </div>
             <div>
-                <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Complemento</label>
+                <label htmlFor={id + "-complement"} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Complemento</label>
                 <input
+                    disabled={disabled} id={id + "-complement"} aria-invalid={!!errors.complement}
                     value={form.complement || ""}
                     onChange={(e) => set("complement", e.target.value)}
                     className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors"
@@ -85,8 +91,9 @@ export default function AddressFields({ form, set, errors = /** @type {Record<st
 
             {/* Bairro + Cidade */}
             <div>
-                <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Bairro *</label>
+                <label htmlFor={id + "-district"} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Bairro *</label>
                 <input
+                    disabled={disabled} id={id + "-district"} aria-invalid={!!errors.district}
                     value={form.district || ""}
                     onChange={(e) => set("district", e.target.value)}
                     className={`w-full border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${errClass("district")}`}
@@ -94,8 +101,9 @@ export default function AddressFields({ form, set, errors = /** @type {Record<st
                 {errors.district && <p className="text-[11px] text-[hsl(var(--rose))] mt-1">{errors.district}</p>}
             </div>
             <div>
-                <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Cidade *</label>
+                <label htmlFor={id + "-city"} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Cidade *</label>
                 <input
+                    disabled={disabled} id={id + "-city"} aria-invalid={!!errors.city}
                     value={form.city || ""}
                     onChange={(e) => set("city", e.target.value)}
                     className={`w-full border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${errClass("city")}`}

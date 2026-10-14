@@ -1,13 +1,13 @@
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { client } from "@/api/apiClient";
 import { Loader2, Mail, Lock, UserPlus, User, Phone, Calendar } from "lucide-react";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import AuthLayout from "@/components/AuthLayout";
-import GoogleIcon from "@/components/GoogleIcon";
+import GoogleSignIn from "@/components/GoogleSignIn";
 import { safeReturnTo } from "@/lib/authReturnTo";
 import { validateCPF, validateEmail, validatePhone, maskCPF, maskPhone } from "@/lib/forms";
 import { track } from "@/lib/analytics";
+import { passwordMessage } from '@/lib/supabaseAuthFlow';
 
 export default function Register() {
     const [form, setForm] = useState({ name: "", email: "", phone: "", cpf: "", birthDate: "", password: "", confirm: "" });
@@ -23,7 +23,7 @@ export default function Register() {
 
     const completeProfile = async () => {
         await client.auth.updateMe({ full_name: form.name, phone: form.phone, cpf: form.cpf, birth_date: form.birthDate });
-        window.location.href = returnTo;
+        window.location.href = returnTo === '/' ? '/minha-conta' : returnTo;
     };
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -33,7 +33,7 @@ export default function Register() {
         if (!validateEmail(form.email)) e2.email = "Informe um e-mail válido";
         if (!validatePhone(form.phone)) e2.phone = "Informe seu telefone";
         if (!validateCPF(form.cpf)) e2.cpf = "CPF inválido";
-        if (form.password.length < 6) e2.password = "Mínimo de 6 caracteres";
+        if (passwordMessage(form.password)) e2.password = passwordMessage(form.password);
         if (form.password !== form.confirm) e2.confirm = "As senhas não coincidem";
         setErrors(e2);
         if (Object.keys(e2).length > 0) return;
@@ -56,6 +56,7 @@ export default function Register() {
     };
 
     const handleVerify = async () => {
+        if (loading) return;
         setError("");
         setLoading(true);
         try {
@@ -73,38 +74,38 @@ export default function Register() {
     };
 
     const handleResend = async () => {
+        if (loading) return;
+        setLoading(true);
         setError("");
         try {
             await client.auth.resendOtp(form.email);
         } catch (err) {
             setError(err.message || "Erro ao reenviar código");
-        }
+        } finally { setLoading(false); }
     };
 
-    const handleGoogle = () => {
-        client.auth.loginWithProvider("google", returnTo);
+    const handleGoogle = async () => {
+        setLoading(true); setError('');
+        try { await client.auth.loginWithProvider("google", returnTo === '/' ? '/minha-conta' : returnTo); }
+        catch { setError('Não foi possível entrar com Google. Tente novamente ou cadastre-se com e-mail e senha.'); }
+        finally { setLoading(false); }
     };
 
     if (showOtp && !registrationComplete) {
         return (
             <AuthLayout
                 title="Verifique seu e-mail"
-                subtitle={`Enviamos um código para ${form.email}`}
+                subtitle={`Confira as instruções de confirmação em ${form.email}`}
             >
                 {error && <div className="mb-4 p-3 bg-[hsl(var(--rose))]/10 text-[hsl(var(--rose))] text-sm text-center">{error}</div>}
-                <div className="flex justify-center mb-6">
-                    <InputOTP maxLength={6} value={otpCode} onChange={setOtpCode} autoFocus>
-                        <InputOTPGroup>
-                            {[0, 1, 2, 3, 4, 5].map((i) => <InputOTPSlot key={i} index={i} />)}
-                        </InputOTPGroup>
-                    </InputOTP>
-                </div>
+                <p className="text-sm mb-5">Abra o link de confirmação enviado pelo Supabase. Depois, complete seus dados na área da cliente. Se o e-mail contiver um código, você também pode informá-lo abaixo.</p>
+                <label className="block text-sm mb-6">Código de confirmação<input className="admin-field block mt-2 w-full" autoComplete="one-time-code" inputMode="numeric" maxLength={10} value={otpCode} onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))} /></label>
                 <button onClick={handleVerify} disabled={loading || otpCode.length < 6} className="btn-gold w-full">
                     {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verificando...</> : "Verificar"}
                 </button>
                 <p className="text-center text-sm text-muted-foreground mt-4">
                     Não recebeu?{" "}
-                    <button onClick={handleResend} className="text-[hsl(var(--rose))] font-medium hover:underline">Reenviar</button>
+                    <button disabled={loading} onClick={handleResend} className="text-[hsl(var(--rose))] min-h-11 font-medium hover:underline">Reenviar instruções</button>
                 </p>
             </AuthLayout>
         );
@@ -123,10 +124,7 @@ export default function Register() {
                 </>
             }
         >
-            <button onClick={handleGoogle} className="w-full h-12 flex items-center justify-center gap-2 border border-border bg-background text-sm font-medium mb-5 hover:border-foreground/40 transition-colors">
-                <GoogleIcon className="w-4 h-4" />
-                Cadastrar com Google
-            </button>
+            <GoogleSignIn loading={loading} onClick={handleGoogle} />
 
             <div className="relative mb-5">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
@@ -156,12 +154,14 @@ export default function Register() {
 }
 
 function Field({ icon: Icon, label, value, onChange, type = "text", required = false, error = "", max = undefined }) {
+    const id = useId();
     return (
         <div>
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
+            <label htmlFor={id} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
             <div className="relative">
                 <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
+                    id={id} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined}
                     type={type}
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
@@ -170,7 +170,7 @@ function Field({ icon: Icon, label, value, onChange, type = "text", required = f
                     className={`w-full border bg-background pl-10 pr-4 py-3.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${error ? "border-[hsl(var(--rose))]" : "border-border"}`}
                 />
             </div>
-            {error && <p className="text-[11px] text-[hsl(var(--rose))] mt-1.5">{error}</p>}
+            {error && <p id={`${id}-error`} role="alert" className="text-[11px] text-destructive mt-1.5">{error}</p>}
         </div>
     );
 }
