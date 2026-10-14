@@ -11,12 +11,15 @@ export default function Overview() {
     const { favorites } = useStore();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
     useEffect(() => {
+        let active = true;
         base44.entities.Order.list("-created_date", 50)
-            .then(setOrders)
-            .catch(() => { })
-            .finally(() => setLoading(false));
+            .then(value => { if (active) setOrders(value); })
+            .catch(() => { if (active) setError('Não foi possível consultar seus pedidos. Acesse Meus pedidos para tentar novamente.'); })
+            .finally(() => { if (active) setLoading(false); });
+        return () => { active = false; };
     }, []);
 
     const firstName = (user?.full_name || "").split(" ")[0] || "querida";
@@ -28,14 +31,15 @@ export default function Overview() {
             <h1 className="font-heading text-3xl tracking-[0.03em]">Olá, {firstName}</h1>
             <div className="flex justify-start mt-3 mb-8"><div className="gold-rule" /></div>
 
+            {error && <p role="alert" className="text-destructive mb-4">{error}</p>}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
-                <StatCard icon={Package} label="Pedidos realizados" value={orders.length} />
-                <StatCard icon={Clock} label="Em andamento" value={ongoing.length} />
+                <StatCard icon={Package} label="Pedidos realizados" value={loading || error ? '—' : orders.length} />
+                <StatCard icon={Clock} label="Em andamento" value={loading || error ? '—' : ongoing.length} />
                 <StatCard icon={Heart} label="Favoritos" value={favorites.length} />
             </div>
 
             <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Pedido mais recente</h2>
-            {loading ? (
+            {error ? <Link to="/minha-conta/pedidos" className="btn-outline">Consultar meus pedidos</Link> : loading ? (
                 <div className="h-32 bg-bone animate-pulse" />
             ) : latest ? (
                 <Link to={`/minha-conta/pedidos/${latest.id}`} className="block bg-[hsl(var(--bone))] p-6 hover:shadow-md transition-shadow group">

@@ -27,15 +27,15 @@ import { ChevronLeft, ChevronRight, Check, X, AlertTriangle } from "lucide-react
  */
 export default function AdminWizard({
     title,
-    subtitle,
+    subtitle = "",
     icon: Icon,
     steps = [],
     validateStep,
     onSave,
     onClose,
     saveLabel = "Salvar",
-    draftLabel,
-    onSaveDraft,
+    draftLabel = null,
+    onSaveDraft = undefined,
     saving = false,
     children,
 }) {
@@ -161,6 +161,12 @@ export default function AdminWizard({
 
                 {/* Body — scrollable */}
                 <div ref={scrollRef} className="flex-1 overflow-y-auto admin-scroll px-6 py-5">
+                    {stepErrors && Object.keys(stepErrors).length > 0 && (
+                        <div role="alert" className="mb-5 flex items-start gap-2 border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span>{Object.values(stepErrors)[0]}</span>
+                        </div>
+                    )}
                     {typeof children === "function"
                         ? children(steps[currentStep], { currentStep, stepErrors, setStepErrors })
                         : children}

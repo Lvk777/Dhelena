@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Plus, Pencil, Trash2, Image, Loader2, Eye, Monitor, Smartphone, AlertCircle, Tag, MapPin, Link2, Calendar, Check, Wand2 } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Plus, Pencil, Trash2, Image, Eye, AlertCircle, Tag, MapPin, Link2, Calendar, Check, Wand2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import AdminWizard from "@/components/admin/AdminWizard";
 import AdminInput from "@/components/admin/AdminInput";
@@ -7,12 +7,13 @@ import AdminTextarea from "@/components/admin/AdminTextarea";
 import AdminImageUploader from "@/components/admin/AdminImageUploader";
 import AdminToggle from "@/components/admin/AdminToggle";
 import AdminSelect from "@/components/admin/AdminSelect";
-import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import ErrorBoundary from "@/components/admin/ErrorBoundary";
 import StorefrontPreview from "@/components/admin/StorefrontPreview";
 import { logAdminAction } from "@/lib/audit";
 import { BANNER_POSITION_PRESETS, IMAGE_PRESETS, generateMobileVersion, blobToFile } from "@/lib/imageProcessor";
+import { usePublicSettings } from '@/context/PublicSettingsContext';
+import { safeNavigation } from '../../../backend/src/lib/navigation.js';
 
 export const BANNER_POSITIONS = [
     { value: "home_hero", label: "Home — Hero principal" },
@@ -130,6 +131,10 @@ export default function Banners() {
 }
 
 function BannerWizard({ item, onClose, onSaved }) {
+    const { settings } = usePublicSettings();
+    const linkErrors = data => Object.fromEntries(['button_link', 'secondary_cta_link']
+        .filter(key => data[key] && !safeNavigation(data[key], { origin: window.location.origin, allowedOrigins: settings.general?.external_link_origins || [] }))
+        .map(key => [key, 'Destino inválido ou não autorizado.']));
     const [form, setForm] = useState({
         internal_name: item.internal_name || "",
         title: item.title || "",
@@ -139,8 +144,8 @@ function BannerWizard({ item, onClose, onSaved }) {
         image: item.image || "",
         image_mobile: item.image_mobile || "",
         position: item.position || "",
-        button_text: item.button_text || item.primary_cta_label || "",
-        button_link: item.button_link || item.primary_cta_link || "",
+        button_text: item.button_text ?? item.primary_cta_label ?? "",
+        button_link: item.button_link ?? item.primary_cta_link ?? "",
         secondary_cta_label: item.secondary_cta_label || "",
         secondary_cta_link: item.secondary_cta_link || "",
         active: item.active !== false,
@@ -199,6 +204,7 @@ function BannerWizard({ item, onClose, onSaved }) {
         if (stepIndex === 0 && !form.internal_name?.trim()) errors.internal_name = "Nome interno é obrigatório";
         if (stepIndex === 1 && !form.image) errors.image = "Adicione uma imagem para publicar este banner.";
         if (stepIndex === 2 && !form.position) errors.position = "Posição é obrigatória";
+        if (stepIndex === 3) Object.assign(errors, linkErrors(form));
         return Object.keys(errors).length > 0 ? errors : null;
     };
 
@@ -207,6 +213,7 @@ function BannerWizard({ item, onClose, onSaved }) {
         if (!form.internal_name?.trim()) allErrors.internal_name = "Nome interno é obrigatório";
         if (!form.position) allErrors.position = "Posição é obrigatória";
         if (!form.image) allErrors.image = "Adicione uma imagem para publicar este banner.";
+        Object.assign(allErrors, linkErrors(form));
         if (Object.keys(allErrors).length > 0) { setStepErrors(allErrors); return; }
 
         setSaving(true);
@@ -227,7 +234,7 @@ function BannerWizard({ item, onClose, onSaved }) {
             onSaved();
         } catch (err) {
             console.error("Erro ao salvar banner:", err);
-            setStepErrors({ _general: "Erro ao salvar. Verifique os dados." });
+            setStepErrors({ _general: err.message || "Erro ao salvar. Verifique os dados." });
         } finally { setSaving(false); }
     };
 
@@ -336,9 +343,9 @@ function BannerWizard({ item, onClose, onSaved }) {
                 return (
                     <div className="max-w-xl mx-auto space-y-4">
                         <AdminInput label="Texto do botão" value={form.button_text} onChange={(v) => set("button_text", v)} full placeholder="Ex: Ver coleção" />
-                        <AdminInput label="Link do botão" value={form.button_link} onChange={(v) => set("button_link", v)} full placeholder="/loja" />
+                        <AdminInput label="Link do botão" value={form.button_link} onChange={(v) => set("button_link", v)} full placeholder="/loja" error={errors?.button_link} />
                         <AdminInput label="CTA secundário — texto" value={form.secondary_cta_label} onChange={(v) => set("secondary_cta_label", v)} placeholder="Ex: Sobre nós" />
-                        <AdminInput label="CTA secundário — link" value={form.secondary_cta_link} onChange={(v) => set("secondary_cta_link", v)} placeholder="/sobre" />
+                        <AdminInput label="CTA secundário — link" value={form.secondary_cta_link} onChange={(v) => set("secondary_cta_link", v)} placeholder="/sobre" error={errors?.secondary_cta_link} />
                     </div>
                 );
             case "schedule":

@@ -14,13 +14,15 @@ import PoliciesTab from "@/components/admin/settings/PoliciesTab";
 import SystemTab from "@/components/admin/settings/SystemTab";
 import SecurityTab from "@/components/admin/settings/SecurityTab";
 import LoginHistoryTab from "@/components/admin/settings/LoginHistoryTab";
+import SenderTab from '@/components/admin/settings/SenderTab';
 
 const DEFAULTS = {
-    general: { store_name: "D'Helenas", trade_name: "", company_name: "", cnpj: "", email: "", phone: "", whatsapp: "", logo: "", logo_dark: "", favicon: "", currency: "BRL", timezone: "America/Sao_Paulo" },
-    store: { top_bar_text: "Frete grátis acima de R$ 499 · Parcelamos em até 6x", free_shipping_threshold: 499, max_installments: 6, interest_free_installments: 6, allow_out_of_stock: false, show_low_stock: true, low_stock_threshold: 3 },
+    general: { store_name: "D'Helenas", trade_name: "", company_name: "", cnpj: "", email: "", phone: "", whatsapp: "", public_address: "", business_hours: "", external_link_origins: [], logo: "", logo_dark: "", favicon: "", currency: "BRL", timezone: "America/Sao_Paulo" },
+    store: { top_bar_text: "", free_shipping_threshold: null, max_installments: null, interest_free_installments: null, allow_out_of_stock: false, show_low_stock: true, low_stock_threshold: 3 },
     address: { cep: "", street: "", number: "", complement: "", district: "", city: "", state: "SP" },
-    shipping: { pickup_enabled: true, pickup_name: "Retirada no estoque", pickup_instructions: "", pickup_time: "", free_shipping_enabled: true, free_shipping_threshold: 499, melhor_envio_enabled: false, melhor_envio_mode: "sandbox" },
-    payments: { mercado_pago_enabled: false, mercado_pago_mode: "sandbox", pix_enabled: true, card_enabled: true, boleto_enabled: false, max_installments: 6, interest_free_installments: 6, pix_discount: 5 },
+    shipping: { pickup_enabled: false, pickup_name: "Retirada", pickup_address: "", pickup_instructions: "", pickup_time: "", free_shipping_enabled: true, free_shipping_threshold: 499, melhor_envio_enabled: false, melhor_envio_mode: "sandbox" },
+    shipping_sender: { name: "", document: "", email: "", phone: "", state_register: "" },
+    payments: { mercado_pago_enabled: false, mercado_pago_mode: "sandbox", pix_enabled: true, card_enabled: true, debit_card_enabled: true, boleto_enabled: false, max_installments: 6, interest_free_installments: 6, pix_discount_enabled: false, pix_discount: 5 },
     emails: { sender_name: "D'Helenas", sender_email: "", reply_to: "", order_received: true, payment_approved: true, order_separation: true, order_shipped: true, order_delivered: true, order_cancelled: true },
     social: { instagram: "", facebook: "", tiktok: "", whatsapp: "" },
     seo: { default_title: "D'Helenas — Boutique Digital", default_description: "", sharing_image: "", ga_id: "", meta_pixel_id: "" },
@@ -34,6 +36,7 @@ const SECTIONS = [
     { key: "general", label: "Geral", icon: Store, component: GeneralTab },
     { key: "store", label: "Loja", icon: ShoppingBag, component: StoreTab },
     { key: "address", label: "Endereço", icon: MapPin, component: AddressTab },
+    { key: "shipping_sender", label: "Remetente", icon: Truck, component: SenderTab },
     { key: "shipping", label: "Entrega", icon: Truck, component: ShippingTab },
     { key: "payments", label: "Pagamentos", icon: CreditCard, component: PaymentsTab },
     { key: "emails", label: "E-mails", icon: Mail, component: EmailsTab },
@@ -57,6 +60,7 @@ export default function Settings() {
     const [saving, setSaving] = useState(false);
     const [savedMessage, setSavedMessage] = useState("");
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [saveError, setSaveError] = useState('');
 
     useEffect(() => { loadSettings(); }, []);
 
@@ -94,13 +98,15 @@ export default function Settings() {
 
     const save = async () => {
         setSaving(true);
+        setSaveError('');
         try {
             for (const key of Object.keys(DEFAULTS)) {
                 if (JSON.stringify(settings[key]) === JSON.stringify(originalSettings[key])) continue;
+                const value = key === 'general' ? { ...settings[key], external_link_origins: (settings[key].external_link_origins || []).map(origin => origin.trim()).filter(Boolean) } : settings[key];
                 if (recordIds[key]) {
-                    await base44.entities.Setting.update(recordIds[key], { value: settings[key] });
+                    await base44.entities.Setting.update(recordIds[key], { value });
                 } else {
-                    const rec = await base44.entities.Setting.create({ key, value: settings[key], is_public: PUBLIC_KEYS.includes(key) });
+                    const rec = await base44.entities.Setting.create({ key, value, is_public: PUBLIC_KEYS.includes(key) });
                     recordIds[key] = rec.id;
                 }
             }
@@ -110,7 +116,7 @@ export default function Settings() {
             await logAdminAction("settings_update", "Setting", "", "Configurações", "Configurações da loja atualizadas");
             setTimeout(() => setSavedMessage(""), 3000);
         } catch (e) {
-            console.error("Erro ao salvar configurações:", e);
+            setSaveError(e.message || 'Não foi possível salvar as configurações.');
         } finally {
             setSaving(false);
         }
@@ -141,7 +147,7 @@ export default function Settings() {
         <div>
             <h1 className="font-heading text-2xl tracking-[0.03em] mb-6">Configurações</h1>
 
-            <div className="flex gap-6">
+            <div className="flex flex-col lg:flex-row gap-6">
                 {/* Desktop sidebar */}
                 <aside className="hidden lg:flex w-56 flex-col bg-background border border-border rounded-lg shrink-0 self-start sticky top-2 max-h-[calc(100vh-6rem)]">
                     <Sidebar />
@@ -193,6 +199,7 @@ export default function Settings() {
                 </div>
             </div>
 
+            {saveError && <p role="alert" className="text-sm text-red-700 py-3">{saveError}</p>}
             {/* Save bar */}
             {hasChanges && !loading && (
                 <div className="sticky bottom-0 left-0 right-0 bg-background border-t border-border p-4 flex items-center justify-between gap-4 mt-6 -mx-5 lg:-mx-8 px-5 lg:px-8 shadow-lg z-10">

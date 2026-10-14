@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, X, Power, Tag, Calendar, Palette, Percent, Truck, ShoppingCart, Save, Layout, Eye, Check } from "lucide-react";
+import { base44 } from '@/api/base44Client';
+import { Plus, Trash2, Power, Tag, Calendar, Palette, Percent, Truck, ShoppingCart, Eye, Check } from "lucide-react";
 import AdminWizard from "@/components/admin/AdminWizard";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminSelect from "@/components/admin/AdminSelect";
 import AdminTextarea from "@/components/admin/AdminTextarea";
 import AdminToggle from "@/components/admin/AdminToggle";
-import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminImageUploader from "@/components/admin/AdminImageUploader";
 import PromotionPreview from "@/components/admin/PromotionPreview";
+import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
 
 const PROMO_TYPES = [
     { value: "look_discount", label: "Desconto no Look" },
@@ -39,18 +40,15 @@ const WIZARD_STEPS = [
 const PROMO_TYPE_LABELS = Object.fromEntries(PROMO_TYPES.map(t => [t.value, t.label]));
 
 export default function Promotions() {
+    const dialogs = useBoutiqueDialogs();
     const [promos, setPromos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(null);
 
-    const token = localStorage.getItem("dhelena_access_token");
-    const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
-
     const load = async () => {
         setLoading(true);
         try {
-            const res = await fetch("/api/look-promotions/admin", { headers });
-            const data = await res.json();
+            const data = await base44.custom.adminPromotions();
             setPromos(data || []);
         } catch { /* */ }
         finally { setLoading(false); }
@@ -60,22 +58,22 @@ export default function Promotions() {
 
     const handleSave = async (promo) => {
         if (promo.id) {
-            await fetch(`/api/look-promotions/${promo.id}`, { method: "PATCH", headers, body: JSON.stringify(promo) });
+            await base44.entities.LookPromotion.update(promo.id, promo);
         } else {
-            await fetch("/api/look-promotions", { method: "POST", headers, body: JSON.stringify(promo) });
+            await base44.entities.LookPromotion.create(promo);
         }
         setEditing(null);
         load();
     };
 
     const handleToggle = async (promo) => {
-        await fetch(`/api/look-promotions/${promo.id}`, { method: "PATCH", headers, body: JSON.stringify({ active: !promo.active }) });
+        await base44.entities.LookPromotion.update(promo.id, { active: !promo.active });
         load();
     };
 
     const handleDelete = async (id) => {
-        if (!confirm("Excluir esta promoção?")) return;
-        await fetch(`/api/look-promotions/${id}`, { method: "DELETE", headers });
+        if (!await dialogs.confirm({ title: 'Excluir promoção', message: 'Excluir esta promoção? Esta ação não poderá ser desfeita.' })) return;
+        await base44.entities.LookPromotion.delete(id);
         load();
     };
 

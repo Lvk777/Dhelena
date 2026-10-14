@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Heart } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
-import { COLOR_SWATCHES, formatBRL, installmentValue, isAvailable } from "@/data/products";
+import { COLOR_SWATCHES, formatBRL, isAvailable } from "@/data/products";
 
 export default function ProductCard({ product, index = 0 }) {
     const { toggleFavorite, isFavorite } = useStore();
@@ -84,7 +84,7 @@ export default function ProductCard({ product, index = 0 }) {
                     ) : (
                         <p className="text-sm font-medium text-foreground">{formatBRL(product.price)}</p>
                     )}
-                    <p className="text-[11px] text-muted-foreground mt-1">ou {product.installments}x de {formatBRL(installmentValue(price, product.installments))}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">Parcelamento disponível no checkout</p>
                 </div>
             </div>
         </div>

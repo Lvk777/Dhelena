@@ -5,6 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { formatBRL, totalStock } from "@/data/products";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import { logAdminAction } from "@/lib/audit";
+import { loadProductPages } from "@/lib/catalogPaging";
 
 const STATUS = {
     draft: { label: "Rascunho", color: "text-muted-foreground bg-[hsl(var(--bone))]" },
@@ -17,12 +18,14 @@ export default function AdminProducts() {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState("all");
     const [q, setQ] = useState("");
+    const [loadError, setLoadError] = useState(false);
 
     const load = () => {
         setLoading(true);
-        base44.entities.Product.list("-created_date", 200)
+        setLoadError(false);
+        loadProductPages((limit, page) => base44.entities.Product.list("-created_date", limit, page), 200)
             .then(setProducts)
-            .catch(() => { })
+            .catch(() => setLoadError(true))
             .finally(() => setLoading(false));
     };
 
@@ -35,7 +38,15 @@ export default function AdminProducts() {
     });
 
     const duplicate = async (p) => {
-        const { id, created_date, updated_date, created_by_id, ...data } = p;
+        const copyFields = [
+            'category', 'subcategory', 'collection', 'description',
+            'short_description', 'details', 'price', 'sale_price', 'cost_price',
+            'installments', 'images', 'colors', 'sizes', 'badges', 'composition',
+            'modeling', 'length', 'lining', 'transparency', 'elasticity', 'care',
+            'measurements', 'weight', 'package_height', 'package_width',
+            'package_length', 'size_guide_id', 'custom_measurements',
+        ];
+        const data = Object.fromEntries(copyFields.filter(field => p[field] !== undefined).map(field => [field, p[field]]));
         const newProduct = await base44.entities.Product.create({ ...data, name: `${p.name} (cópia)`, sku: "", status: "draft" });
         await logAdminAction("product_create", "Product", newProduct.id, `${p.name} (cópia)`, `Produto duplicado de "${p.name}"`);
         load();
@@ -68,6 +79,7 @@ export default function AdminProducts() {
 
     return (
         <div>
+            {loadError && <div role="alert" className="mb-4 text-sm text-destructive">Não foi possível carregar os produtos. <button onClick={load} className="underline">Tentar novamente</button></div>}
             <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
                 <h1 className="font-heading text-2xl tracking-[0.03em]">Produtos</h1>
                 <Link to="/admin/produtos/novo" className="btn-gold">

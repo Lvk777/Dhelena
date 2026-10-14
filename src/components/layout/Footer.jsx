@@ -2,17 +2,20 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Instagram, MessageCircle } from "lucide-react";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
+import { instagramLink, whatsappLink, validCnpjFormat } from '../../../backend/src/lib/navigation.js';
 
 export default function Footer() {
     const { settings } = usePublicSettings();
-    const instLink = settings.social?.instagram || "https://instagram.com";
-    const wppLink = settings.social?.whatsapp
-        ? (settings.social.whatsapp.startsWith("http") ? settings.social.whatsapp : `https://wa.me/${settings.social.whatsapp.replace(/\D/g, "")}`)
-        : "https://wa.me/5500000000000";
+    const instLink = instagramLink(settings.social?.instagram);
+    const wppLink = whatsappLink(settings.general?.whatsapp || settings.social?.whatsapp);
+    const company = settings.general?.company_name;
+    const tradeName = settings.general?.trade_name;
+    const cnpj = settings.general?.cnpj;
+    const realCnpj = validCnpjFormat(cnpj);
     return (
         <footer className="bg-[hsl(var(--rose-deep))] border-t border-[hsl(var(--rose-deep))] mt-24">
             <div className="container-boutique py-16">
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-10">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
                     {/* brand */}
                     <div className="col-span-2 lg:col-span-2">
                         <span className="font-heading text-2xl tracking-[0.08em] text-bone">D'Helenas</span>
@@ -21,12 +24,12 @@ export default function Footer() {
                             Moda feminina e acessórios. Mais que moda, conectamos mulheres, histórias e legados.
                         </p>
                         <div className="flex items-center gap-3 mt-6">
-                            <a href={instLink} target="_blank" rel="noreferrer" className="w-9 h-9 rounded-full border border-bone/25 flex items-center justify-center text-bone/70 hover:border-[hsl(var(--gold))] hover:text-[hsl(var(--gold))] transition-colors" aria-label="Instagram">
+                            {instLink && <a href={instLink} target="_blank" rel="noopener noreferrer" className="w-11 h-11 rounded-full border border-bone/25 flex items-center justify-center text-bone/70 hover:border-[hsl(var(--gold))] hover:text-[hsl(var(--gold))] transition-colors" aria-label="Instagram">
                                 <Instagram className="w-4 h-4" strokeWidth={1.25} />
-                            </a>
-                            <a href={wppLink} target="_blank" rel="noreferrer" className="w-9 h-9 rounded-full border border-bone/25 flex items-center justify-center text-bone/70 hover:border-[hsl(var(--gold))] hover:text-[hsl(var(--gold))] transition-colors" aria-label="WhatsApp">
+                            </a>}
+                            {wppLink && <a href={wppLink} target="_blank" rel="noopener noreferrer" className="w-11 h-11 rounded-full border border-bone/25 flex items-center justify-center text-bone/70 hover:border-[hsl(var(--gold))] hover:text-[hsl(var(--gold))] transition-colors" aria-label="WhatsApp">
                                 <MessageCircle className="w-4 h-4" strokeWidth={1.25} />
-                            </a>
+                            </a>}
                         </div>
                     </div>
 
@@ -47,25 +50,14 @@ export default function Footer() {
                     ]} />
 
                     <div>
-                        <h4 className="text-[11px] uppercase tracking-[0.22em] text-[hsl(var(--gold))] mb-5">Pagamento</h4>
-                        <div className="flex flex-wrap gap-2">
-                            {["Pix", "Visa", "Master", "Elo", "Débito"].map((p) => (
-                                <span key={p} className="text-[10px] uppercase tracking-[0.12em] text-bone/60 border border-bone/20 px-2.5 py-1.5">{p}</span>
-                            ))}
-                        </div>
-                        <p className="text-[11px] text-bone/50 mt-5 leading-relaxed">
-                            Silvestre & Sousa — CNPJ 00.000.000/0001-00
-                        </p>
+                        {tradeName && <p className="text-[11px] text-bone/50 mt-5 leading-relaxed break-words">{tradeName}</p>}
+                        {company && realCnpj && <p className="text-[11px] text-bone/50 mt-2 leading-relaxed break-words">{company} · CNPJ {cnpj}</p>}
                     </div>
                 </div>
 
                 <div className="mt-14 pt-6 border-t border-bone/15 flex flex-col sm:flex-row items-center justify-between gap-3">
                     <p className="text-[11px] tracking-wide text-bone/50">© {new Date().getFullYear()} D'Helenas. Todos os direitos reservados.</p>
                     <div className="flex items-center gap-4">
-                        <Link to="/admin" className="text-[11px] tracking-[0.1em] text-bone/40 hover:text-[hsl(var(--gold))] transition-colors">
-                            Painel Admin
-                        </Link>
-                        <span className="text-bone/20">•</span>
                         <p className="text-[11px] tracking-[0.2em] uppercase text-bone/50">Moda que conecta histórias</p>
                     </div>
                 </div>

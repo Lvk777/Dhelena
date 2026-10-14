@@ -1,8 +1,11 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
-// ─── Helper: key generator (IP + optional user) ───────────────────
+// ─── Helper: key generator (trusted proxy IP + optional user) ─────
 const keyGenerator = (req) => {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+    // Never read X-Forwarded-For directly. Express applies the constrained
+    // proxy rule before deriving req.ip, but that value is only authoritative
+    // after infrastructure blocks direct access to the Railway origin.
+    const ip = ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown');
     return req.user?.id ? `${ip}:${req.user.id}` : ip;
 };
 

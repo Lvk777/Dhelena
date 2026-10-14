@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from "react";
+import AdminConfirmDialog from '@/components/admin/AdminConfirmDialog';
+import { safeMelhorEnvioAuthorizationUrl } from '../../../backend/src/lib/navigation.js';
 import {
     Database, CreditCard, Truck, Mail, MessageCircle, Cloud,
-    CheckCircle2, XCircle, Save, X, Lock, Power, Loader2, AlertTriangle, Zap
+    CheckCircle2, XCircle, Save, Lock, Power, Loader2, AlertTriangle, Zap
 } from "lucide-react";
 import AdminModal from "@/components/admin/AdminModal";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminSelect from "@/components/admin/AdminSelect";
+import { client } from "@/api/apiClient";
 
 const INTEGRATION_DEFS = [
     {
@@ -30,6 +33,7 @@ const INTEGRATION_DEFS = [
     },
     {
         key: "mercado_pago",
+        statusKey: "mercadoPago",
         name: "Mercado Pago",
         icon: CreditCard,
         description: "Gateway de pagamentos — Pix, cartão de crédito e boleto.",
@@ -41,6 +45,7 @@ const INTEGRATION_DEFS = [
     },
     {
         key: "melhor_envio",
+        statusKey: "melhorEnvio",
         name: "Melhor Envio",
         icon: Truck,
         description: "Cotação e compra de fretes com transportadoras.",
@@ -65,7 +70,7 @@ const INTEGRATION_DEFS = [
         key: "email",
         name: "E-mail Transacional",
         icon: Mail,
-        description: "Envio de e-mails de pedidos, recuperação de senha e notificações.",
+        description: "E-mails de pedidos e notificações. Cadastro e recuperação de senha usam o serviço de e-mail do Supabase Auth.",
         fields: [
             { key: "resend_api_key", label: "Resend API Key", type: "text", placeholder: "NUNCA exibido — digite para definir", sensitive: true },
             { key: "email_from", label: "E-mail remetente", type: "email", placeholder: "contato@dhelenas.com.br", sensitive: false },
@@ -84,14 +89,24 @@ export default function Integrations() {
     const [testing, setTesting] = useState(null);
     const [testResult, setTestResult] = useState(null);
     const [showConfirmSave, setShowConfirmSave] = useState(false);
-
-    const token = localStorage.getItem("dhelena_access_token");
-    const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+    const [oauthMode, setOauthMode] = useState(null);
+    const [oauthBusy, setOauthBusy] = useState(false);
+    const [oauthError, setOauthError] = useState('');
+    const authorizeOAuth = async () => {
+        setOauthBusy(true); setOauthError('');
+        try {
+            const result = await client.custom.authorizeMelhorEnvio(oauthMode);
+            const url = safeMelhorEnvioAuthorizationUrl(oauthMode, result.authorization_url);
+            if (!url) throw new Error('Invalid OAuth destination');
+            window.location.assign(url);
+        } catch { setOauthError('Não foi possível iniciar o OAuth no ambiente selecionado.'); setOauthMode(null); }
+        finally { setOauthBusy(false); }
+    };
 
     useEffect(() => {
         Promise.all([
-            fetch("/api/integrations/config", { headers }).then(r => r.json()),
-            fetch("/api/integrations/status", { headers }).then(r => r.json()),
+            client.custom.integrationConfigs(),
+            client.custom.integrationStatus(),
         ]).then(([cfgs, envs]) => {
             const cfgMap = {};
             (cfgs || []).forEach(c => { cfgMap[c.service_key] = c; });
@@ -130,17 +145,12 @@ export default function Integrations() {
         setShowConfirmSave(false);
         setSaving(true);
         try {
-            const res = await fetch(`/api/integrations/config/${editingDef.key}`, {
-                method: "PUT",
-                headers,
-                body: JSON.stringify({
-                    service_name: editingDef.name,
-                    description: editingDef.description,
-                    config_data: editForm,
-                    is_active: configs[editingDef.key]?.is_active ?? false,
-                }),
+            const saved = await client.custom.updateIntegrationConfig(editingDef.key, {
+                service_name: editingDef.name,
+                description: editingDef.description,
+                config_data: editForm,
+                is_active: configs[editingDef.key]?.is_active ?? false,
             });
-            const saved = await res.json();
             setConfigs(prev => ({ ...prev, [editingDef.key]: saved }));
             setEditingDef(null);
         } catch { /* */ }
@@ -152,12 +162,7 @@ export default function Integrations() {
         setTestResult(null);
         try {
             // Save first if there are unsaved changes, then test
-            const res = await fetch(`/api/integrations/test/${editingDef.key}`, {
-                method: "POST",
-                headers,
-                body: JSON.stringify({ config_data: editForm }),
-            });
-            const result = await res.json();
+            const result = await client.custom.testIntegration(editingDef.key, editForm);
             if (result.success) {
                 setTesting("success");
                 setTestResult("Conectado");
@@ -172,10 +177,7 @@ export default function Integrations() {
     };
 
     const toggleActive = async (def) => {
-        const res = await fetch(`/api/integrations/config/${def.key}/toggle`, {
-            method: "PATCH", headers,
-        });
-        const updated = await res.json();
+        const updated = await client.custom.toggleIntegration(def.key);
         setConfigs(prev => ({ ...prev, [def.key]: updated }));
     };
 
@@ -206,7 +208,7 @@ export default function Integrations() {
             <div className="grid sm:grid-cols-2 gap-4">
                 {INTEGRATION_DEFS.map(def => {
                     const cfg = configs[def.key];
-                    const env = getEnvStatus(def.key);
+                    const env = getEnvStatus(def.statusKey || def.key);
                     const envConfigured = env && env.status !== "Não configurado";
                     const dbActive = cfg?.is_active ?? false;
                     const dbSensitiveConfigured = def.fields.some(f => getFieldStatus(def, f.key)?.configured);
@@ -245,6 +247,13 @@ export default function Integrations() {
                                         </span>
                                     )}
                                 </div>
+                                {env?.environments && <dl className="mt-3 space-y-1 text-xs">
+                                    {Object.entries(env.environments).map(([mode, state]) => <div key={mode} className="flex flex-wrap justify-between gap-2">
+                                        <dt>{mode === 'sandbox' ? 'Sandbox' : 'Produção'}</dt>
+                                        <dd>{state.oauth_token_present ? (state.token_expired ? 'Autorização expirada' : 'OAuth autorizado') : state.oauth_configured ? 'Aguardando autorização' : 'Credenciais pendentes'}</dd>
+                                        <button type="button" title={`Autorizar OAuth ${mode}`} disabled={!state.oauth_configured || oauthBusy} onClick={() => setOauthMode(mode)} className="min-h-11 text-xs underline disabled:opacity-40">Autorizar {mode === 'sandbox' ? 'Sandbox' : 'Produção'}</button>
+                                    </div>)}
+                                </dl>}
 
                                 <div className="flex gap-2 mt-4">
                                     <button
@@ -269,6 +278,8 @@ export default function Integrations() {
             </div>
 
             {/* Integration Modal */}
+            {oauthError && <p role="alert" className="text-sm text-red-700 mt-4">{oauthError}</p>}
+            <AdminConfirmDialog open={!!oauthMode} onClose={() => setOauthMode(null)} onConfirm={authorizeOAuth} loading={oauthBusy} danger={false} title={`Autorizar Melhor Envio ${oauthMode === 'production' ? 'Produção' : 'Sandbox'}`} confirmLabel="Continuar para OAuth" message="A autorização será concluída no Melhor Envio. O ambiente ativo da loja permanecerá inalterado." />
             {editingDef && (
                 <AdminModal
                     open

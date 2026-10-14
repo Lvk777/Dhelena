@@ -7,11 +7,18 @@ import { PromotionCampaignBanner } from "@/components/PromoComponents";
 import { useReveal } from "@/hooks/useReveal";
 import { useCatalog } from "@/context/CatalogContext";
 import { LOOK_IMAGE, formatBRL } from "@/data/products";
+import SafeConfiguredLink from '@/components/SafeConfiguredLink';
+import { usePublicSettings } from '@/context/PublicSettingsContext';
+import { instagramLink } from '../../backend/src/lib/navigation.js';
+import { primaryBannerCta } from '@/lib/banners';
 
 export default function Home() {
     const { products, categories, banners, loading } = useCatalog();
+    const { settings } = usePublicSettings();
+    const instagram = instagramLink(settings.social?.instagram);
     const hero = banners.find(b => b.position === "home_hero") || banners[0] || {};
     const concept = banners.find(b => b.position === "home_after_news") || banners[1] || {};
+    const heroCta = primaryBannerCta(hero), conceptCta = primaryBannerCta(concept);
     const novidades = products.filter((p) => p.badges?.novo).slice(0, 8);
     const maisDesejados = products.filter((p) => p.badges?.maisVendido).slice(0, 4);
     const instImages = products.slice(0, 6).map((p) => p.images[0]).filter(Boolean);
@@ -42,12 +49,12 @@ export default function Home() {
                             <p className="mt-5 font-heading text-2xl sm:text-3xl italic text-bone/90">{hero.subtitle}</p>
                             <p className="mt-4 text-sm sm:text-base text-bone/80 leading-relaxed max-w-md">{hero.text}</p>
                             <div className="mt-9 flex flex-wrap gap-3">
-                                <Link to={hero.button_link || hero.primary_cta_link || "/novidades"} className="inline-flex items-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--rose))]/85">
-                                    {hero.button_text || hero.primary_cta_label || "Ver novidades"} <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
-                                </Link>
-                                <Link to={(!hero.secondary_cta_link || hero.secondary_cta_link === "/loja") ? "/colecoes" : hero.secondary_cta_link} className="inline-flex items-center gap-2 border border-bone/80 text-bone text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-bone hover:text-charcoal">
+                                <SafeConfiguredLink to={heroCta.href || "/novidades"} className="inline-flex items-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--rose))]/85">
+                                    {heroCta.label || "Ver novidades"} <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
+                                </SafeConfiguredLink>
+                                <SafeConfiguredLink to={(!hero.secondary_cta_link || hero.secondary_cta_link === "/loja") ? "/colecoes" : hero.secondary_cta_link} className="inline-flex items-center gap-2 border border-bone/80 text-bone text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-bone hover:text-charcoal">
                                     {hero.secondary_cta_label || "Conhecer a coleção"}
-                                </Link>
+                                </SafeConfiguredLink>
                             </div>
                         </div>
                     </div>
@@ -99,10 +106,10 @@ export default function Home() {
                             <p className="eyebrow text-[hsl(var(--gold))]">{concept.eyebrow}</p>
                             <h2 className="mt-4 font-heading text-5xl sm:text-6xl tracking-[0.03em]">{concept.title}</h2>
                             <p className="mt-5 text-base text-bone/85 leading-relaxed max-w-xl mx-auto">{concept.text}</p>
-                            {concept.primary_cta_link && (
-                                <Link to={concept.primary_cta_link} className="mt-8 inline-flex items-center gap-2 bg-[hsl(var(--gold))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--gold))]/85">
-                                    {concept.primary_cta_label}
-                                </Link>
+                            {conceptCta.href && (
+                                <SafeConfiguredLink to={conceptCta.href} className="mt-8 inline-flex items-center gap-2 bg-[hsl(var(--gold))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--gold))]/85">
+                                    {conceptCta.label}
+                                </SafeConfiguredLink>
                             )}
                         </div>
                     </div>
@@ -149,11 +156,11 @@ export default function Home() {
             </section>
 
             {/* INSTAGRAM */}
-            {instImages.length > 0 && (
-                <Section title="Siga a D'Helenas" eyebrow="@dhelenas.oficial">
+            {instagram && instImages.length > 0 && (
+                <Section title="Siga a D'Helenas" eyebrow="Instagram">
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mt-12">
                         {instImages.map((src, i) => (
-                            <a key={i} href="https://instagram.com" target="_blank" rel="noreferrer" className="group relative aspect-square overflow-hidden bg-bone">
+                            <a key={i} href={instagram} target="_blank" rel="noopener noreferrer" className="group relative aspect-square overflow-hidden bg-bone">
                                 <img src={src} alt="Instagram D'Helenas" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
                                 <div className="absolute inset-0 bg-charcoal/0 group-hover:bg-charcoal/30 transition-colors duration-500 flex items-center justify-center">
                                     <Instagram className="w-5 h-5 text-bone opacity-0 group-hover:opacity-100 transition-opacity duration-500" strokeWidth={1.25} />
@@ -169,7 +176,7 @@ export default function Home() {
     );
 }
 
-function Section({ children, title, eyebrow, id, className = "" }) {
+function Section({ children, title, eyebrow, id = undefined, className = "" }) {
     const { ref, visible } = useReveal();
     return (
         <section id={id} className={`py-20 sm:py-28 ${className}`}>
@@ -215,7 +222,7 @@ function LookLine({ product }) {
             </div>
             <div className="flex-1">
                 <p className="text-sm font-medium group-hover:text-[hsl(var(--rose))] transition-colors">{product.name}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">{formatBRL(product.salePrice || product.price)} · {product.installments}x sem juros</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{formatBRL(product.salePrice || product.price)} · Parcelamento disponível no checkout</p>
             </div>
             <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-[hsl(var(--gold))] transition-colors" strokeWidth={1.25} />
         </Link>

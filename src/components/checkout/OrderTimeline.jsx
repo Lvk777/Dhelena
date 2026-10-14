@@ -1,24 +1,9 @@
 import React from "react";
 import { Check } from "lucide-react";
+import { orderEventLabel } from '@/lib/orderTimeline';
 
 // Maps order_events to a visual timeline
-const EVENT_LABELS = {
-    order_created: "Pedido recebido",
-    payment_pending: "Aguardando pagamento",
-    payment_approved: "Pagamento confirmado",
-    payment_rejected: "Pagamento recusado",
-    payment_refunded: "Pagamento reembolsado",
-    em_separacao: "Em separação",
-    label_generated: "Etiqueta gerada",
-    shipped: "Postado",
-    em_transporte: "Em trânsito",
-    saiu_entrega: "Saiu para entrega",
-    delivered: "Entregue",
-    entregue: "Entregue",
-    cancelled: "Cancelado",
-};
-
-export default function OrderTimeline({ events = [] }) {
+export default function OrderTimeline({ events = [], paymentStatus = null }) {
     if (!events || events.length === 0) return null;
 
     return (
@@ -26,7 +11,7 @@ export default function OrderTimeline({ events = [] }) {
             <h3 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Linha do tempo</h3>
             <div className="space-y-0">
                 {events.map((ev, i) => {
-                    const label = EVENT_LABELS[ev.event] || ev.description || ev.event;
+                    const label = orderEventLabel(ev, paymentStatus);
                     return (
                         <div key={ev.id || i} className="flex items-start gap-4">
                             <div className="flex flex-col items-center">

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { logSafeError } from '../lib/safeErrorLog.js';
 import multer from 'multer';
 import crypto from 'crypto';
 import path from 'path';
@@ -121,7 +122,7 @@ async function isFileReferenced(fileUrl) {
         }
         return false;
     } catch (err) {
-        console.error('[Upload] Reference check error:', err.message);
+        logSafeError('upload_reference_check_failed', err);
         // On error, don't delete — safer to keep the file
         return true;
     }
@@ -176,7 +177,7 @@ router.post('/upload', auth, requireAdmin, uploadLimiter, upload.single('file'),
                 });
 
             if (uploadError) {
-                console.error('[Upload] Supabase error:', uploadError.message);
+                logSafeError('storage_upload_failed', uploadError);
                 return res.status(500).json({ error: 'Não foi possível enviar a imagem.' });
             }
 
@@ -187,7 +188,7 @@ router.post('/upload', auth, requireAdmin, uploadLimiter, upload.single('file'),
 
             return res.json({ file_url: publicUrl, path: safeFileName });
         } catch (err) {
-            console.error('[Upload] Unexpected error:', err.message);
+            logSafeError('upload_failed', err);
             return res.status(500).json({ error: 'Não foi possível enviar a imagem.' });
         }
     }
@@ -226,12 +227,12 @@ router.delete('/upload', auth, requireAdmin, async (req, res) => {
                 .remove([storagePath]);
 
             if (error) {
-                console.error('[Upload] Delete error:', error.message);
+                logSafeError('storage_delete_failed', error);
                 return res.status(500).json({ error: 'Não foi possível remover o arquivo.' });
             }
             return res.json({ success: true });
         } catch (err) {
-            console.error('[Upload] Delete unexpected error:', err.message);
+            logSafeError('upload_delete_failed', err);
             return res.status(500).json({ error: 'Não foi possível remover o arquivo.' });
         }
     }

@@ -4,10 +4,17 @@
  */
 
 import { supabase } from './supabaseClient.js';
+import { createSupabaseAuthFlow } from '../lib/supabaseAuthFlow.js';
+import { createSessionFence } from '../lib/sessionFence.js';
+import { buildPlaceOrderRequest } from './orderRequest.js';
+import { resolveApiBase, apiUrl } from './apiBase.js';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const API_BASE = resolveApiBase(import.meta.env.VITE_API_URL, import.meta.env.PROD);
 const TOKEN_KEY = 'dhelena_access_token';
 const USER_KEY = 'dhelena_auth_user';
+const sessionFence = createSessionFence();
+if (supabase) supabase.auth.onAuthStateChange((event, session) => event === 'INITIAL_SESSION'
+    ? sessionFence.initialize(session?.user?.id || null) : sessionFence.observe(session?.user?.id || null));
 
 // ─── Token & user storage ──────────────────────────────────────────
 function getToken() { return localStorage.getItem(TOKEN_KEY); }
@@ -15,39 +22,42 @@ function setToken(token) { token ? localStorage.setItem(TOKEN_KEY, token) : loca
 function getStoredUser() { try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch { return null; } }
 function setStoredUser(user) { user ? localStorage.setItem(USER_KEY, JSON.stringify(user)) : localStorage.removeItem(USER_KEY); }
 
-// ─── Sync Supabase session → localStorage token ────────────────────
-// Only sync when supabase has a session; don't clear JWT token on sign-out events
-if (supabase) {
-    supabase.auth.onAuthStateChange((event, session) => {
-        if (session?.access_token) {
-            setToken(session.access_token);
-        }
-        // Don't clear JWT token on SIGNED_OUT — the JWT auth path is independent
-    });
+/** @param {string} message @param {number} status @param {unknown} [data] */
+function createApiError(message, status, data) {
+    return Object.assign(new Error(message), { status, response: data === undefined ? undefined : { data } });
 }
 
 // ─── Core fetch wrapper ────────────────────────────────────────────
 async function apiFetch(path, options = {}) {
-    const token = getToken();
+    const startedBy = sessionFence.capture();
+    let token = getToken();
+    let identity = null;
+    if (supabase) {
+        const { data, error } = await supabase.auth.getSession();
+        sessionFence.assert(startedBy);
+        token = error ? null : data?.session?.access_token || null;
+        identity = data?.session?.user?.id || null;
+        setToken(token);
+    }
     const headers = { 'Content-Type': 'application/json', ...options.headers };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    const res = await fetch(apiUrl(API_BASE, path), { ...options, headers });
+    sessionFence.assert(startedBy);
+    if (supabase && identity) {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session?.user?.id !== identity) throw createApiError('Sua sessão mudou. Recarregue a página.', 401);
+    }
 
     if (res.status === 401) {
         setToken(null);
         setStoredUser(null);
-        const err = new Error('Não autenticado');
-        err.status = 401;
-        throw err;
+        throw createApiError('Não autenticado', 401);
     }
 
     if (!res.ok) {
         const error = await res.json().catch(() => ({ error: res.statusText }));
-        const err = new Error(error.error || error.message || 'Request failed');
-        err.status = res.status;
-        err.response = { data: error };
-        throw err;
+        throw createApiError(error.error || error.message || 'Request failed', res.status, error);
     }
 
     return res.json();
@@ -68,16 +78,19 @@ const ENTITY_MAP = {
     AuditLog: 'audit-logs',
     User: 'users',
     NotificationLog: 'notifications',
+    SizeGuide: 'size-guides',
+    LookPromotion: 'look-promotions',
 };
 
 // ─── Entity CRUD factory ───────────────────────────────────────────
 function makeEntity(name) {
     const endpoint = ENTITY_MAP[name] || name.toLowerCase();
     return {
-        async list(sortField, limit) {
+        async list(sortField, limit, page) {
             const params = new URLSearchParams();
             if (sortField) params.set('sort', sortField);
             if (limit) params.set('limit', limit);
+            if (page) params.set('page', page);
             return apiFetch(`/${endpoint}?${params}`);
         },
         async filter(predicate, sortField, limit) {
@@ -112,6 +125,7 @@ function makeEntity(name) {
 
 // ─── Auth (Supabase when configured, Express JWT fallback) ──────────
 const auth = {
+    providerStatus: () => apiFetch('/auth/capabilities'),
     async me() {
         // When supabase is configured, try its session first;
         // fall back to JWT token from localStorage if no supabase session
@@ -124,16 +138,16 @@ const auth = {
         // If no supabase session (or supabase not configured), check JWT token
         const token = getToken();
         if (!token) {
-            const err = new Error('Not authenticated');
-            err.status = 401;
-            throw err;
+            throw createApiError('Not authenticated', 401);
         }
         try {
             const user = await apiFetch('/auth/me');
             setStoredUser(user);
             return user;
         } catch (err) {
-            if (err.status === 401) {
+            /** @type {{ status?: number }} */
+            const apiError = /** @type {any} */ (err);
+            if (apiError.status === 401) {
                 setToken(null);
                 setStoredUser(null);
             }
@@ -145,23 +159,19 @@ const auth = {
     setToken(token) { setToken(token); },
     async loginViaEmailPassword(email, password, returnTo = '') {
         if (supabase) {
-            try {
-                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-                if (!error && data.session) {
-                    setToken(data.session.access_token);
-                    const user = await apiFetch('/auth/me');
-                    setStoredUser(user);
-                    return user;
-                }
-            } catch {
-                // Supabase Auth failed — fall through to Express JWT
-            }
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+            if (!data.session) throw createApiError('Sessão indisponível.', 401);
+            setToken(data.session.access_token);
+            const user = await apiFetch('/auth/me');
+            setStoredUser(user);
+            return user;
         }
         // Express JWT fallback (uses bcrypt hash in profiles table)
         const data = await apiFetch('/auth/login', {
             method: 'POST',
             body: JSON.stringify({ email, password }),
-        });
+        }).catch(error => { if (error.status === 401) throw createApiError('E-mail ou senha inválidos.', 401); throw error; });
         setToken(data.token);
         setStoredUser(data.user);
         return data.user;
@@ -192,8 +202,23 @@ const auth = {
         setStoredUser(data.user);
         return data.user;
     },
-    async verifyOtp() { throw new Error('OTP não implementado'); },
-    async resendOtp() { return {}; },
+    async verifyOtp({ email, otpCode }) {
+        if (!supabase) throw new Error('Verificação por código exige Supabase Auth.');
+        const { data, error } = await supabase.auth.verifyOtp({
+            email,
+            token: otpCode,
+            type: 'signup',
+        });
+        if (error || !data.session) throw error || new Error('Código inválido ou expirado.');
+        setToken(data.session.access_token);
+        return data.session;
+    },
+    async resendOtp(email) {
+        if (!supabase) throw new Error('Reenvio de código exige Supabase Auth.');
+        const { error } = await supabase.auth.resend({ type: 'signup', email });
+        if (error) throw error;
+        return {};
+    },
     async updateMe(data) {
         const user = await apiFetch('/auth/me', { method: 'PATCH', body: JSON.stringify(data) });
         setStoredUser(user);
@@ -217,6 +242,9 @@ const auth = {
         }
         return apiFetch('/auth/reset-password', { method: 'POST', body: JSON.stringify({ resetToken, newPassword }) });
     },
+    async securityInfo() { const user = await auth.me(); return { email: user.email, pending_email: null, password_provider: true, local_mode: true, email_change_supported: false }; },
+    changePassword(data) { return apiFetch('/auth/change-password', { method: 'POST', body: JSON.stringify(data) }); },
+    recoveryReady() { return !supabase && !!new URLSearchParams(window.location.search).get('token'); },
     logout(redirectUrl) {
         if (supabase) supabase.auth.signOut();
         setToken(null);
@@ -239,11 +267,16 @@ const auth = {
 };
 
 // ─── Backend functions ─────────────────────────────────────────────
+if (supabase) Object.assign(auth, createSupabaseAuthFlow({ supabase, api: apiFetch,
+    origin: window.location.origin, storage: sessionStorage, location: window.location, history: window.history,
+    setToken, setUser: setStoredUser }));
 const functions = {
     async invoke(name, args) {
         switch (name) {
+            case 'previewCheckout':
+                return apiFetch('/checkout/preview', { method: 'POST', body: JSON.stringify(args) });
             case 'placeOrder':
-                return apiFetch('/orders', { method: 'POST', body: JSON.stringify(args) });
+                return apiFetch('/orders', buildPlaceOrderRequest(args));
             case 'cancelOrder':
                 return apiFetch(`/orders/${args.orderId || args.id}`, { method: 'DELETE' });
             case 'validateCoupon':
@@ -266,14 +299,69 @@ const functions = {
                 return apiFetch(`/orders/${args.orderId}/payment/pix`, { method: 'POST', body: JSON.stringify(args) });
             case 'createCardPayment':
                 return apiFetch(`/orders/${args.orderId}/payment/card`, { method: 'POST', body: JSON.stringify(args) });
+            case 'previewPaymentMethodChange':
+                return apiFetch(`/orders/${args.orderId}/payment/method/preview`, { method: 'POST', body: JSON.stringify({ payment_method: args.payment_method }) });
+            case 'changePaymentMethod':
+                return apiFetch(`/orders/${args.orderId}/payment/method`, { method: 'POST', headers: { 'X-Idempotency-Key': args.idempotencyKey },
+                    body: JSON.stringify({ payment_method: args.payment_method, expected_pricing: args.expected_pricing }) });
             case 'getPaymentStatus':
                 return apiFetch(`/orders/${args.orderId}/payment/status`);
+            case 'getPaymentReconciliationPreview': {
+                const params = new URLSearchParams();
+                if (args.mpOrderId) params.set('mp_order_id', args.mpOrderId);
+                return apiFetch(`/admin/orders/${encodeURIComponent(args.orderId)}/payment-reconciliation-preview?${params}`);
+            }
             case 'getPaymentMethods':
                 return apiFetch('/payments/methods');
+            case 'getInstallmentSettings':
+                return apiFetch('/admin/payments/installments');
+            case 'saveInstallmentSettings':
+                return apiFetch('/admin/payments/installments', { method: 'PATCH', body: JSON.stringify(args) });
+            case 'simulateInstallments':
+                return apiFetch('/admin/payments/installments/simulate', { method: 'POST', body: JSON.stringify(args) });
+            case 'approveInstallments':
+                return apiFetch('/admin/payments/installments/approve', { method: 'POST', body: JSON.stringify(args) });
+            case 'getInstallmentOffers':
+                return apiFetch(`/orders/${args.orderId}/payment/installments`, { method: 'POST', body: JSON.stringify({ bin: args.bin }) });
+            case 'getPublicInstallmentPolicy':
+                return apiFetch('/payments/installment-policy');
             case 'getOrderEvents':
                 return apiFetch(`/orders/${args.orderId}/events`);
+            case 'getAfterSales':
+                return apiFetch(`/orders/${args.orderId}/after-sales`);
+            case 'createReturn':
+                return apiFetch(`/orders/${args.orderId}/returns`, { method: 'POST', body: JSON.stringify(args) });
+            case 'advanceReturn':
+                return apiFetch(`/orders/${args.orderId}/returns/${args.returnId}`, {
+                    method: 'PATCH', body: JSON.stringify({ status: args.status, restockable: args.restockable,
+                        conditionNotes: args.conditionNotes, postingInstructions: args.postingInstructions,
+                        reverseTrackingCode: args.reverseTrackingCode, reversePostingCode: args.reversePostingCode }),
+                });
+            case 'requestRefund':
+                return apiFetch(`/orders/${args.orderId}/refunds`, {
+                    method: 'POST', headers: { 'X-Idempotency-Key': args.idempotencyKey },
+                    body: JSON.stringify({ kind: args.kind, reason: args.reason }),
+                });
+            case 'previewRefund':
+                return apiFetch(`/orders/${args.orderId}/refunds/preview`);
+            case 'reconcileRefund':
+                return apiFetch(`/orders/${args.orderId}/refunds/${args.refundId}/reconcile`, { method: 'POST' });
+            case 'cancelAfterRefund':
+                return apiFetch(`/orders/${args.orderId}/cancel-after-refund`, { method: 'POST' });
+            case 'cancelPendingPayment':
+                return apiFetch(`/orders/${args.orderId}/cancel-pending-payment`, { method: 'POST' });
+            case 'operationalRefundPreview':
+                return apiFetch(`/orders/${args.orderId}/refunds/operational/preview`, { method:'POST',body:JSON.stringify(args.request) });
+            case 'operationalRefundReconcile':
+                return apiFetch(`/orders/${args.orderId}/refunds/operational/${args.refundId}/reconcile`,{method:'POST'});
+            case 'operationalRefund':
+                return apiFetch(`/orders/${args.orderId}/refunds/operational`, { method:'POST',headers:{'X-Idempotency-Key':args.idempotencyKey},body:JSON.stringify(args.request) });
+            case 'notificationReadiness':
+                return apiFetch('/notifications/readiness');
             case 'generateShippingLabel':
                 return apiFetch(`/orders/${args.orderId}/shipping/label`, { method: 'POST', body: JSON.stringify(args) });
+            case 'shippingReadiness':
+                return apiFetch(`/orders/${args.orderId}/shipping/readiness`);
             case 'getTrackingInfo':
                 return apiFetch(`/orders/${args.orderId}/tracking`);
             // ─── Shipping quote ───
@@ -306,7 +394,7 @@ const integrations = {
             formData.append('file', file);
             formData.append('folder', folder);
 
-            const res = await fetch(`${API_BASE}/upload`, {
+            const res = await fetch(apiUrl(API_BASE, '/upload'), {
                 method: 'POST',
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {},
                 body: formData,
@@ -339,15 +427,35 @@ const app = {
 };
 
 // ─── Entity registry ───────────────────────────────────────────────
-const entities = new Proxy({}, {
+const entities = /** @type {Record<string, ReturnType<typeof makeEntity>>} */ (new Proxy({}, {
     get(_, name) {
         return makeEntity(name);
     },
-});
+}));
 
 // ─── Custom analytics endpoints ───────────────────────────────────
 const custom = {
-    analyticsOverview: ({ period, start, end }) => apiFetch(`/analytics/overview?period=${period || '7d'}${start ? `&start=${start}` : ''}${end ? `&end=${end}` : ''}`),
+    readAdminAccess: () => apiFetch('/admin/access'),
+    changeAdminAccess: (id, grant) => apiFetch(`/admin/access/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ grant }) }),
+    submitContact: data => apiFetch('/contact', { method: 'POST', body: JSON.stringify(data) }),
+    activePromotions: () => apiFetch('/look-promotions'),
+    adminPromotions: () => apiFetch('/look-promotions/admin'),
+    integrationConfigs: () => apiFetch('/integrations/config'),
+    integrationStatus: () => apiFetch('/integrations/status'),
+    authorizeMelhorEnvio: mode => {
+        if (!['sandbox', 'production'].includes(mode)) throw new Error('Ambiente inválido.');
+        return apiFetch(`/integrations/melhor-envio/oauth${mode === 'production' ? '/production' : ''}/authorize`);
+    },
+    updateIntegrationConfig: (serviceKey, data) => apiFetch(`/integrations/config/${serviceKey}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    }),
+    testIntegration: (serviceKey, configData) => apiFetch(`/integrations/test/${serviceKey}`, {
+        method: 'POST',
+        body: JSON.stringify({ config_data: configData }),
+    }),
+    toggleIntegration: (serviceKey) => apiFetch(`/integrations/config/${serviceKey}/toggle`, { method: 'PATCH' }),
+    analyticsOverview: ({ period, start = '', end = '' }) => apiFetch(`/analytics/overview?period=${period || '7d'}${start ? `&start=${start}` : ''}${end ? `&end=${end}` : ''}`),
     analyticsSources: ({ period }) => apiFetch(`/analytics/sources?period=${period || '7d'}`),
     analyticsDevices: ({ period }) => apiFetch(`/analytics/devices?period=${period || '7d'}`),
     analyticsPages: ({ period }) => apiFetch(`/analytics/pages?period=${period || '7d'}`),
