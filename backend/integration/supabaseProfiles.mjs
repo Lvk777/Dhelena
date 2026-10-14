@@ -50,7 +50,10 @@ try {
     assert.equal((await db.query('SELECT count(*)::int AS n FROM profiles WHERE id=$1', [fresh.id])).rows[0].n, 1);
     console.log('PASS: 12 concurrent first authenticated requests provision exactly one customer');
 
-    const patch = await request('new', '/api/auth/me', { method: 'PATCH', body: JSON.stringify({ role: 'admin', id: crypto.randomUUID(), full_name: 'Allowed Name' }) });
+    const forbiddenPatch = await request('new', '/api/auth/me', { method: 'PATCH', body: JSON.stringify({ role: 'admin', id: crypto.randomUUID(), full_name: 'Allowed Name' }) });
+    assert.equal(forbiddenPatch.status, 400);
+    assert.equal((await request('new').then(result => result.json())).role, 'customer');
+    const patch = await request('new', '/api/auth/me', { method: 'PATCH', body: JSON.stringify({ full_name: 'Allowed Name' }) });
     assert.equal(patch.status, 200); assert.equal((await patch.json()).role, 'customer');
     assert.equal((await request('new', '/admin-probe')).status, 403);
     console.log('PASS: metadata and HTTP profile updates cannot promote customer');
