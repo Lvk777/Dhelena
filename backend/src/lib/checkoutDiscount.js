@@ -11,9 +11,20 @@ export function checkoutCents(value) {
 }
 
 export function pixDiscountOffer(paymentConfig = {}, env = process.env) {
+    const percentage = paymentConfig.pix_discount;
     const enabled = env.PIX_DISCOUNT_ENABLED === 'true' && paymentConfig.pix_enabled !== false
-        && Number(paymentConfig.pix_discount) === 5;
-    return { enabled, percentage: enabled ? 5 : 0 };
+        && paymentConfig.pix_discount_enabled === true && validPixDiscountPercentage(percentage)
+        && percentage > 0;
+    return { enabled, percentage: enabled ? percentage : 0 };
+}
+
+export function validPixDiscountPercentage(value) {
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 30
+        && Math.abs(value * 100 - Math.round(value * 100)) < 0.000001;
+}
+
+export function pixDiscountCents(productCents, percentage) {
+    return Math.round(productCents * Math.round(percentage * 100) / 10000);
 }
 
 // Preserve the existing coupon/promotion choice. Pix never stacks with a
@@ -41,7 +52,7 @@ export function checkoutDiscount({ subtotal, lines, couponCode = '', couponDisco
     const reason = !offer.enabled ? 'offer_disabled' : paymentMethod !== 'pix' ? 'payment_method'
         : couponCode ? 'coupon' : lines.some(line => line.price_promotion) || promotion > 0
             ? 'price_promotion' : null;
-    const pix = reason ? 0 : Math.round(base * 5 / 100);
+    const pix = reason ? 0 : pixDiscountCents(base, offer.percentage);
     return {
         discount: (coupon + promotion + pix) / 100,
         discount_breakdown: { coupon: coupon / 100, promotion: promotion / 100, pix: pix / 100 },

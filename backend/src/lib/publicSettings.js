@@ -1,6 +1,7 @@
 import { httpsOrigin, instagramLink, whatsappLink, validEmail, validCnpjFormat } from './navigation.js';
 import { preparationPolicy } from './deliveryEstimate.js';
 import { creditInstallmentPolicy } from './paymentChoice.js';
+import { validPixDiscountPercentage } from './checkoutDiscount.js';
 
 export const PUBLIC_SETTING_FIELDS = {
     general: ['store_name', 'trade_name', 'company_name', 'cnpj', 'email', 'phone', 'whatsapp', 'logo', 'logo_dark', 'public_address', 'business_hours', 'external_link_origins'],
@@ -34,6 +35,11 @@ export function publicSetting(row) {
 export function validateSettingValue(key, value) {
     const invalid = message => { throw Object.assign(new Error(message), { status: 400 }); };
     if (!value || typeof value !== 'object' || Array.isArray(value)) invalid('Configuração inválida.');
+    if (key === 'payments') {
+        if (value.pix_discount_enabled !== undefined && typeof value.pix_discount_enabled !== 'boolean') invalid('Ativação do desconto Pix inválida.');
+        if (value.pix_discount !== undefined && !validPixDiscountPercentage(value.pix_discount)) invalid('Percentual do desconto Pix inválido.');
+        if (value.pix_discount_enabled === true && !(value.pix_discount > 0)) invalid('Informe um desconto Pix maior que zero para ativar.');
+    }
     const textKeys = {
         general: ['store_name', 'trade_name', 'company_name', 'cnpj', 'phone', 'public_address', 'business_hours'],
         shipping: ['pickup_address', 'pickup_instructions', 'pickup_time', 'pickup_name'],

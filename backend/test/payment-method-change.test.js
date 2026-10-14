@@ -21,7 +21,7 @@ function fixture(order = base(), env = {}) {
         queries.push(sql);
         if (sql.startsWith('SELECT pg_advisory')) return { rows: [] };
         if (sql.startsWith('SELECT * FROM orders')) return { rows: [structuredClone(state.order)] };
-        if (sql.includes('FROM settings')) return { rows: [{ value: { pix_enabled: true, pix_discount: 5 } }] };
+        if (sql.includes('FROM settings')) return { rows: [{ value: { pix_enabled: true, pix_discount_enabled: true, pix_discount: 5 } }] };
         if (sql.startsWith('UPDATE orders')) {
             Object.assign(state.order, { payment_method: args[0], discount: args[1], total: args[2], snapshot: JSON.parse(args[3]) });
             return { rows: [structuredClone(state.order)] };
@@ -144,16 +144,26 @@ test('future homologated Pix switch rounds once, affects products only and prese
     assert.equal(f.state.stock, 7); assert.equal(f.state.couponUses, 1);
 });
 
+test('a later Pix percentage is previewed without mutating an existing order', () => {
+    const f = fixture(base(), { PIX_DISCOUNT_ENABLED: 'true' });
+    const original = structuredClone(f.state.order);
+    const pricing = changedPaymentPricing(original, 'pix', { pix_discount_enabled: true, pix_discount: 7.5 }, { PIX_DISCOUNT_ENABLED: 'true' });
+    assert.equal(pricing.discount, 14.99);
+    assert.equal(pricing.shipping_cost, 14.95);
+    assert.equal(pricing.total, 199.86);
+    assert.deepEqual(f.state.order, original);
+});
+
 test('coupon, promotion, free freight and legacy pricing survive method changes', () => {
     for (const order of [
         { ...base(), coupon_code: 'KEEP', discount: 15, total: 199.85, snapshot: { ...base().snapshot, discount_breakdown: { coupon: 15, promotion: 0, pix: 0 } } },
         { ...base(), snapshot: { ...base().snapshot, items: [{ price_promotion: true }] } },
         { ...base(), discount: 15, snapshot: { ...base().snapshot, discount_breakdown: { coupon: 0, promotion: 15, pix: 0 } } },
     ]) {
-        const pricing = changedPaymentPricing(order, 'pix', { pix_discount: 5 }, { PIX_DISCOUNT_ENABLED: 'true' });
+        const pricing = changedPaymentPricing(order, 'pix', { pix_discount_enabled: true, pix_discount: 5 }, { PIX_DISCOUNT_ENABLED: 'true' });
         assert.equal(pricing.discount, order.discount); assert.equal(pricing.discount_breakdown.pix, 0);
     }
-    assert.equal(changedPaymentPricing({ ...base(), shipping_cost: 0 }, 'pix', { pix_discount: 5 }, { PIX_DISCOUNT_ENABLED: 'true' }).shipping_cost, 0);
+    assert.equal(changedPaymentPricing({ ...base(), shipping_cost: 0 }, 'pix', { pix_discount_enabled: true, pix_discount: 5 }, { PIX_DISCOUNT_ENABLED: 'true' }).shipping_cost, 0);
     assert.equal(changedPaymentPricing({ ...base(), snapshot: {} }, 'debito', {}, {}).total, 214.85);
-    assert.throws(() => changedPaymentPricing({ ...base(), snapshot: {} }, 'pix', { pix_discount: 5 }, { PIX_DISCOUNT_ENABLED: 'true' }));
+    assert.throws(() => changedPaymentPricing({ ...base(), snapshot: {} }, 'pix', { pix_discount_enabled: true, pix_discount: 5 }, { PIX_DISCOUNT_ENABLED: 'true' }));
 });

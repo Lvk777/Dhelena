@@ -6,6 +6,7 @@ import { previewCheckout } from '../src/lib/checkoutPreview.js';
 import { placeOrder } from '../src/orderService.js';
 import { createPixPayment } from '../src/services/mercadoPago.js';
 import orderRouter from '../src/routes/orders.js';
+import { validateSettingValue } from '../src/lib/publicSettings.js';
 import { pool } from '../src/config/db.js';
 
 const id = '11111111-1111-4111-8111-111111111111';
@@ -23,7 +24,7 @@ function fixture({ price = 100, sale_price = null, promotions = [], coupon = nul
     shipping = {}, stock = 3, env = enabled } = {}) {
     let state = { products: [product(price, { sale_price, colors: [{ id: 'white', name: 'Synthetic', stock: { M: stock } }] })],
         orders: [], movements: [], usages: [], orderItems: [] };
-    const settings = { payments: { pix_enabled: true, pix_discount: 5 }, address: { cep: '01001000' },
+    const settings = { payments: { pix_enabled: true, pix_discount_enabled: true, pix_discount: 5 }, address: { cep: '01001000' },
         shipping: { pickup_enabled: true, melhor_envio_enabled: true, free_shipping_enabled: true, free_shipping_threshold: 499, ...shipping } };
     const queries = [];
     const db = { async query(sql, values = []) {
@@ -68,10 +69,35 @@ function fixture({ price = 100, sale_price = null, promotions = [], coupon = nul
 
 test('Pix offer stays off without its explicit operator gate and approved percentage', () => {
     assert.deepEqual(pixDiscountOffer({ pix_discount: 5 }, {}), { enabled: false, percentage: 0 });
-    assert.equal(pixDiscountOffer({ pix_discount: 5 }, { PIX_DISCOUNT_ENABLED: 'false' }).enabled, false);
-    assert.equal(pixDiscountOffer({ pix_discount: 4 }, enabled).enabled, false);
-    assert.equal(pixDiscountOffer({ pix_discount: 5, pix_enabled: false }, enabled).enabled, false);
-    assert.equal(pixDiscountOffer({ pix_discount: 5 }, enabled).enabled, true);
+    assert.equal(pixDiscountOffer({ pix_discount: 5 }, enabled).enabled, false);
+    assert.equal(pixDiscountOffer({ pix_discount_enabled: true, pix_discount: 5 }, { PIX_DISCOUNT_ENABLED: 'false' }).enabled, false);
+    assert.equal(pixDiscountOffer({ pix_discount_enabled: true, pix_discount: 5, pix_enabled: false }, enabled).enabled, false);
+    assert.deepEqual(pixDiscountOffer({ pix_discount_enabled: true, pix_discount: 5 }, enabled), { enabled: true, percentage: 5 });
+});
+
+test('admin Pix percentage is validated before saving and supports two decimal places', () => {
+    for (const percentage of [0, 5, 7.5, 30]) {
+        assert.doesNotThrow(() => validateSettingValue('payments', { pix_discount_enabled: false, pix_discount: percentage }));
+    }
+    for (const percentage of [-1, 30.01, 100, 5.001, '5', null, Infinity, NaN]) {
+        assert.throws(() => validateSettingValue('payments', { pix_discount_enabled: false, pix_discount: percentage }), { status: 400 });
+    }
+    assert.throws(() => validateSettingValue('payments', { pix_discount_enabled: 'true', pix_discount: 5 }), { status: 400 });
+    assert.throws(() => validateSettingValue('payments', { pix_discount_enabled: true, pix_discount: 0 }), { status: 400 });
+});
+
+test('configured Pix percentage is calculated from products in cents; disabling either gate restores full total', async () => {
+    const f = fixture({ price: 19.99, quote: 12.34 });
+    f.settings.payments.pix_discount = 7.5;
+    const body = request({ shipping_method: 'melhor_envio', shipping_quote_id: 1 });
+    const preview = await f.preview(body);
+    assert.deepEqual(ack(preview), { subtotal: 19.99, discount: 1.50, shipping_cost: 12.34, total: 30.83 });
+    const order = await f.place({ ...body, expected_pricing: ack(preview) });
+    assert.equal(order.snapshot.pix_discount_percentage, 7.5);
+    assert.equal(order.snapshot.discount_breakdown.pix, 1.50);
+    f.settings.payments.pix_discount_enabled = false;
+    assert.equal((await f.preview(body)).total, 32.33);
+    assert.equal(order.total, 30.83);
 });
 
 test('disabled pickup rejects preview and final order without consuming stock or coupons', async () => {
@@ -155,7 +181,7 @@ test('sale-priced products, including mixed baskets, cannot also receive Pix dis
 test('existing coupon/campaign combination is preserved without adding Pix', () => {
     const result = checkoutDiscount({ subtotal: 100, lines: [{}], couponCode: 'KEEP', couponDiscount: 10,
         promotions: [{ discount_percent: 10, stacks_with_coupon: true }], paymentMethod: 'pix',
-        paymentConfig: { pix_discount: 5 }, env: enabled });
+        paymentConfig: { pix_discount_enabled: true, pix_discount: 5 }, env: enabled });
     assert.equal(result.discount, 20); assert.equal(result.discount_breakdown.pix, 0);
 });
 

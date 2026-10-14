@@ -63,7 +63,7 @@ test('simulator returns actual buyer financing with unknown boutique costs and n
     assert.equal(result.offers.length, 12); assert.equal(result.provider_options.at(-1).buyer_total, 144);
     assert.equal(result.offers.at(-1).processing_fee, null); assert.equal(f.charges, 0); assert.equal(f.stored, null);
     f.setMode('interest-all'); const blocked = await (await f.request('/simulate', 'POST', args)).json();
-    assert.deepEqual(blocked.unavailable_installments, [2, 3, 4, 5, 6]);
+    assert.deepEqual(blocked.unavailable_installments, []);
     f.setMode('offline'); assert.equal((await f.request('/simulate', 'POST', args)).status, 503);
     assert.equal(f.charges, 0);
 });

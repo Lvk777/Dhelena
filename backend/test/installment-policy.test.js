@@ -33,7 +33,7 @@ test('buyer financing respects the free range and computes interest from the pro
     const offer = installmentOffers(plans(), defaults, 120).find(o => o.installments === 12);
     assert.equal(offer.installment_amount, 12); assert.equal(offer.buyer_interest_rate, 20);
     assert.equal(offer.buyer_interest_amount, 24); assert.equal(offer.buyer_total, 144);
-    assert.equal(installmentOffers(plans(12, 1), defaults, 120).some(o => o.installments === 6), false);
+    assert.equal(installmentOffers(plans(12, 1), defaults, 120).some(o => o.installments === 6), true);
     assert.equal(installmentOffers(plans(), { ...defaults, allow_interest: false }, 120).length, 6);
 });
 test('missing provider quantities, minimum amounts and divergent rounding block the proposed range', () => {
@@ -50,6 +50,23 @@ test('a provider rounding adjustment is retained rather than multiplying the dis
     const offer = installmentOffers(p, { ...defaults, interest_free_installments: 1 }, 50)[0];
     assert.equal(offer.buyer_total, 57.16); assert.equal(offer.buyer_interest_amount, 7.16);
     assert.equal(offer.installment_amount, 9.53);
+});
+
+test('Orders API keeps the original charge while a 12x buyer-financed quote keeps the provider total', () => {
+    const plans = [{ payment_method_id: 'master', issuer: { id: 12749 }, payer_costs: [
+        { installments: 12, installment_rate: 22.11, installment_amount: '50.88', total_amount: '610.55' },
+    ] }];
+    const offer = installmentOffers(plans, defaults, 500)[0];
+    assert.equal(offer.original_amount, 500);
+    assert.equal(offer.buyer_total, 610.55);
+    assert.equal(offer.buyer_interest_amount, 110.55);
+    assert.equal(offer.installment_amount, 50.88);
+    const order = { total: 500, order_number: 'MOCK', snapshot: { card_installment_offer: offer } };
+    const resource = { mp_order_id: 'ORD', external_reference: 'MOCK', total_amount: '500.00', transaction_amount: '500.00', currency_id: 'BRL',
+        payment_count: 1, mp_payment_id: 'PAY', order_status: 'processed', order_status_detail: 'accredited', transaction_status: 'processed',
+        transaction_status_detail: 'accredited', mp_status: 'processed', mp_status_detail: 'accredited', payment_method_type: 'credit_card',
+        payment_method_id: 'master', payment_installments: 12, payment_installment_amount: '50.88', payment_issuer_id: '12749' };
+    assert.equal(verifyPaymentResourceForOrder(order, resource), resource);
 });
 test('tampered buyer totals, rates, counts, issuer, brand and policy versions are rejected', () => {
     const offers = installmentOffers(plans(), defaults, 120), offer = offers.at(-1);
@@ -68,7 +85,7 @@ test('configuration change invalidates the quote and approval scope; unknown pro
 });
 test('invalid admin settings and incorrect commercial promises are refused', () => {
     for (const invalid of [{ max_installments: 13 }, { max_installments: 0 }, { min_installment_amount: 0.001 },
-        { enabled: 'true' }, { interest_payer: 'arbitrary_rate' }, { commercial_message: '12x sem juros' }, { approval: true, max_installments: 2 }]) {
+        { enabled: 'true' }, { interest_payer: 'arbitrary_rate' }, { commercial_message: '12x sem juros' }, { max_installments: 2, interest_free_installments: 3 }]) {
         assert.throws(() => installmentConfig({ ...defaults, ...invalid }), { status: 400 });
     }
 });

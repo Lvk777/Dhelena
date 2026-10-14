@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export const installmentDefaults = { enabled: false, max_installments: 12, interest_free_installments: 6,
+export const installmentDefaults = { enabled: false, max_installments: 12, interest_free_installments: 1,
     allow_interest: true, interest_payer: 'buyer', min_installment_amount: 0, commercial_message: '' };
 export const installmentSettingsLock = "hashtextextended('credit-installment-settings', 0)";
 const fields = Object.keys(installmentDefaults);

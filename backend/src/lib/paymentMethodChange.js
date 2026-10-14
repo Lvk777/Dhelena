@@ -1,5 +1,5 @@
 import { withTransaction } from '../config/db.js';
-import { checkoutCents, pixDiscountOffer, assertCheckoutPriceAcknowledged } from './checkoutDiscount.js';
+import { checkoutCents, pixDiscountOffer, pixDiscountCents, assertCheckoutPriceAcknowledged } from './checkoutDiscount.js';
 import { orderAttemptLockSql } from './orderAttemptLock.js';
 import { normalizeIdempotencyKey } from './idempotency.js';
 import * as mp from '../services/mercadoPago.js';
@@ -35,7 +35,7 @@ export function changedPaymentPricing(order, method, config = {}, env = process.
         || !Array.isArray(snapshot.items) || snapshot.items.some(item => item.price_promotion);
     const reason = !offer.enabled ? 'offer_disabled' : method !== 'pix' ? 'payment_method'
         : order.coupon_code || snapshot.coupon_code ? 'coupon' : hasPromotion || fixedDiscount > 0 ? 'price_promotion' : null;
-    const pix = reason ? 0 : Math.round(subtotal * 5 / 100);
+    const pix = reason ? 0 : pixDiscountCents(subtotal, offer.percentage);
     const discount = fixedDiscount + pix;
     const shipping = checkoutCents(order.shipping_cost);
     return { subtotal: subtotal / 100, discount: discount / 100, shipping_cost: shipping / 100,

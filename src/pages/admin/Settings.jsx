@@ -22,7 +22,7 @@ const DEFAULTS = {
     address: { cep: "", street: "", number: "", complement: "", district: "", city: "", state: "SP" },
     shipping: { pickup_enabled: false, pickup_name: "Retirada", pickup_address: "", pickup_instructions: "", pickup_time: "", free_shipping_enabled: true, free_shipping_threshold: 499, melhor_envio_enabled: false, melhor_envio_mode: "sandbox" },
     shipping_sender: { name: "", document: "", email: "", phone: "", state_register: "" },
-    payments: { mercado_pago_enabled: false, mercado_pago_mode: "sandbox", pix_enabled: true, card_enabled: true, debit_card_enabled: true, boleto_enabled: false, max_installments: 6, interest_free_installments: 6, pix_discount: 5 },
+    payments: { mercado_pago_enabled: false, mercado_pago_mode: "sandbox", pix_enabled: true, card_enabled: true, debit_card_enabled: true, boleto_enabled: false, max_installments: 6, interest_free_installments: 6, pix_discount_enabled: false, pix_discount: 5 },
     emails: { sender_name: "D'Helenas", sender_email: "", reply_to: "", order_received: true, payment_approved: true, order_separation: true, order_shipped: true, order_delivered: true, order_cancelled: true },
     social: { instagram: "", facebook: "", tiktok: "", whatsapp: "" },
     seo: { default_title: "D'Helenas — Boutique Digital", default_description: "", sharing_image: "", ga_id: "", meta_pixel_id: "" },

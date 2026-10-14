@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { CreditCard, Loader2, Check, X, QrCode, Banknote } from "lucide-react";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminToggle from "@/components/admin/AdminToggle";
+import AdminInput from "@/components/admin/AdminInput";
 import { base44 } from "@/api/base44Client";
 import InstallmentsModule from './InstallmentsModule';
 
@@ -55,6 +56,13 @@ export default function PaymentsTab({ data, onChange }) {
                     <AdminToggle label="Cartão de crédito" checked={data.card_enabled} onChange={(v) => set("card_enabled", v)} description="Pagamento via cartão com parcelamento (Card Payment Brick)" />
                     <AdminToggle label="Cartão de débito" checked={data.debit_card_enabled} onChange={(v) => set("debit_card_enabled", v)} description="Somente se disponível na conta Mercado Pago" />
                 </div>
+            </AdminFormSection>
+
+            <AdminFormSection title="Desconto Pix" description="Proposta inicial: 5% sobre os produtos, desativada até homologação comercial.">
+                <div className="sm:col-span-2">
+                    <AdminToggle label="Ativar desconto Pix" checked={data.pix_discount_enabled === true} onChange={(v) => set("pix_discount_enabled", v)} description="Além deste controle, a liberação operacional do servidor precisa estar ativa. Não acumula com cupom ou promoção e não reduz o frete." />
+                </div>
+                <AdminInput label="Desconto nos produtos (%)" type="number" min={0} max={30} step={0.01} value={data.pix_discount} onChange={(v) => set("pix_discount", v === "" ? "" : Number(v))} description="De 0 a 30%, com até duas casas decimais. O valor é conferido pelo servidor antes de salvar." />
             </AdminFormSection>
 
             <InstallmentsModule />
