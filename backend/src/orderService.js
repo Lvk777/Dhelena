@@ -1,3 +1,4 @@
+import { notificationMetadata } from './services/notificationOutbox.js';
 import { pool, withTransaction } from './config/db.js';
 import { withDeliveryEstimate, assertDeliveryEstimateAcknowledged } from './lib/deliveryEstimate.js';
 import { checkoutCents, checkoutDiscount, assertCheckoutPriceAcknowledged } from './lib/checkoutDiscount.js';
@@ -217,6 +218,7 @@ export async function placeOrder(userId, body, idempotencyKey, {
             shipping_delivery_time: shippingDeliveryTime,
             delivery_estimate: deliveryEstimate,
             shipping_packages: shippingPackages,
+            shipping_environment: shipping_method === 'melhor_envio' ? (env.MELHOR_ENVIO_MODE || (env.NODE_ENV === 'production' ? null : 'sandbox')) : null,
             payment_method,
             shipping_address,
             customer: customer || {},
@@ -258,6 +260,9 @@ export async function placeOrder(userId, body, idempotencyKey, {
             [order.id, JSON.stringify({ order_number: orderNum, total: Number(total.toFixed(2)) })]
         );
 
+        await client.query(`INSERT INTO order_events(order_id,event,description,metadata)
+            VALUES($1,'order_created','Pedido recebido; aguardando confirmação de pagamento',$2)`,
+            [order.id, JSON.stringify(notificationMetadata({}, env))]);
         return { order, created: true };
     }).then(async ({ order, created }) => {
         // Fire notifications (async — don't block or fail the order)
@@ -293,9 +298,9 @@ export async function cancelOrderInTransaction(client, order, userId = null, res
         [orderId]
     );
     await client.query(
-        `INSERT INTO order_events (order_id, event, description)
-         VALUES ($1, 'order_cancelled', 'Pedido cancelado; estoque devolvido')`,
-        [orderId]
+        `INSERT INTO order_events (order_id, event, description, metadata)
+         VALUES ($1, 'order_cancelled', 'Pedido cancelado; estoque devolvido', $2)`,
+        [orderId, JSON.stringify(notificationMetadata())]
     );
     await client.query(
         `INSERT INTO audit_logs (admin_id, action, entity_type, entity_id, changes) VALUES ($1, 'order.cancel', 'order', $2, $3)`,

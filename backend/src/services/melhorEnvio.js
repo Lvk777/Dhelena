@@ -14,10 +14,11 @@ function isSandbox() {
 }
 
 async function meFetch(path, options = {}) {
-    const { token, mode } = await melhorEnvioTokens.getToken();
+    const { environment: selectedMode, ...requestOptions } = options;
+    const { token, mode } = await melhorEnvioTokens.getToken(selectedMode);
     const url = `${melhorEnvioEnvironment(mode).base}/api/v2${path}`;
     const res = await fetch(url, {
-        ...options,
+        ...requestOptions,
         headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',
@@ -134,7 +135,8 @@ function participant(data, includeCountry = false) {
     if (includeCountry) result.country_id = 'BR';
     if (digits.length === 14) {
         result.company_document = digits;
-        result.state_register = data.state_register || 'ISENTO';
+        result.state_register = data.state_register || '';
+        if (data.economic_activity_code) result.economic_activity_code = data.economic_activity_code;
     } else {
         result.document = digits;
     }
@@ -142,7 +144,7 @@ function participant(data, includeCountry = false) {
 }
 
 // ─── Label lifecycle: cart → checkout → generate → print ──────
-export async function addShipmentToCart({ from, to, serviceId, products, volumes, orderNumber, totalValue }) {
+export async function addShipmentToCart({ from, to, serviceId, products, volumes, orderNumber, totalValue, invoiceKey, environment }) {
     if (!Array.isArray(volumes) || volumes.length === 0) {
         throw Object.assign(new Error('Cotação sem volumes confirmados para gerar a etiqueta'), { status: 409 });
     }
@@ -162,6 +164,7 @@ export async function addShipmentToCart({ from, to, serviceId, products, volumes
             weight: Number(volume.weight),
         })),
         options: {
+            ...(invoiceKey ? { invoice: { key: invoiceKey } } : {}),
             insurance_value: totalValue || 0,
             receipt: false,
             own_hand: false,
@@ -172,26 +175,28 @@ export async function addShipmentToCart({ from, to, serviceId, products, volumes
     };
 
     const data = await meFetch('/me/cart', {
+        environment,
         method: 'POST',
         body: JSON.stringify(body),
     });
     const shipmentId = data.id || data.uuid;
     if (!shipmentId) throw Object.assign(new Error('Melhor Envio não retornou o ID do envio'), { status: 502 });
-    return { shipment_id: String(shipmentId), status: data.status || 'cart_created' };
+    return { shipment_id: String(shipmentId), status: data.status || 'cart_created', price: data.price ?? data.total ?? null };
 }
 
-export async function checkoutShipments(shipmentIds) {
-    return meFetch('/me/shipment/checkout', { method: 'POST', body: JSON.stringify({ orders: shipmentIds }) });
+export async function checkoutShipments(shipmentIds, environment) {
+    return meFetch('/me/shipment/checkout', { environment, method: 'POST', body: JSON.stringify({ orders: shipmentIds }) });
 }
 
-export async function generateShipments(shipmentIds) {
-    return meFetch('/me/shipment/generate', { method: 'POST', body: JSON.stringify({ orders: shipmentIds }) });
+export async function generateShipments(shipmentIds, environment) {
+    return meFetch('/me/shipment/generate', { environment, method: 'POST', body: JSON.stringify({ orders: shipmentIds }) });
 }
 
-export async function printShipments(shipmentIds) {
+export async function printShipments(shipmentIds, environment) {
     const data = await meFetch('/me/shipment/print', {
         method: 'POST',
-        body: JSON.stringify({ mode: 'public', orders: shipmentIds }),
+        environment,
+        body: JSON.stringify({ mode: 'private', orders: shipmentIds }),
     });
     return { print_url: data.url || data.print_url || data.link || null };
 }
@@ -206,14 +211,18 @@ export async function generateLabel(input) {
 }
 
 // ─── Get tracking info ────────────────────────────────────────
-export async function getTracking(shipmentId) {
+export async function getTracking(shipmentId, environment) {
     const data = await meFetch('/me/shipment/tracking', {
         method: 'POST',
+        environment,
         body: JSON.stringify({ orders: [String(shipmentId)] }),
     });
     const record = Array.isArray(data)
-        ? data[0]
+        ? data.find(entry => String(entry.id) === String(shipmentId))
         : data?.[shipmentId] || data?.[String(shipmentId)] || data?.data?.[shipmentId] || data;
+    if (!record || (record.id && String(record.id) !== String(shipmentId))) {
+        throw Object.assign(new Error('Rastreio não corresponde ao envio'), { status: 502 });
+    }
     return {
         tracking_code: record?.tracking || record?.tracking_code || null,
         status: record?.status || null,
@@ -221,6 +230,12 @@ export async function getTracking(shipmentId) {
         delivered_at: record?.delivered_at || null,
         history: record?.history || [],
     };
+}
+
+export async function getShipment(shipmentId, environment) {
+    const record = await meFetch(`/me/cart/${encodeURIComponent(shipmentId)}`, { environment });
+    if (String(record?.id) !== String(shipmentId)) throw Object.assign(new Error('Etiqueta divergente'), { status: 502 });
+    return { shipment_id: String(record.id), price: record.price, status: record.status };
 }
 
 // ─── Get tracking by code ─────────────────────────────────────
@@ -237,8 +252,8 @@ export async function getTrackingByCode(trackingCode) {
 }
 
 // ─── Validate webhook (official Melhor Envio HMAC-SHA256) ─────
-export function validateWebhook(req) {
-    const secret = process.env.MELHOR_ENVIO_WEBHOOK_SECRET;
+export function validateWebhook(req, env = process.env) {
+    const secret = env.MELHOR_ENVIO_WEBHOOK_SECRET;
     const signature = req.headers['x-me-signature'];
     if (!secret || typeof signature !== 'string' || !Buffer.isBuffer(req.rawBody)) return false;
 

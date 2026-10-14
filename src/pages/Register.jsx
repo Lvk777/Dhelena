@@ -15,11 +15,16 @@ export default function Register() {
     const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
     const [loading, setLoading] = useState(false);
     const [showOtp, setShowOtp] = useState(false);
+    const [registrationComplete, setRegistrationComplete] = useState(false);
     const [otpCode, setOtpCode] = useState("");
 
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
     const returnTo = safeReturnTo();
 
+    const completeProfile = async () => {
+        await client.auth.updateMe({ full_name: form.name, phone: form.phone, cpf: form.cpf, birth_date: form.birthDate });
+        window.location.href = returnTo;
+    };
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
@@ -34,19 +39,14 @@ export default function Register() {
         if (Object.keys(e2).length > 0) return;
         setLoading(true);
         try {
+            if (registrationComplete) { await completeProfile(); return; }
             const registration = await client.auth.register({ email: form.email, password: form.password, full_name: form.name });
             track('sign_up');
             if (registration?.pending_verification) {
                 setShowOtp(true);
             } else {
-                try {
-                    await client.auth.updateMe({
-                        phone: form.phone,
-                        cpf: form.cpf,
-                        birth_date: form.birthDate,
-                    });
-                } catch (profileError) { console.error("Profile save error:", profileError); }
-                window.location.href = returnTo;
+                setRegistrationComplete(true);
+                await completeProfile();
             }
         } catch (err) {
             setError(err.message || "Falha no cadastro");
@@ -62,16 +62,9 @@ export default function Register() {
             const result = await client.auth.verifyOtp({ email: form.email, otpCode });
             if (result?.access_token) {
                 client.auth.setToken(result.access_token);
-                // Save extra profile data
-                try {
-                    await client.auth.updateMe({
-                        phone: form.phone,
-                        cpf: form.cpf,
-                        birth_date: form.birthDate,
-                    });
-                } catch (e) { console.error("Profile save error:", e); }
-            }
-            window.location.href = returnTo;
+                setRegistrationComplete(true);
+                await completeProfile();
+            } else { throw new Error("Confirmação sem sessão válida. Faça login para concluir seu cadastro."); }
         } catch (err) {
             setError(err.message || "Código inválido");
         } finally {
@@ -92,7 +85,7 @@ export default function Register() {
         client.auth.loginWithProvider("google", returnTo);
     };
 
-    if (showOtp) {
+    if (showOtp && !registrationComplete) {
         return (
             <AuthLayout
                 title="Verifique seu e-mail"
@@ -155,7 +148,7 @@ export default function Register() {
                 <Field icon={Lock} label="Senha" type="password" value={form.password} onChange={(v) => set("password", v)} required error={errors.password} />
                 <Field icon={Lock} label="Confirmar senha" type="password" value={form.confirm} onChange={(v) => set("confirm", v)} required error={errors.confirm} />
                 <button type="submit" disabled={loading} className="btn-gold w-full">
-                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Criando conta...</> : <><UserPlus className="w-4 h-4" strokeWidth={1.5} /> Criar conta</>}
+                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : <><UserPlus className="w-4 h-4" strokeWidth={1.5} /> {registrationComplete ? "Concluir meus dados" : "Criar conta"}</>}
                 </button>
             </form>
         </AuthLayout>

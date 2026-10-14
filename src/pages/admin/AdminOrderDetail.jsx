@@ -1,6 +1,8 @@
+import OperationalRefund from '@/components/admin/OperationalRefund';
+import ShippingOperations from '@/components/admin/ShippingOperations';
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Truck, Loader2, Copy, FileText, Printer, MapPin, QrCode, CreditCard, Banknote } from "lucide-react";
+import { ArrowLeft, Truck, Loader2, Copy, MapPin, QrCode, CreditCard, Banknote } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL, ORDER_STATUS, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
 import OrderTimeline from "@/components/checkout/OrderTimeline";
@@ -24,8 +26,6 @@ export default function AdminOrderDetail() {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [labelLoading, setLabelLoading] = useState(false);
-    const [labelError, setLabelError] = useState("");
     const [trackingInfo, setTrackingInfo] = useState(null);
     const [trackingLoading, setTrackingLoading] = useState(false);
 
@@ -61,17 +61,6 @@ export default function AdminOrderDetail() {
         navigator.clipboard?.writeText(text);
     };
 
-    const generateLabel = async () => {
-        setLabelLoading(true);
-        setLabelError("");
-        try {
-            await base44.functions.invoke("generateShippingLabel", { orderId: id });
-            load();
-        } catch (e) {
-            setLabelError(e.response?.data?.error || e.message || "Erro ao gerar etiqueta");
-        } finally { setLabelLoading(false); }
-    };
-
     const fetchTracking = async () => {
         setTrackingLoading(true);
         try {
@@ -89,7 +78,6 @@ export default function AdminOrderDetail() {
     const customer = snapshot.customer || {};
     const shippingAddress = order.shipping_address || snapshot.shipping_address || {};
     const isPaid = order.payment_status === "approved";
-    const hasLabel = !!order.melhor_envio_shipment_id;
 
     const PaymentIcon = order.payment_method === "pix" ? QrCode : order.payment_method === "debito" ? Banknote : CreditCard;
 
@@ -158,6 +146,7 @@ export default function AdminOrderDetail() {
                     <PaymentReconciliationPreview key={order.id} order={order} />
 
                     <AdminAfterSales order={order} onChanged={load} />
+                    <OperationalRefund key={order.id} order={order} onChanged={load} />
 
                     {/* Delivery / Shipping */}
                     <div className="bg-background p-5">
@@ -171,38 +160,10 @@ export default function AdminOrderDetail() {
                             <InfoRow label="ID Melhor Envio" value={order.melhor_envio_shipment_id || "—"} />
                         </div>
 
-                        {/* Actions */}
-                        <div className="flex flex-wrap gap-2 mt-4">
-                            {!isPaid && (
-                                <p className="text-xs text-amber-600 flex items-center gap-1.5">
-                                    <FileText className="w-3.5 h-3.5" strokeWidth={1.5} /> Etiqueta disponível após pagamento aprovado
-                                </p>
-                            )}
-                            {isPaid && !hasLabel && (
-                                <button onClick={generateLabel} disabled={labelLoading} className="btn-outline text-xs flex items-center gap-2">
-                                    {labelLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" strokeWidth={1.5} />}
-                                    Gerar etiqueta
-                                </button>
-                            )}
-                            {hasLabel && (
-                                <>
-                                    <button onClick={fetchTracking} disabled={trackingLoading} className="btn-outline text-xs flex items-center gap-2">
-                                        {trackingLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" strokeWidth={1.5} />}
-                                        Rastrear
-                                    </button>
-                                    {order.melhor_envio_shipment_id && (
-                                        <a
-                                            href={`https://sandbox.melhorenvio.com.br/carrinho/${order.melhor_envio_shipment_id}`}
-                                            target="_blank" rel="noopener noreferrer"
-                                            className="btn-outline text-xs flex items-center gap-2"
-                                        >
-                                            <Printer className="w-3.5 h-3.5" strokeWidth={1.5} /> Imprimir etiqueta
-                                        </a>
-                                    )}
-                                </>
-                            )}
-                        </div>
-                        {labelError && <p className="text-xs text-red-600 mt-2">{labelError}</p>}
+                        <ShippingOperations order={order} onChanged={load} />
+                        {order.melhor_envio_shipment_id && <button onClick={fetchTracking} disabled={trackingLoading} className="btn-outline text-xs mt-3">
+                            {trackingLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />} Acompanhar entrega
+                        </button>}
                         {trackingInfo && !trackingInfo.error && (
                             <div className="mt-3 p-3 bg-[hsl(var(--bone))] text-xs space-y-1">
                                 <p><span className="text-muted-foreground">Status:</span> {trackingInfo.status || "—"}</p>

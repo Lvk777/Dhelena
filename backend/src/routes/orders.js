@@ -1,3 +1,4 @@
+import { notificationMetadata } from '../services/notificationOutbox.js';
 import { Router } from 'express';
 import { withDeliveryEstimate } from '../lib/deliveryEstimate.js';
 import { previewCheckout } from '../lib/checkoutPreview.js';
@@ -9,7 +10,8 @@ import { validateCoupon, couponPreviewSubtotal, adjustStock, logAudit } from '..
 import { orderLimiter, couponLimiter } from '../middleware/rateLimiters.js';
 import * as mp from '../services/mercadoPago.js';
 import * as me from '../services/melhorEnvio.js';
-import { assertLabelEligible, buildShippingPackages, getPersistedShippingService, normalizeBrazilianPhone } from '../lib/shipping.js';
+import { operateShipping, shippingEnvironment } from '../services/shippingOperations.js';
+import { buildShippingPackages } from '../lib/shipping.js';
 import { getVerifiedPaymentForOrder } from '../lib/paymentVerification.js';
 import { assertFulfillmentTransition } from '../lib/afterSalesPolicy.js';
 import { applyVerifiedOrderInTransaction, recordVerifiedNonApprovedOrderInTransaction } from '../lib/paymentReconciliation.js';
@@ -134,6 +136,11 @@ router.patch('/orders/:id/status', auth, requireAdmin, async (req, res, next) =>
                 `UPDATE orders SET status = COALESCE($1, status), tracking_code = COALESCE($2, tracking_code),
                  updated_at = now() WHERE id = $3 RETURNING *`,
                 [status, tracking_code, req.params.id]);
+            if (status && status !== rows[0].status) {
+                const event = { em_separacao:'order_separation',enviado:'order_shipped',entregue:'order_delivered' }[status] || 'shipping_updated';
+                await client.query('INSERT INTO order_events(order_id,event,description,metadata) VALUES($1,$2,$3,$4)',
+                    [req.params.id,event,'Etapa de entrega atualizada',JSON.stringify(notificationMetadata())]);
+            }
             return result.rows[0];
         });
         if (!updated) return res.status(404).json({ error: 'Pedido não encontrado' });
@@ -797,141 +804,24 @@ router.get('/shipping/test', auth, requireAdmin, async (req, res) => {
     }
 });
 
-// POST /api/orders/:id/shipping/label — generate shipping label (admin)
-router.post('/orders/:id/shipping/label', auth, requireAdmin, async (req, res) => {
-    let client;
+// Each operation is explicit; preparing never purchases a label.
+router.post('/orders/:id/shipping/label', auth, requireSupabaseAdmin, async (req, res) => {
     try {
-        client = await pool.connect();
-        await client.query('SELECT pg_advisory_lock(hashtext($1))', [`shipping-label:${req.params.id}`]);
-
-        const { rows } = await client.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
-        if (rows.length === 0) return res.status(404).json({ error: 'Pedido não encontrado' });
-
-        let order = assertLabelEligible(rows[0]);
-
-        // A completed label is returned without purchasing or generating again.
-        if (order.melhor_envio_shipment_id && order.shipping_status === 'generated') {
-            return res.json({
-                shipment_id: order.melhor_envio_shipment_id,
-                tracking_code: order.tracking_code,
-                message: 'Etiqueta já gerada',
-            });
-        }
-
-        // Get origin address from settings
-        const { rows: addrRows } = await client.query("SELECT value FROM settings WHERE key = 'address'");
-        const address = addrRows[0]?.value || {};
-        const { rows: senderRows } = await client.query("SELECT value FROM settings WHERE key = 'shipping_sender' AND is_public = false");
-        const sender = senderRows[0]?.value || {};
-
-        const shippingAddress = order.shipping_address || {};
-        const snapshot = order.snapshot || {};
-        const customer = snapshot.customer || {};
-        const products = (snapshot.items || []).map(item => ({
-            name: item.product_name,
-            qty: item.quantity,
-            price: Number(item.unit_price),
-        }));
-
-        let shipmentId = order.melhor_envio_shipment_id;
-        if (!shipmentId) {
-            const originPostalCode = (address.cep || '').replace(/\D/g, '');
-            const senderDocument = (sender.document || '').replace(/\D/g, '');
-            const senderPhone = normalizeBrazilianPhone(sender.phone);
-            if (!sender.name || !sender.email || ![10, 11].includes(senderPhone.length)
-                || ![11, 14].includes(senderDocument.length) || originPostalCode.length !== 8
-                || !address.street || !address.number || !address.district || !address.city
-                || !/^[A-Z]{2}$/.test(address.state || '')) {
-                return res.status(422).json({ error: 'Dados reais do remetente incompletos ou inválidos' });
-            }
-            const shipment = await me.addShipmentToCart({
-                from: {
-                    name: sender.name,
-                    phone: senderPhone,
-                    email: sender.email,
-                    document: senderDocument,
-                    state_register: sender.state_register || '',
-                    address: address.street,
-                    number: address.number,
-                    complement: address.complement || '',
-                    district: address.district,
-                    city: address.city,
-                    state: address.state,
-                    postal_code: originPostalCode,
-                },
-                to: {
-                    name: customer.name || '',
-                    phone: customer.phone || '',
-                    email: customer.email || '',
-                    document: (customer.cpf || '').replace(/\D/g, ''),
-                    address: shippingAddress.street || '',
-                    number: shippingAddress.number || '',
-                    district: shippingAddress.district || '',
-                    city: shippingAddress.city || '',
-                    state: shippingAddress.state || 'SP',
-                    postal_code: (shippingAddress.cep || '').replace(/\D/g, ''),
-                },
-                serviceId: getPersistedShippingService(order),
-                products,
-                volumes: snapshot.shipping_packages,
-                orderNumber: order.order_number,
-                totalValue: Number(order.subtotal) - Number(order.discount),
-            });
-            shipmentId = shipment.shipment_id;
-            await client.query(
-                `UPDATE orders SET melhor_envio_shipment_id = $1, shipping_status = 'cart_created', updated_at = now() WHERE id = $2`,
-                [shipmentId, order.id]
-            );
-            order = { ...order, melhor_envio_shipment_id: shipmentId, shipping_status: 'cart_created' };
-        }
-
-        if (order.shipping_status === 'cart_created') {
-            await me.checkoutShipments([shipmentId]);
-            await client.query("UPDATE orders SET shipping_status = 'purchased', updated_at = now() WHERE id = $1", [order.id]);
-            order = { ...order, shipping_status: 'purchased' };
-        }
-
-        if (order.shipping_status === 'purchased') {
-            await me.generateShipments([shipmentId]);
-            await client.query("UPDATE orders SET shipping_status = 'generated', updated_at = now() WHERE id = $1", [order.id]);
-            order = { ...order, shipping_status: 'generated' };
-        }
-
-        if (order.shipping_status !== 'generated') {
-            throw Object.assign(new Error('Estado da etiqueta não permite continuar'), { status: 409 });
-        }
-
-        const printed = await me.printShipments([shipmentId]);
-        const tracking = await me.getTracking(shipmentId).catch(() => ({}));
-        if (tracking.tracking_code) {
-            await client.query('UPDATE orders SET tracking_code = $1, updated_at = now() WHERE id = $2', [tracking.tracking_code, order.id]);
-        }
-
-        // Timeline event
-        await client.query(
-            `INSERT INTO order_events (order_id, event, description, metadata)
-             SELECT $1, 'label_generated', 'Etiqueta gerada via Melhor Envio', $2
-             WHERE NOT EXISTS (SELECT 1 FROM order_events WHERE order_id = $1 AND event = 'label_generated')`,
-            [order.id, JSON.stringify({ shipment_id: shipmentId, tracking_code: tracking.tracking_code || null })]
-        );
-
-        // Audit log
-        await logAudit(req.user.id, 'shipping.label_generated', 'order', order.id, { shipment_id: shipmentId }, req.ip);
-
-        res.json({
-            shipment_id: shipmentId,
-            tracking_code: tracking.tracking_code || null,
-            print_url: printed.print_url,
-        });
+        res.json(await operateShipping(req.params.id, req.body?.action || 'prepare', req.body || {}, req.user.id));
     } catch (err) {
         logSafeError('shipping_label_failed', err);
         res.status(err.status || 500).json({ error: publicError(err) });
-    } finally {
-        if (client) {
-            await client.query('SELECT pg_advisory_unlock(hashtext($1))', [`shipping-label:${req.params.id}`]).catch(() => {});
-            client.release();
-        }
     }
+});
+
+router.get('/orders/:id/shipping/readiness', auth, requireSupabaseAdmin, async (req, res, next) => {
+    try {
+        const { rows } = await pool.query('SELECT snapshot, shipping_status FROM orders WHERE id=$1', [req.params.id]);
+        if (!rows.length) return res.status(404).json({ error: 'Pedido não encontrado' });
+        res.json({ environment: rows[0].snapshot?.shipping_environment || null,
+            status: rows[0].shipping_status, price: rows[0].snapshot?.shipping_operation?.price ?? null,
+            purchase_enabled: process.env.SHIPPING_LABEL_PURCHASE_ENABLED === 'true' });
+    } catch (err) { next(err); }
 });
 
 // GET /api/orders/:id/tracking — get tracking info (admin or owner)
@@ -953,7 +843,7 @@ router.get('/orders/:id/tracking', auth, async (req, res) => {
             return res.json({ tracking_code: order.tracking_code, status: order.shipping_status });
         }
 
-        const tracking = await me.getTracking(order.melhor_envio_shipment_id);
+        const tracking = await me.getTracking(order.melhor_envio_shipment_id, shippingEnvironment(order));
         res.json(tracking);
     } catch (err) {
         res.status(err.status || 500).json({ error: publicError(err) });

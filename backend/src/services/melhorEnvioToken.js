@@ -33,8 +33,9 @@ export function createMelhorEnvioTokenManager({ db = pool, fetchImpl = fetch, no
         return rows[0] || null;
     }
 
-    async function getToken() {
-        const mode = melhorEnvioMode();
+    async function getToken(selectedMode) {
+        const mode = selectedMode || melhorEnvioMode();
+        if (!['sandbox', 'production'].includes(mode)) throw disconnected();
         const environment = melhorEnvioEnvironment(mode);
         let row;
         try { row = await readRow(mode); } catch { throw disconnected(); }

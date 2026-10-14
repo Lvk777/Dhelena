@@ -42,6 +42,7 @@ function fixture({ price = 100, sale_price = null, promotions = [], coupon = nul
         if (sql.startsWith('INSERT INTO stock_movements')) { state.movements.push(values); return { rows: [] }; }
         if (sql.startsWith('INSERT INTO coupon_usages')) { state.usages.push(values); return { rows: [] }; }
         if (sql.startsWith('INSERT INTO order_items')) { state.orderItems.push(values); return { rows: [] }; }
+        if (sql.startsWith('INSERT INTO order_events')) return { rows: [] };
         if (sql.startsWith('INSERT INTO audit_logs')) return { rows: [] };
         if (sql.includes('INSERT INTO orders')) {
             const order = { id: '33333333-3333-4333-8333-333333333333', order_number: values[0], user_id: values[1],

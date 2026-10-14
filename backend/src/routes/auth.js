@@ -6,7 +6,7 @@ import { auth } from '../middleware.js';
 import { loginLimiter, registerLimiter, forgotPasswordLimiter } from '../middleware/rateLimiters.js';
 import { logSecurityEvent } from '../middleware/securityLog.js';
 import { recordLoginEvent } from './security.js';
-import { normalizeBirthDate } from '../lib/validation.js';
+import { normalizeBirthDate, normalizeProfileInput } from '../lib/validation.js';
 
 const router = Router();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -93,7 +93,7 @@ router.get('/me', auth, async (req, res) => {
 router.patch('/me', auth, async (req, res, next) => {
     try {
         if (!req.user) return res.status(401).json({ error: 'Não autenticado' });
-        const { full_name, phone, cpf, birth_date } = req.body;
+        const { full_name, phone, cpf, birth_date } = normalizeProfileInput(req.body);
         const normalizedBirthDate = normalizeBirthDate(birth_date);
         const { rows } = await pool.query(
             `UPDATE profiles SET full_name = COALESCE($1, full_name), phone = COALESCE($2, phone),

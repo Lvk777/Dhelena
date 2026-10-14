@@ -1,8 +1,10 @@
+import { addressInput } from '../lib/customerAddress.js';
 import { Router } from 'express';
-import { pool } from '../config/db.js';
+import { pool, withTransaction } from '../config/db.js';
 import { auth } from '../middleware.js';
 
 const router = Router();
+const productIdValid = v => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
 // ─── FAVORITES ─────────────────────────────────────────────────────
 
@@ -21,6 +23,7 @@ router.get('/favorites', auth, async (req, res, next) => {
 router.post('/favorites', auth, async (req, res, next) => {
     try {
         const { product_id } = req.body;
+        if (!productIdValid(product_id)) return res.status(400).json({error:"Produto inválido"});
         const { rows } = await pool.query(
             `INSERT INTO favorites (user_id, product_id) VALUES ($1, $2)
              ON CONFLICT (user_id, product_id) DO NOTHING RETURNING *`,
@@ -33,6 +36,7 @@ router.post('/favorites', auth, async (req, res, next) => {
 router.post('/favorites/bulk', auth, async (req, res, next) => {
     try {
         const { items } = req.body;
+        if (!Array.isArray(items) || items.length > 100 || items.some(i => !productIdValid(i?.product_id))) return res.status(400).json({error:"Lista de favoritos inválida"});
         const results = [];
         for (const item of items) {
             const { rows } = await pool.query(
@@ -62,7 +66,7 @@ router.delete('/favorites/:id', auth, async (req, res, next) => {
 router.get('/addresses', auth, async (req, res, next) => {
     try {
         const { rows } = await pool.query(
-            'SELECT *, created_at as created_date FROM addresses WHERE user_id = $1 ORDER BY created_at DESC',
+            'SELECT *, zip_code AS cep, is_default AS is_primary, created_at as created_date FROM addresses WHERE user_id = $1 ORDER BY created_at DESC',
             [req.user.id]
         );
         res.json(rows);
@@ -71,36 +75,33 @@ router.get('/addresses', auth, async (req, res, next) => {
 
 router.post('/addresses', auth, async (req, res, next) => {
     try {
-        const { label, recipient, zip_code, street, number, complement, district, city, state, is_default } = req.body;
-        if (is_default) {
-            await pool.query('UPDATE addresses SET is_default = false WHERE user_id = $1', [req.user.id]);
-        }
-        const { rows } = await pool.query(
-            `INSERT INTO addresses (user_id, label, recipient, zip_code, street, number, complement, district, city, state, is_default)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *, created_at as created_date`,
-            [req.user.id, label, recipient, zip_code, street, number, complement, district, city, state, is_default || false]
-        );
-        res.status(201).json(rows[0]);
-    } catch (err) { next(err); }
+        const v=addressInput(req.body);
+        const row=await withTransaction(async c=>{
+            await c.query('SELECT id FROM profiles WHERE id=$1 FOR UPDATE',[req.user.id]);
+            if(v.is_default)await c.query('UPDATE addresses SET is_default=false WHERE user_id=$1',[req.user.id]);
+            const result=await c.query(`INSERT INTO addresses(user_id,label,recipient,zip_code,street,number,complement,district,city,state,is_default)
+                VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *,zip_code AS cep,is_default AS is_primary,created_at AS created_date`,
+            [req.user.id,v.label||null,v.recipient||null,v.zip_code,v.street,v.number,v.complement||'',v.district,v.city,v.state,v.is_default||false]);
+            return result.rows[0];
+        });res.status(201).json(row);
+    }catch(err){next(err);}
 });
-
-router.patch('/addresses/:id', auth, async (req, res, next) => {
+router.patch('/addresses/:id', auth, async (req,res,next)=>{
     try {
-        const { label, recipient, zip_code, street, number, complement, district, city, state, is_default } = req.body;
-        if (is_default) {
-            await pool.query('UPDATE addresses SET is_default = false WHERE user_id = $1', [req.user.id]);
-        }
-        const { rows } = await pool.query(
-            `UPDATE addresses SET label = COALESCE($1, label), recipient = COALESCE($2, recipient),
-             zip_code = COALESCE($3, zip_code), street = COALESCE($4, street), number = COALESCE($5, number),
-             complement = COALESCE($6, complement), district = COALESCE($7, district), city = COALESCE($8, city),
-             state = COALESCE($9, state), is_default = COALESCE($10, is_default), updated_at = now()
-             WHERE id = $11 AND user_id = $12 RETURNING *, created_at as created_date`,
-            [label, recipient, zip_code, street, number, complement, district, city, state, is_default, req.params.id, req.user.id]
-        );
-        if (rows.length === 0) return res.status(404).json({ error: 'Endereço não encontrado' });
-        res.json(rows[0]);
-    } catch (err) { next(err); }
+        const v=addressInput(req.body,true);
+        const row=await withTransaction(async c=>{
+            await c.query('SELECT id FROM profiles WHERE id=$1 FOR UPDATE',[req.user.id]);
+            const owned=await c.query('SELECT id FROM addresses WHERE id=$1 AND user_id=$2 FOR UPDATE',[req.params.id,req.user.id]);
+            if(!owned.rows.length)return null;
+            if(v.is_default)await c.query('UPDATE addresses SET is_default=false WHERE user_id=$1',[req.user.id]);
+            const result=await c.query(`UPDATE addresses SET label=COALESCE($1,label),recipient=COALESCE($2,recipient),zip_code=COALESCE($3,zip_code),
+                street=COALESCE($4,street),number=COALESCE($5,number),complement=COALESCE($6,complement),district=COALESCE($7,district),
+                city=COALESCE($8,city),state=COALESCE($9,state),is_default=COALESCE($10,is_default),updated_at=now()
+                WHERE id=$11 AND user_id=$12 RETURNING *,zip_code AS cep,is_default AS is_primary,created_at AS created_date`,
+            [v.label,v.recipient,v.zip_code,v.street,v.number,v.complement,v.district,v.city,v.state,v.is_default,req.params.id,req.user.id]);
+            return result.rows[0];
+        });if(!row)return res.status(404).json({error:'Endereço não encontrado'});res.json(row);
+    }catch(err){next(err);}
 });
 
 router.delete('/addresses/:id', auth, async (req, res, next) => {

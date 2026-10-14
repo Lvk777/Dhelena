@@ -16,25 +16,22 @@ export default function Addresses() {
         setLoading(true);
         base44.entities.Address.list("-created_date", 50)
             .then(setAddresses)
-            .catch(() => { })
+            .catch(() => { setLoadError("Não foi possível consultar seus endereços. Tente novamente."); })
             .finally(() => setLoading(false));
     };
 
     useEffect(() => { load(); }, []);
 
+    const [loadError, setLoadError] = useState("");
     const setPrimary = async (id) => {
-        // Unset all, then set the chosen one
-        for (const a of addresses) {
-            if (a.is_primary) await base44.entities.Address.update(a.id, { is_primary: false });
-        }
-        await base44.entities.Address.update(id, { is_primary: true });
-        load();
+        try { await base44.entities.Address.update(id, { is_primary: true }); load(); }
+        catch (e) { setLoadError(e.message || "Não foi possível definir o endereço principal."); }
     };
 
     const confirmDelete = async () => {
         setDeleting(true);
         try { await base44.entities.Address.delete(deleteTarget.id); setDeleteTarget(null); load(); }
-        catch { } finally { setDeleting(false); }
+        catch (e) { setLoadError(e.message || "Não foi possível excluir o endereço."); } finally { setDeleting(false); }
     };
 
     return (
@@ -46,6 +43,7 @@ export default function Addresses() {
                 </button>
             </div>
 
+            {loadError && <p role="alert" className="text-red-700 mb-3">{loadError}</p>}
             {loading ? (
                 <div className="h-32 bg-bone animate-pulse" />
             ) : addresses.length === 0 ? (
@@ -106,6 +104,7 @@ function AddressForm({ address, onClose, onSaved }) {
     });
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState({});
+    const [saveError, setSaveError] = useState("");
 
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -127,7 +126,7 @@ function AddressForm({ address, onClose, onSaved }) {
             }
             onSaved();
         } catch (e) {
-            console.error("Erro ao salvar endereço:", e);
+            setSaveError(e.message || "Não foi possível salvar o endereço.");
         } finally {
             setSaving(false);
         }
@@ -141,6 +140,7 @@ function AddressForm({ address, onClose, onSaved }) {
                     <h2 className="font-heading text-2xl">{address.id ? "Editar endereço" : "Novo endereço"}</h2>
                     <button onClick={onClose}><X className="w-5 h-5" strokeWidth={1.25} /></button>
                 </div>
+                {saveError && <p role="alert" className="text-red-700 mb-3">{saveError}</p>}
                 <AddressFields form={form} set={set} errors={errors} />
                 <button onClick={save} disabled={saving} className="btn-gold w-full mt-6">{saving ? "Salvando..." : "Salvar endereço"}</button>
             </div>

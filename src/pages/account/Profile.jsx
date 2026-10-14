@@ -31,6 +31,7 @@ export default function Profile() {
         setSaving(true);
         try {
             await base44.auth.updateMe({
+                full_name: form.name,
                 phone: form.phone,
                 cpf: form.cpf,
                 birth_date: form.birth_date,
@@ -39,7 +40,7 @@ export default function Profile() {
             setSaved(true);
             setTimeout(() => setSaved(false), 3000);
         } catch (e) {
-            setSaveError("Erro ao salvar dados. Tente novamente.");
+            setSaveError(e.message || "Erro ao salvar dados. Tente novamente.");
         } finally {
             setSaving(false);
         }

@@ -89,7 +89,7 @@ test('Managed OAuth keys in both environments cannot be edited by generic integr
     for (const key of ['melhor_envio_sandbox_oauth', 'melhor_envio_production_oauth', 'melhor_envio_oauth_state_abc', 'melhor_envio_production_oauth_state_abc', 'melhor_envio_production_oauth_code_abc']) assert.equal(isManagedMelhorEnvioConfig(key), true);
     assert.equal(isManagedMelhorEnvioConfig('email'), false);
     assert.equal(MELHOR_ENVIO_OAUTH_SCOPES.includes('*'), false);
-    assert.deepEqual(MELHOR_ENVIO_OAUTH_SCOPES.split(' '), ['shipping-calculate', 'cart-write', 'shipping-checkout', 'shipping-generate', 'shipping-print', 'shipping-tracking', 'users-read']);
+    assert.deepEqual(MELHOR_ENVIO_OAUTH_SCOPES.split(' '), ['shipping-calculate', 'cart-read', 'cart-write', 'shipping-checkout', 'shipping-generate', 'shipping-print', 'shipping-tracking', 'users-read']);
 });
 
 for (const mode of ['sandbox', 'production']) test(`Freight quote uses ${mode} endpoint and token, with catalog dimensions and no label purchase`, async () => {

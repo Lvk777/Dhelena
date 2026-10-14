@@ -1,3 +1,5 @@
+import { createShippingWebhookWorker } from './services/shippingWebhookQueue.js';
+import { createNotificationWorker } from './services/notificationOutbox.js';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -168,10 +170,14 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 3001;
 const orderWebhookWorker = createOrderWebhookWorker();
+const notificationWorker = createNotificationWorker();
+const shippingWebhookWorker = createShippingWebhookWorker();
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[D'Helenas API] Running on port ${PORT}`);
     ensureInitialized();
     orderWebhookWorker.start();
+    notificationWorker.start();
+    shippingWebhookWorker.start();
 });
 
 let shuttingDown = false;
@@ -181,6 +187,8 @@ async function shutdown(signal) {
     console.log(`[API] ${signal} received; closing HTTP server`);
     server.close(async () => {
         await orderWebhookWorker.stop();
+        await notificationWorker.stop();
+        await shippingWebhookWorker.stop();
         try { await pool.end(); } catch { /* pool may not have connected yet */ }
         process.exit(0);
     });

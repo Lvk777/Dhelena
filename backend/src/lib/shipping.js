@@ -53,6 +53,9 @@ export function getPersistedShippingService(order) {
 }
 
 export function assertLabelEligible(order) {
+    if (order?.status === 'cancelado' || Number(order?.refunded_amount) > 0) {
+        throw Object.assign(new Error('Pedido cancelado ou reembolsado não aceita etiqueta'), { status: 409 });
+    }
     if (order?.payment_status !== 'approved') {
         throw Object.assign(new Error('Pagamento não confirmado. Gere a etiqueta apenas após o pagamento ser aprovado.'), { status: 400 });
     }
@@ -60,4 +63,13 @@ export function assertLabelEligible(order) {
         throw Object.assign(new Error('Pedido não utiliza o Melhor Envio'), { status: 409 });
     }
     return order;
+}
+
+export function safeShippingPrintUrl(value) {
+    try {
+        const url=new URL(value);
+        if(url.protocol!=='https:'||url.username||url.password||url.port
+            || !['melhorenvio.com.br','www.melhorenvio.com.br','sandbox.melhorenvio.com.br'].includes(url.hostname))return null;
+        return url.href;
+    }catch{return null;}
 }

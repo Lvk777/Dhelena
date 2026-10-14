@@ -190,7 +190,7 @@ export default function AdminAfterSales({ order, onChanged }) {
                             || !SHIPPED.has(order.status)} onClick={submitReturn}>Solicitar devolução</button>
                     </div>
                     {order.order_number === 'DH-2026-000006' && <p className="text-xs text-muted-foreground">Pedido preservado como evidência da homologação financeira.</p>}
-                    {['approved', 'partially_refunded'].includes(order.payment_status) && <div className="space-y-2 pt-2">
+                    {!order.snapshot?.payment_context && ['approved', 'partially_refunded'].includes(order.payment_status) && <div className="space-y-2 pt-2">
                         <div className="border border-border p-3 space-y-2" aria-label="Prévia de reembolso do saldo restante">
                             <h4 className="font-medium">Prévia do saldo restante · Mercado Pago TEST</h4>
                             <button className="btn-outline text-xs" disabled={busy} onClick={previewRefund}>Consultar prévia read-only</button>
@@ -211,7 +211,7 @@ export default function AdminAfterSales({ order, onChanged }) {
                             </div>}
                         </div>
                     </div>}
-                    {data.refunds_enabled && ['approved', 'partially_refunded'].includes(order.payment_status) && <div className="space-y-2 pt-2">
+                    {!order.snapshot?.payment_context && data.refunds_enabled && ['approved', 'partially_refunded'].includes(order.payment_status) && <div className="space-y-2 pt-2">
                         <p className="text-xs text-muted-foreground">Esta liberação TEST aceita somente o saldo restante calculado no backend para DH-2026-000006. O reembolso não cria devolução nem repõe estoque.</p>
                         <button className="btn-outline text-xs" disabled={busy || !refundPreview?.safe_to_refund_remaining} onClick={submitRefund}>Solicitar reembolso do saldo MP TEST</button>
                     </div>}
@@ -224,7 +224,7 @@ export default function AdminAfterSales({ order, onChanged }) {
                         {entry.kind === 'full' ? 'Total' : entry.kind === 'remaining' ? 'Saldo restante' : 'Parcial'} · {formatBRL(Number(entry.amount))} · {entry.status}
                         {entry.provider_refund_id && <span> · MP {entry.provider_refund_id}</span>}
                         {['processing', 'reconciliation_required'].includes(entry.status) && <button className="btn-outline text-xs ml-2" disabled={busy}
-                            onClick={() => run(() => base44.functions.invoke('reconcileRefund', { orderId: order.id, refundId: entry.id }))}>Consultar MP</button>}
+                            onClick={() => run(() => base44.functions.invoke(order.snapshot?.payment_context ? 'operationalRefundReconcile' : 'reconcileRefund', { orderId: order.id, refundId: entry.id }))}>Consultar MP</button>}
                     </div>)}
                     {!data.refunds?.length && <p className="text-xs text-muted-foreground">Nenhum reembolso.</p>}
                 </div>

@@ -24,8 +24,10 @@ test('Public boutique pages do not invent business identity, legal terms or garm
     }
 });
 
-test('Editable tracking destinations use the same validated public link sink as banners', () => {
+test('Customer tracking stays in the owned order instead of assuming a carrier or external link', () => {
     const source = fs.readFileSync(new URL('../../src/pages/account/Tracking.jsx', import.meta.url), 'utf8');
-    assert.ok(source.includes('<SafeConfiguredLink to={order.tracking_link}'));
+    assert.ok(source.includes('to={`/minha-conta/pedidos/${order.id}`}'));
+    assert.ok(!source.includes('linkcorreios.com.br'));
+    assert.ok(source.includes('order.shipping_carrier'));
     assert.ok(!source.includes('href={order.tracking_link}'));
 });

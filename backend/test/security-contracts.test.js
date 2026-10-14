@@ -439,7 +439,7 @@ test('Melhor Envio label mock follows cart, checkout, generate, print and tracki
         ]);
         assert.deepEqual(calls[1].body, { orders: ['shipment-1'] });
         assert.deepEqual(calls[2].body, { orders: ['shipment-1'] });
-        assert.deepEqual(calls[3].body, { mode: 'public', orders: ['shipment-1'] });
+        assert.deepEqual(calls[3].body, { mode: 'private', orders: ['shipment-1'] });
         assert.equal(calls[0].body.service, 17);
         assert.deepEqual(calls[0].body.volumes, [{ height: 10, width: 20, length: 30, weight: 0.4 }]);
         assert.equal(label.tracking_code, 'TRACK123');

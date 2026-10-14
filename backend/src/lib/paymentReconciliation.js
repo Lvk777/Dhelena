@@ -1,3 +1,4 @@
+import { notificationMetadata } from '../services/notificationOutbox.js';
 import { verifyPaymentResourceForOrder, hasPaymentStateChanged } from './paymentVerification.js';
 import { shouldApplyProviderPayment } from './afterSalesPolicy.js';
 import { refundInFlight } from './refundState.js';
@@ -70,7 +71,7 @@ export async function applyVerifiedOrderInTransaction(client, orderId, resource,
     await client.query(
         `INSERT INTO order_events (order_id, event, description, metadata)
          VALUES ($1, 'payment_approved', 'Pagamento aprovado pela order oficial do Mercado Pago', $2)`,
-        [orderId, JSON.stringify({ source, mp_order_id: resource.mp_order_id })]
+        [orderId, JSON.stringify(notificationMetadata({ source, mp_order_id: resource.mp_order_id }, {MERCADO_PAGO_MODE:current.snapshot?.payment_context?.mode || 'unverified'}))]
     );
     return { outcome: 'applied', payment_status: plan.payment_status };
 }
@@ -109,7 +110,7 @@ export async function recordVerifiedNonApprovedOrderInTransaction(client, orderI
     await client.query(
         `INSERT INTO order_events (order_id, event, description, metadata)
          VALUES ($1, $2, 'Estado do pagamento confirmado pela order oficial do Mercado Pago', $3)`,
-        [orderId, `payment_${paymentStatus}`, JSON.stringify({ source, mp_order_id: resource.mp_order_id })]
+        [orderId, `payment_${paymentStatus}`, JSON.stringify(notificationMetadata({ source, mp_order_id: resource.mp_order_id }, {MERCADO_PAGO_MODE:current.snapshot?.payment_context?.mode || 'unverified'}))]
     );
     return { outcome: 'applied', payment_status: paymentStatus };
 }

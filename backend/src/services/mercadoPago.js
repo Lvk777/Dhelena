@@ -484,7 +484,7 @@ export async function getRefundableOrder(mpOrderId, credentialContext) {
     };
 }
 
-export async function refundOrder({ mpOrderId, mpPaymentId, amount, full, idempotencyKey }) {
+export async function refundOrder({ mpOrderId, mpPaymentId, amount, full, idempotencyKey, credentialContext }) {
     if (!idempotencyKey || !/^[a-zA-Z0-9_-]{1,128}$/.test(idempotencyKey)) {
         throw Object.assign(new Error('Chave de idempotência inválida'), { status: 400 });
     }
@@ -492,7 +492,7 @@ export async function refundOrder({ mpOrderId, mpPaymentId, amount, full, idempo
         transactions: [{ id: mpPaymentId, amount: (amount / 100).toFixed(2) }],
     });
     const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}/refund`, {
-        method: 'POST', idempotencyKey, ...(body ? { body } : {}),
+        method: 'POST', idempotencyKey, credentialContext, ...(body ? { body } : {}),
     });
     return {
         id: data.id,
@@ -507,9 +507,9 @@ export async function refundOrder({ mpOrderId, mpPaymentId, amount, full, idempo
     };
 }
 
-export async function cancelPendingOrder(mpOrderId, idempotencyKey) {
+export async function cancelPendingOrder(mpOrderId, idempotencyKey, credentialContext) {
     const data = await mpFetch(`/v1/orders/${encodeURIComponent(mpOrderId)}/cancel`, {
-        method: 'POST', idempotencyKey,
+        method: 'POST', idempotencyKey, credentialContext,
     });
     return { id: data.id, status: data.status, external_reference: data.external_reference };
 }

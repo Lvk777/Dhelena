@@ -1,6 +1,6 @@
 import { pool } from './config/db.js';
 import { effectiveSizes, stockForSize } from './lib/variantStock.js';
-import { sendOrderEmail, EMAIL_EVENTS } from './services/orderEmail.js';
+import { queueOrderEmails } from './services/notificationOutbox.js';
 import { logSafeError } from './lib/safeErrorLog.js';
 
 // ─── Audit Log ─────────────────────────────────────────────────────
@@ -115,110 +115,8 @@ export async function adjustStock(client, productId, colorId, size, newStock, re
     return { previousStock, newStock, delta };
 }
 
-// ─── Notifications (async, never blocks order) ──────────────────────
+// Future marked events only; dispatch is durable and disabled until authorized.
 export async function sendOrderNotifications(orderId, event) {
-    try {
-        const { rows: orderRows } = await pool.query(
-            `SELECT o.*, u.email as user_email, u.full_name as user_name, u.phone as user_phone
-             FROM orders o JOIN profiles u ON o.user_id = u.id WHERE o.id = $1`,
-            [orderId]
-        );
-        if (orderRows.length === 0) return;
-        const order = orderRows[0];
-
-        const { rows: settingRows } = await pool.query("SELECT value FROM settings WHERE key = 'notifications'");
-        const notifSettings = settingRows[0]?.value || { recipients: [] };
-        const recipients = notifSettings.recipients || [];
-        const { rows: emailRows } = await pool.query("SELECT value FROM settings WHERE key = 'emails'");
-        const emailSettings = emailRows[0]?.value || {};
-
-        for (const r of recipients) {
-            if (!r.active) continue;
-
-            const events = r.events || ['order_created', 'payment_approved'];
-            if (!events.includes(event)) continue;
-
-            // Email
-            if (r.email && notifSettings.email_enabled !== false && EMAIL_EVENTS[event] && emailSettings[EMAIL_EVENTS[event][0]] !== false) {
-                await tryNotify(orderId, event, 'email', r.email, () => sendOrderEmail(order, r.email, event));
-            }
-
-            // WhatsApp
-            if (r.whatsapp && notifSettings.whatsapp_enabled !== false) {
-                await tryNotify(orderId, event, 'whatsapp', r.whatsapp, () => sendOrderWhatsApp(order, r.whatsapp));
-            }
-        }
-    } catch (err) {
-        logSafeError('notifications_dispatch_failed', err);
-    }
-}
-
-async function tryNotify(orderId, event, channel, recipient, sender) {
-    try {
-        const { rows: existing } = await pool.query(
-            `SELECT * FROM notification_logs WHERE order_id = $1 AND event = $2 AND channel = $3 AND recipient = $4 AND status = 'sent'`,
-            [orderId, event, channel, recipient]
-        );
-        if (existing.length > 0) return;
-
-        const { rows: logRows } = await pool.query(
-            `INSERT INTO notification_logs (order_id, event, channel, recipient, status, attempts)
-             VALUES ($1, $2, $3, $4, 'retrying', 1)
-             ON CONFLICT (order_id, event, channel, recipient)
-             DO UPDATE SET attempts = notification_logs.attempts + 1
-             RETURNING *`,
-            [orderId, event, channel, recipient]
-        );
-
-        await sender();
-
-        await pool.query(
-            `UPDATE notification_logs SET status = 'sent', sent_at = now() WHERE id = $1`,
-            [logRows[0].id]
-        );
-    } catch (err) {
-        await pool.query(
-            `UPDATE notification_logs SET status = 'failed', error = $2
-             WHERE order_id = $1 AND event = $3 AND channel = $4 AND recipient = $5`,
-            [orderId, `${channel}_delivery_failed`, event, channel, recipient]
-        ).catch(() => {});
-        logSafeError(channel === 'email' ? 'email_delivery_failed' : 'whatsapp_delivery_failed', err);
-    }
-}
-
-// ─── WhatsApp notification (Cloud API) ────────────────────────────
-async function sendOrderWhatsApp(order, recipient) {
-    if (!process.env.WHATSAPP_ACCESS_TOKEN || !process.env.WHATSAPP_PHONE_NUMBER_ID) {
-        throw new Error('WhatsApp não configurado');
-    }
-
-    const phone = recipient.replace(/\D/g, '');
-    const items = order.snapshot?.items || [];
-    const itemsText = items.map(i => `• ${i.quantity}x ${i.product_name} (${i.color_name || '-'}, ${i.size || '-'}) — R$ ${Number(i.subtotal).toFixed(2)}`).join('\n');
-
-    const message = `*Novo pedido ${order.order_number}*\n\n*Cliente:* ${order.user_name || '-'}\n*Telefone:* ${order.user_phone || '-'}\n\n*Itens:*\n${itemsText}\n\n*Subtotal:* R$ ${Number(order.subtotal).toFixed(2)}\n*Desconto:* R$ ${Number(order.discount).toFixed(2)}\n*Frete:* R$ ${Number(order.shipping_cost).toFixed(2)}\n*Total:* R$ ${Number(order.total).toFixed(2)}\n\n*Pagamento:* ${order.payment_method || '-'}\n*Status:* ${order.status}`;
-
-    const response = await fetch(
-        `https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
-        {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                messaging_product: 'whatsapp',
-                to: phone,
-                type: 'text',
-                text: { body: message },
-            }),
-        }
-    );
-
-    if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error?.message || `WhatsApp API error: ${response.status}`);
-    }
-
-    return response.json();
+    try { await queueOrderEmails(orderId, event); }
+    catch (err) { logSafeError('notifications_dispatch_failed', err); }
 }

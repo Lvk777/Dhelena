@@ -1,5 +1,8 @@
+import { notificationMetadata } from './services/notificationOutbox.js';
 import { pool, withTransaction } from './config/db.js';
 import * as mp from './services/mercadoPago.js';
+import { paymentContexts } from './lib/mercadoPagoContext.js';
+import { verifyResourceContext } from './services/mercadoPagoWebhookQueue.js';
 import {
     afterSalesError, assertRefundableOrder, canCancelAfterRefund,
     findIdempotentRefund, moneyCents, nextReturnStatus, planRefund,
@@ -39,7 +42,7 @@ function matchNewProviderRefund(provider, ledger, amountCents, paymentId) {
     return matches[0];
 }
 
-async function recordRefundOutcome(refundId, provider, existingLedger, transaction = withTransaction) {
+export async function recordRefundOutcome(refundId, provider, existingLedger, transaction = withTransaction) {
     return transaction(async client => {
         const row = await queryOne(client, 'SELECT * FROM order_refunds WHERE id = $1 FOR UPDATE', [refundId]);
         if (!row) throw afterSalesError('Reembolso não encontrado', 404);
@@ -81,7 +84,7 @@ async function recordRefundOutcome(refundId, provider, existingLedger, transacti
             await client.query(
                 `INSERT INTO order_events (order_id, event, description, metadata)
                  VALUES ($1, 'refund_processed', 'Reembolso confirmado no Mercado Pago', $2)`,
-                [order.id, JSON.stringify({ refund_id: matched.id, amount: row.amount, actor_id: row.actor_id })]);
+                [order.id, JSON.stringify(notificationMetadata({ refund_id: matched.id, amount: row.amount, actor_id: row.actor_id }, {MERCADO_PAGO_MODE:order.snapshot?.payment_context?.mode || 'unverified'}))]);
             await client.query(
                 `INSERT INTO audit_logs (admin_id, action, entity_type, entity_id, changes)
                  VALUES ($1, 'refund.processed', 'order', $2, $3)`,
@@ -256,8 +259,8 @@ export async function cancelPaidOrder(orderId, actorId) {
         for (const item of items) await restoreStock(client, order, item, item.quantity, 'cancellation', null, actorId);
         const updated = await queryOne(client,
             "UPDATE orders SET status = 'cancelado', updated_at = now() WHERE id = $1 RETURNING *", [orderId]);
-        await client.query(`INSERT INTO order_events (order_id, event, description)
-            VALUES ($1, 'order_cancelled', 'Pedido cancelado após reembolso integral; estoque reposto')`, [orderId]);
+        await client.query(`INSERT INTO order_events (order_id, event, description,metadata)
+            VALUES ($1, 'order_cancelled', 'Pedido cancelado após reembolso integral; estoque reposto',$2)`, [orderId,JSON.stringify(notificationMetadata({}, {MERCADO_PAGO_MODE:order.snapshot?.payment_context?.mode || 'unverified'}))]);
         await client.query(`INSERT INTO audit_logs (admin_id, action, entity_type, entity_id, changes)
             VALUES ($1, 'order.cancel_after_refund', 'order', $2, $3)`,
         [actorId, orderId, JSON.stringify({ previous_status: order.status })]);
@@ -265,7 +268,7 @@ export async function cancelPaidOrder(orderId, actorId) {
     });
 }
 
-export async function cancelPendingProviderOrder(orderId, actorId, provider = mp) {
+export async function cancelPendingProviderOrder(orderId, actorId, provider = mp, { contexts = paymentContexts } = {}) {
     if (process.env.AFTER_SALES_CANCELLATIONS_ENABLED !== 'true') {
         throw afterSalesError('Cancelamento no provedor desabilitado até validação operacional', 503);
     }
@@ -278,7 +281,16 @@ export async function cancelPendingProviderOrder(orderId, actorId, provider = mp
             || order.melhor_envio_shipment_id || order.tracking_code) {
             throw afterSalesError('Pedido não elegível a cancelamento de pagamento pendente');
         }
-        let remote = await provider.getRefundableOrder(order.mercado_pago_order_id);
+        const bound=order.snapshot?.payment_context;
+        const contextsFound=contexts().filter(c=>c.mode===bound?.mode&&c.credentialId===bound?.credential_id);
+        if(contextsFound.length!==1)throw afterSalesError('Tentativa legada ou ambiente não comprovado; preserve para análise.');
+        const context=contextsFound[0],identity=await provider.getWebhookCredentialIdentity(context);
+        const readOfficial=async()=>{
+            const result=await provider.getRefundableOrder(order.mercado_pago_order_id,context);
+            verifyResourceContext({version:1,resource_id:order.mercado_pago_order_id,application_id:bound.application_id},context,identity,order,result.provider_resource);
+            return result;
+        };
+        let remote = await readOfficial();
         const matches = value => value.id === order.mercado_pago_order_id
             && value.external_reference === order.order_number
             && moneyCents(value.total_amount) === moneyCents(order.total)
@@ -287,14 +299,14 @@ export async function cancelPendingProviderOrder(orderId, actorId, provider = mp
                 || String(value.payment?.id) === String(order.mercado_pago_payment_id));
         if (!matches(remote)) throw afterSalesError('Order do provedor não corresponde ao pedido');
         if (['created', 'action_required'].includes(remote.status)) {
-            const canceled = await provider.cancelPendingOrder(remote.id, `cancel-${order.id}`);
+            const canceled = await provider.cancelPendingOrder(remote.id, `cancel-${order.id}`,context);
             if (canceled.id !== remote.id || canceled.external_reference !== order.order_number) {
                 throw afterSalesError('Cancelamento retornou outra order');
             }
-            remote = await provider.getRefundableOrder(remote.id);
+            remote = await readOfficial();
             if (!matches(remote)) throw afterSalesError('Order cancelada não corresponde ao pedido');
         }
-        if (!['canceled', 'cancelled', 'failed'].includes(remote.status)
+        if (!['canceled', 'cancelled', 'failed', 'expired'].includes(remote.status)
             || ['approved', 'processed', 'refunded'].includes(remote.payment?.status)) {
             throw afterSalesError('Pagamento não foi confirmado como cancelado no provedor');
         }
@@ -306,7 +318,7 @@ export async function cancelPendingProviderOrder(orderId, actorId, provider = mp
             [remote.status, orderId]);
         await client.query(`INSERT INTO order_events (order_id, event, description, metadata)
             VALUES ($1, 'order_cancelled', 'Pagamento pendente cancelado no Mercado Pago; estoque reposto', $2)`,
-        [orderId, JSON.stringify({ mp_status: remote.status, actor_id: actorId })]);
+        [orderId, JSON.stringify(notificationMetadata({ mp_status: remote.status, actor_id: actorId }, {MERCADO_PAGO_MODE:context.mode}))]);
         await client.query(`INSERT INTO audit_logs (admin_id, action, entity_type, entity_id, changes)
             VALUES ($1, 'order.cancel_pending_provider', 'order', $2, $3)`,
         [actorId, orderId, JSON.stringify({ previous_status: order.status, mp_status: remote.status })]);

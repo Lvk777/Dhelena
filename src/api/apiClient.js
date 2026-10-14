@@ -335,8 +335,18 @@ const functions = {
                 return apiFetch(`/orders/${args.orderId}/cancel-after-refund`, { method: 'POST' });
             case 'cancelPendingPayment':
                 return apiFetch(`/orders/${args.orderId}/cancel-pending-payment`, { method: 'POST' });
+            case 'operationalRefundPreview':
+                return apiFetch(`/orders/${args.orderId}/refunds/operational/preview`, { method:'POST',body:JSON.stringify(args.request) });
+            case 'operationalRefundReconcile':
+                return apiFetch(`/orders/${args.orderId}/refunds/operational/${args.refundId}/reconcile`,{method:'POST'});
+            case 'operationalRefund':
+                return apiFetch(`/orders/${args.orderId}/refunds/operational`, { method:'POST',headers:{'X-Idempotency-Key':args.idempotencyKey},body:JSON.stringify(args.request) });
+            case 'notificationReadiness':
+                return apiFetch('/notifications/readiness');
             case 'generateShippingLabel':
                 return apiFetch(`/orders/${args.orderId}/shipping/label`, { method: 'POST', body: JSON.stringify(args) });
+            case 'shippingReadiness':
+                return apiFetch(`/orders/${args.orderId}/shipping/readiness`);
             case 'getTrackingInfo':
                 return apiFetch(`/orders/${args.orderId}/tracking`);
             // ─── Shipping quote ───

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../config/db.js';
-import { auth, requireAdmin } from '../middleware.js';
+import { auth, requireAdmin, requireSupabaseAdmin } from '../middleware.js';
+import { operationalRefunds } from '../services/operationalRefund.js';
 import {
     advanceReturn, cancelPaidOrder, cancelPendingProviderOrder, createReturn, reconcileRefund, requestRefund,
 } from '../afterSalesService.js';
@@ -8,6 +9,18 @@ import { loadRefundPreview } from '../lib/refundPreview.js';
 import { resolveFailedPixAttempt } from '../failedPixResolution.js';
 
 const router = Router();
+router.post('/orders/:id/refunds/operational/preview', auth, requireSupabaseAdmin, async (req, res) => {
+    try { res.json(await operationalRefunds.preview(req.params.id, req.user.id, req.body)); }
+    catch (error) { replyError(res, error); }
+});
+router.post('/orders/:id/refunds/operational', auth, requireSupabaseAdmin, async (req, res) => {
+    try { res.json(await operationalRefunds.request(req.params.id, req.user.id, req.body, req.get('X-Idempotency-Key'))); }
+    catch (error) { replyError(res, error); }
+});
+router.post('/orders/:id/refunds/operational/:refundId/reconcile',auth,requireSupabaseAdmin,async(req,res)=>{
+    try{res.json(await operationalRefunds.reconcile(req.params.id,req.user.id,req.params.refundId));}
+    catch(error){replyError(res,error);}
+});
 router.use('/orders', auth, (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Autenticação necessária' });
     next();
