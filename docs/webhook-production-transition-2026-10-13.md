@@ -1,5 +1,7 @@
 # Correção do webhook e transição TEST → produção — 13/10/2026
 
+Atualização: a [verificação privada](mercado-pago-credentials-readiness-2026-10-13.md) confirmou assinatura compartilhada entre TEST/produção nesta aplicação. A exigência inicial abaixo de assinaturas distintas foi substituída pela [correção de seleção por vínculo e recurso oficial](webhook-shared-signature-fix-2026-10-13.md), sem rotação. O restante do plano e as autorizações de instalação/corte continuam aplicáveis.
+
 Continuação de [webhook-production-verification-2026-10-13.md](webhook-production-verification-2026-10-13.md). As falhas identificadas em `963238e` foram corrigidas no código, sem mudar variáveis, segredos, URL/evento cadastrados, migrations ou políticas do Supabase. Não houve pagamentos, reembolsos ou alterações de pedidos reais. Manutenção ON, Data API OFF, Mercado Pago TEST e desconto Pix OFF permanecem como condições de operação. Main e PR #3 não recebem merge.
 
 ## Comportamento entregue
