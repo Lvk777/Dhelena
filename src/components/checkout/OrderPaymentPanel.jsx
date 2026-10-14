@@ -39,7 +39,7 @@ export default function OrderPaymentPanel({ order, onChanged, onRefresh }) {
             : <CardPaymentBrick key={`${order.id}-${order.payment_method}`} order={order} amount={order.total} publicKey={methods.public_key}
                 maxInstallments={methods.max_installments} installmentPolicyManaged={methods.installment_policy_managed} isDebit={order.payment_method === 'debito'} onApproved={onRefresh}
                 onRejected={onRefresh} onAttempt={() => setAttempted(true)} />)}
-        {!open && order.payment_method === 'pix' && order.payment_status === 'pending' && order.pix_qr_code && <div className="space-y-3">
+        {!open && !status?.reconciliation_required && order.payment_method === 'pix' && order.payment_status === 'pending' && order.pix_qr_code && <div className="space-y-3">
             {order.pix_qr_code_base64 && <img className="w-48 h-48" src={`data:image/png;base64,${order.pix_qr_code_base64}`} alt="QR Code do pagamento existente" />}
             <button type="button" className="btn-outline min-h-11" onClick={() => navigator.clipboard?.writeText(order.pix_qr_code)}>Copiar código Pix deste pedido</button>
             {order.pix_expiration_at && <p className="text-sm">Validade do código: {new Date(order.pix_expiration_at).toLocaleString('pt-BR')}</p>}

@@ -84,6 +84,7 @@ export default function CardPaymentBrick({ order, publicKey, amount, maxInstallm
                     });
                     callbacks.current.onAttempt?.();
                     setResult(next);
+                    if (next.reconciliation_required) setError(next.status_message || 'Este pagamento precisa de conciliação. Entre em contato com o atendimento antes de uma nova tentativa.');
                     if (next.payment_status === 'approved') callbacks.current.onApproved?.(next);
                     else if (next.payment_status === 'rejected') callbacks.current.onRejected?.(next);
                     return next;
