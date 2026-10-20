@@ -2,8 +2,10 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { useReveal } from "@/hooks/useReveal";
 import { ABOUT_IMAGE, HERO_IMAGE, CATEGORY_IMAGES } from "@/data/products";
+import useSEO from "@/lib/useSEO";
 
 export default function About() {
+    useSEO({ title: "Nossa História", description: "Conheça a história da D'Helenas.", url: "/sobre" });
     return (
         <div>
             {/* hero */}

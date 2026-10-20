@@ -4,8 +4,10 @@ import { useStore } from "@/context/StoreContext";
 import { usePublicSettings } from '@/context/PublicSettingsContext';
 import { base44 } from '@/api/base44Client';
 import { instagramLink, whatsappLink, validEmail } from '../../backend/src/lib/navigation.js';
+import useSEO from '@/lib/useSEO';
 
 export default function Contact() {
+    useSEO({ title: 'Contato', description: "Entre em contato com a D'Helenas.", url: '/contato' });
     const { showToast } = useStore();
     const { settings } = usePublicSettings();
     const general = settings.general || {};
