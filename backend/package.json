@@ -12,6 +12,7 @@
     "seed": "node seed/seed.js",
     "test": "node --test",
     "test:auth-postgres": "node integration/authReadiness.mjs",
+    "test:email-postgres": "node integration/emailReadiness.mjs",
     "test:operations-postgres": "node integration/operationalReadiness.mjs",
     "test:coupon-postgres": "node integration/couponConcurrency.mjs",
     "test:security-postgres": "node supabase/security/rehearse_local.mjs"
