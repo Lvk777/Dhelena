@@ -6,6 +6,8 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
+        "start": "node static-server.mjs",
+        "test:static": "node --test scripts/static-server.test.mjs",
         "lint": "eslint . --quiet",
         "lint:fix": "eslint . --fix",
         "typecheck": "tsc -p ./jsconfig.json",
