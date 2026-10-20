@@ -33,8 +33,11 @@ try {
     const profiles = (await db.query('SELECT * FROM profiles ORDER BY id')).rows;
     const legacyUser = { id: authId, email: legacy.email, email_confirmed_at: 'confirmed' };
     assert.equal((await ensureSupabaseProfile(db, legacyUser)).id, legacy.id);
+    const ownerAuthId = crypto.randomUUID();
+    const ownerUser = { id: ownerAuthId, email: owner.email, email_confirmed_at: 'confirmed' };
+    await assert.rejects(ensureSupabaseProfile(db, ownerUser), { status: 409 });
     assert.deepEqual(await readAdminAccess(owner, { db, env: {} }), { available: false, can_manage: false, collaborators: [] });
-    pass('current schema without new migrations preserves legacy profiles and disables access management safely');
+    pass('current schema preserves customer profiles, blocks unlinked admin claims and disables access management');
     for (const name of ['016_profile_auth_links.sql', '017_admin_authorities.sql']) {
         const sql = await fs.readFile(new URL('../migrations/' + name, import.meta.url), 'utf8');
         await db.query('BEGIN'); await db.query(sql); await db.query('ROLLBACK');
@@ -46,6 +49,9 @@ try {
     }
     assert.equal((await db.query('SELECT count(*)::int AS n FROM admin_authorities')).rows[0].n, 0);
     pass('migrations 016/017 roll back, preserve all records and create no owner or permission grants');
+    await db.query('INSERT INTO profile_auth_links(auth_user_id,profile_id) VALUES($1,$2)', [ownerAuthId, owner.id]);
+    assert.equal((await ensureSupabaseProfile(db, ownerUser)).id, owner.id);
+    pass('explicit verified link restores legacy admin access without email-only promotion');
     await db.query('INSERT INTO profile_auth_links(auth_user_id,profile_id) VALUES($1,$2)', [authId, legacy.id]);
     const linked = await ensureSupabaseProfile(db, { ...legacyUser, email: 'confirmed-new@example.test', new_email: 'unconfirmed@example.test' });
     assert.equal(linked.id, legacy.id); assert.equal(linked.email, 'confirmed-new@example.test'); assert.equal(linked.identity_linked, true);

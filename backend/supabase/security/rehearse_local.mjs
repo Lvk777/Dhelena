@@ -46,6 +46,35 @@ try {
     await run('supabase/security/verify_local_postgres.mjs');
     console.log('PASS: recovery retains revoked grants; RLS reapplied');
 
+    // Rehearse the later application migrations on top of the hardened
+    // inventory. Roll back so the 29-table backend fixture remains unchanged.
+    await client.query('BEGIN');
+    try {
+        for (const migration of ['015_notification_outbox.sql', '016_profile_auth_links.sql', '017_admin_authorities.sql']) {
+            await client.query(fs.readFileSync(path.join(backend, 'migrations', migration), 'utf8'));
+        }
+        const future = await client.query(`SELECT count(*)::int AS tables,
+            count(*) FILTER (WHERE c.relrowsecurity AND NOT c.relforcerowsecurity)::int AS protected,
+            count(*) FILTER (WHERE has_any_column_privilege('anon',c.oid,'SELECT,INSERT,UPDATE,REFERENCES')
+                OR has_any_column_privilege('authenticated',c.oid,'SELECT,INSERT,UPDATE,REFERENCES'))::int AS exposed
+            FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+            WHERE n.nspname='public' AND c.relkind IN ('r','p')`);
+        assert.deepEqual(future.rows[0], { tables: 31, protected: 31, exposed: 0 });
+        const newGrants = await client.query(`SELECT count(*)::int AS n
+            FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+            CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a
+            WHERE n.nspname='public' AND c.relname IN ('profile_auth_links','admin_authorities')
+                AND a.grantee IN (0::oid,'anon'::regrole,'authenticated'::regrole,'service_role'::regrole)`);
+        assert.equal(newGrants.rows[0].n, 0);
+        const columns = await client.query(`SELECT count(*)::int AS n FROM information_schema.columns
+            WHERE table_schema='public' AND table_name='notification_logs'
+                AND column_name IN ('delivery_payload','source_event_id','next_attempt_at','first_attempt_at')`);
+        assert.equal(columns.rows[0].n, 4);
+        console.log('PASS: migrations 015-017 after security preserve 31/31 RLS and zero direct client access');
+    } finally {
+        await client.query('ROLLBACK');
+    }
+
     const portProbe = net.createServer();
     await new Promise(resolve => portProbe.listen(0, '127.0.0.1', resolve));
     env.PORT = String(portProbe.address().port);

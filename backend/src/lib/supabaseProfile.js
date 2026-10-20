@@ -49,6 +49,11 @@ export async function ensureSupabaseProfile(db, user) {
             const legacy = await client.query(
                 `SELECT ${fields} FROM profiles WHERE lower(email) = $1 LIMIT 2 FOR UPDATE`, [email]);
             if (legacy.rows.length > 1) throw profileError('Perfil exige reconciliação.', 409);
+            // A verified mailbox is insufficient proof of ownership of a
+            // privileged legacy profile. Require an explicit, reviewed link.
+            if (legacy.rows[0]?.role === 'admin' && legacy.rows[0].id !== user.id) {
+                throw profileError('Perfil administrativo exige vinculação verificada.', 409);
+            }
             // Preserve legacy UUIDs and their orders. Only the verified Auth
             // email may use this compatibility path; do not rewrite role or ID.
             profile = legacy.rows[0];

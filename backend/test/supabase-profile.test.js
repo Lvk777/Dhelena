@@ -43,10 +43,18 @@ test('profile created while waiting on the lock is reused', async () => {
     assert.equal(db.calls.some(c => c.sql.startsWith('INSERT')), false);
 });
 
-test('a unique verified legacy email preserves UUID, role and order associations', async () => {
-    const legacy = { ...customer, id: 'legacy-id', role: 'admin' };
+test('a unique verified customer email preserves its legacy UUID and order associations', async () => {
+    const legacy = { ...customer, id: 'legacy-id' };
     const db = database([[], [], [legacy]]);
     assert.deepEqual(await ensureSupabaseProfile(db, user), legacy);
+    assert.equal(db.calls.some(c => /^(INSERT|UPDATE|DELETE)/.test(c.sql)), false);
+});
+
+test('a verified email alone cannot claim an unlinked legacy administrator', async () => {
+    const legacy = { ...customer, id: 'legacy-admin-id', role: 'admin' };
+    const db = database([[], [], [legacy]]);
+    await assert.rejects(ensureSupabaseProfile(db, user), { status: 409 });
+    assert.equal(db.calls.at(-1).sql, 'ROLLBACK');
     assert.equal(db.calls.some(c => /^(INSERT|UPDATE|DELETE)/.test(c.sql)), false);
 });
 

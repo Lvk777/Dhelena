@@ -5,3 +5,16 @@ CREATE TABLE IF NOT EXISTS admin_authorities (
     active BOOLEAN NOT NULL DEFAULT TRUE,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Authority records must never be readable or writable through Data API roles.
+ALTER TABLE admin_authorities ENABLE ROW LEVEL SECURITY;
+REVOKE ALL PRIVILEGES ON TABLE admin_authorities FROM PUBLIC;
+DO $revoke$
+DECLARE role_name text;
+BEGIN
+    FOR role_name IN SELECT rolname FROM pg_roles
+        WHERE rolname IN ('anon', 'authenticated', 'service_role')
+    LOOP
+        EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE public.admin_authorities FROM %I', role_name);
+    END LOOP;
+END
+$revoke$;
