@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createShippingOperations,shippingEnvironment,shippingPreparation} from '../src/services/shippingOperations.js';
-import {officialShippingUpdate} from '../src/services/shippingWebhookQueue.js';
+import {createShippingWebhookWorker,officialShippingUpdate} from '../src/services/shippingWebhookQueue.js';
 import {safeShippingPrintUrl} from '../src/lib/shipping.js';
 const origin={cep:'01001000',street:'Origem',number:'1',district:'Centro',city:'São Paulo',state:'SP'};
 const sender={name:'Fixture',document:'12345678909',phone:'11999999999',email:'sender@example.test'};
@@ -79,4 +79,14 @@ test('shipping status cannot regress a delivered order or advance an unpaid one'
 test('label print links allow only HTTPS Melhor Envio hosts without credentials or unusual ports',()=>{
     assert.ok(safeShippingPrintUrl('https://sandbox.melhorenvio.com.br/imprimir/fixture'));
     for(const url of ['javascript:alert(1)','https://evil.example/imprimir/fixture','https://melhorenvio.com.br.evil.example/','https://user:secret@melhorenvio.com.br/','http://melhorenvio.com.br/','https://melhorenvio.com.br:444/'])assert.equal(safeShippingPrintUrl(url),null);
+});
+
+test('unsupported cancellation and disabled tracking worker make no provider or database calls',async()=>{
+    const f=fixture();
+    await assert.rejects(f.operate('fixture','cancel',{confirm_cancel:true}),{status:400});
+    assert.equal(f.calls.length,0);
+    let touched=false;
+    const worker=createShippingWebhookWorker({db:{query(){touched=true;throw Error('unexpected database access');}},env:{}});
+    assert.equal(await worker.processOne(),false);
+    assert.equal(touched,false);
 });
