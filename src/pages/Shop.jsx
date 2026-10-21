@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { SlidersHorizontal, X, ChevronDown } from "lucide-react";
 import ProductCard from "@/components/ProductCard";
 import { useCatalog } from "@/context/CatalogContext";
@@ -81,6 +81,18 @@ export default function Shop() {
 
     if (loading) return <div className="h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-[hsl(var(--bone))] border-t-[hsl(var(--gold))] rounded-full animate-spin" /></div>;
     if (error) return <div className="container-boutique py-24 text-center"><p role="alert">Não foi possível carregar a coleção.</p><button onClick={reload} className="btn-outline mt-6">Tentar novamente</button></div>;
+
+    if (products.length === 0) return (
+        <main className="container-boutique min-h-[65vh] flex items-center justify-center py-24 text-center">
+            <div className="max-w-2xl">
+                <p className="eyebrow">Nossa coleção</p>
+                <h1 className="font-heading text-5xl sm:text-6xl mt-4">Novas peças em preparação</h1>
+                <div className="gold-rule mx-auto mt-6" />
+                <p className="text-muted-foreground mt-7 leading-relaxed">A coleção está vazia no momento. Os produtos aparecerão aqui quando forem cadastrados e publicados.</p>
+                <Link to="/contato" className="btn-gold inline-block mt-8">Entre em contato</Link>
+            </div>
+        </main>
+    );
 
     return (
         <div>

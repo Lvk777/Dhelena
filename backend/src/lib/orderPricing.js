@@ -6,6 +6,7 @@ function invalid(message, status = 400) {
 }
 
 export function resolveCatalogLine(product, { colorId, size, qty }) {
+    if (product?.status !== 'published') throw invalid('Produto indisponível', 409);
     const quantity = Number(qty);
     if (!Number.isInteger(quantity) || quantity <= 0) throw invalid('Quantidade inválida');
 

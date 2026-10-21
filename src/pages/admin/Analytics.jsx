@@ -272,7 +272,7 @@ export default function Analytics() {
                                         <td className="py-2.5 px-4 text-xs font-numeric text-right">{c.add_to_cart}</td>
                                         <td className="py-2.5 px-4 text-xs font-numeric text-right">{c.checkouts}</td>
                                         <td className="py-2.5 px-4 text-xs font-numeric text-right">{c.orders}</td>
-                                        <td className="py-2.5 px-4 text-xs font-numeric text-right">{formatCurrency(c.revenue)}</td>
+                                        <td className="py-2.5 px-4 text-xs font-numeric text-right" title="Pedidos sem vínculo persistido de campanha">{c.revenue == null ? '—' : formatCurrency(c.revenue)}</td>
                                         <td className="py-2.5 pl-4 text-xs font-numeric text-right">{c.conversion}%</td>
                                     </tr>
                                 ))}

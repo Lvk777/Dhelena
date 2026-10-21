@@ -567,7 +567,7 @@ test('checkout propagates its idempotency key in the API header, not the JSON bo
 
 test('catalog price, stock and server totals cannot be imposed by the browser', () => {
     const catalogProduct = {
-        name: 'Vestido', price: '200.00', sale_price: '150.00',
+        name: 'Vestido', status: 'published', price: '200.00', sale_price: '150.00',
         sizes: ['M'],
         colors: [{ id: 'black', name: 'Preto', stock: { M: 2 } }],
     };
@@ -580,7 +580,7 @@ test('catalog price, stock and server totals cannot be imposed by the browser', 
 });
 
 test('legacy single-size stock is reserved and restored without rewriting stock keys', () => {
-    const bag = { name: 'Bolsa', price: '180.00', sizes: ['Único'], colors: [
+    const bag = { name: 'Bolsa', status: 'published', price: '180.00', sizes: ['Único'], colors: [
         { id: 'rosa', name: 'Rosa', stock: { PP: 5, P: 5, M: 5, G: 5, GG: 5 } },
     ] };
     const line = resolveCatalogLine(bag, { colorId: 'rosa', size: 'Único', qty: 2 });
@@ -606,9 +606,20 @@ test('sequential reservations from a locked product row cannot oversell the last
 });
 
 test('a size-less legacy accessory uses a single sellable variant', () => {
-    const product = { name: 'Colar', price: 100, sizes: [], colors: [{ id: 'dourado', name: 'Dourado', stock: { PP: 2 } }] };
+    const product = { name: 'Colar', status: 'published', price: 100, sizes: [], colors: [{ id: 'dourado', name: 'Dourado', stock: { PP: 2 } }] };
     assert.equal(resolveCatalogLine(product, { colorId: 'dourado', size: 'Único', qty: 1 }).currentStock, 2);
     assert.equal(stockFor(product, 'dourado', 'Único'), 2);
+});
+
+test('archived and draft products cannot be purchased from a stale cart', () => {
+    const product = { name: 'Peça fictícia', price: 100, sizes: ['M'],
+        colors: [{ id: 'rose', name: 'Rosé', stock: { M: 5 } }] };
+    for (const status of ['archived', 'draft', null]) {
+        assert.throws(() => resolveCatalogLine({ ...product, status },
+            { colorId: 'rose', size: 'M', qty: 1 }), error => error.status === 409);
+    }
+    assert.equal(resolveCatalogLine({ ...product, status: 'published' },
+        { colorId: 'rose', size: 'M', qty: 1 }).currentStock, 5);
 });
 
 test('admin adjustment converts legacy stock explicitly without changing its total by accident', async () => {

@@ -13,7 +13,7 @@ import { instagramLink } from '../../backend/src/lib/navigation.js';
 import { primaryBannerCta } from '@/lib/banners';
 
 export default function Home() {
-    const { products, categories, banners, loading } = useCatalog();
+    const { products, categories, banners, loading, error, reload } = useCatalog();
     const { settings } = usePublicSettings();
     const instagram = instagramLink(settings.social?.instagram);
     const hero = banners.find(b => b.position === "home_hero") || banners[0] || {};
@@ -32,6 +32,21 @@ export default function Home() {
 
     if (loading) {
         return <div className="h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-[hsl(var(--bone))] border-t-[hsl(var(--gold))] rounded-full animate-spin" /></div>;
+    }
+    if (error) return <main className="container-boutique py-24 text-center"><p role="alert">Não foi possível carregar a coleção.</p><button onClick={reload} className="btn-outline mt-6">Tentar novamente</button></main>;
+
+    if (products.length === 0) {
+        return (
+            <main className="min-h-[70vh] bg-[hsl(var(--bone))] flex items-center py-24">
+                <div className="container-boutique max-w-3xl text-center">
+                    <p className="eyebrow">D’Helenas Boutique</p>
+                    <h1 className="font-heading text-5xl sm:text-7xl leading-tight mt-5">Uma nova coleção está sendo preparada</h1>
+                    <div className="gold-rule mx-auto mt-7" />
+                    <p className="text-muted-foreground leading-relaxed mt-7 max-w-xl mx-auto">No momento, não há peças disponíveis na loja. Volte para conhecer os novos cadastros quando estiverem publicados.</p>
+                    <Link to="/contato" className="btn-gold inline-block mt-9">Fale com a boutique</Link>
+                </div>
+            </main>
+        );
     }
 
     return (

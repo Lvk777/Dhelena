@@ -129,3 +129,6 @@ jobs:
       - run: npm run test:operations-postgres --prefix backend
         env:
           TEST_DATABASE_URL: postgresql://postgres:synthetic-ci-only@127.0.0.1:5432/dhelenas_operations_ci
+      - run: npm run test:launch-postgres --prefix backend
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:synthetic-ci-only@127.0.0.1:5432/dhelenas_operations_ci

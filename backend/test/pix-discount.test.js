@@ -253,6 +253,18 @@ test('missing or stale preview causes transactional rollback without losing stoc
     assert.equal(f.state.orders.length, 0); assert.equal(f.state.products[0].colors[0].stock.M, 3);
 });
 
+test('an archived item in an old cart fails preview and order creation without reserving stock', async () => {
+    const f = fixture();
+    const body = request();
+    const preview = await f.preview(body);
+    f.state.products[0].status = 'archived';
+    await assert.rejects(f.preview(body), { status: 409 });
+    await assert.rejects(f.place({ ...body, expected_pricing: ack(preview) }), { status: 409 });
+    assert.equal(f.state.orders.length, 0);
+    assert.equal(f.state.movements.length, 0);
+    assert.equal(f.state.products[0].colors[0].stock.M, 3);
+});
+
 test('a changed coupon or quote also invalidates the acknowledged final amount', () => {
     assert.throws(() => assertCheckoutPriceAcknowledged({ subtotal: 100, discount: 5, shipping_cost: 20, total: 115 },
         { subtotal: 100, discount: 10, shipping_cost: 20, total: 110 }), { status: 409 });

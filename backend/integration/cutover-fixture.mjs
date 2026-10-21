@@ -7,6 +7,8 @@ if (!process.argv.includes('--local-fixture') || process.env.NODE_ENV === 'produ
 const root = new URL('../../', import.meta.url);
 const initial = JSON.parse(fs.readFileSync(new URL('src/data/initialData.json', root), 'utf8'));
 const product = initial.Product[0];
+const launchEmpty = process.argv.includes('--launch-empty');
+const fixtureProducts = launchEmpty ? [{ ...product, status: 'archived' }] : initial.Product;
 const orderId = '11111111-1111-4111-8111-111111111111';
 const fixtureUser = { id: '22222222-2222-4222-8222-222222222222', role: 'admin', email: 'fixture@example.test', full_name: 'QA Fixture', phone: '(11) 91234-5678', cpf: '52998224725' };
 const order = { id: orderId, order_number: 'QA-FIXTURE-ONLY', user_id: fixtureUser.id, status: 'pagamento_aprovado', payment_status: 'approved', payment_method: 'pix', total: 80, subtotal: 80, discount: 0, shipping_cost: 0, shipping_method: 'retirada', created_date: new Date().toISOString(),
@@ -37,6 +39,11 @@ const server = http.createServer(async (req, res) => {
     const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {};
     if (path === '/qa-proof') return send({ fixtureOnly: true, calls, prohibited });
     if (req.method !== 'GET') {
+        if (launchEmpty && req.method === 'POST' && path === '/products' && body.status === 'draft' && body.name?.trim()) {
+            const draft = { ...body, id: '88888888-8888-4888-8888-888888888888', updated_date: new Date().toISOString() };
+            fixtureProducts.push(draft);
+            return send(draft, 201);
+        }
         if (path === '/auth/login') return send({ token: 'LOCAL_FIXTURE_ONLY', user: fixtureUser });
         if (path === '/shipping/quote') return send({ options: [{ id: 1, name: 'QA service', company: 'QA carrier', price: 12.5, delivery_time: 3 }] });
         if (path === '/coupons/validate') return send({ valid: body.code === 'QA-FIXTURE', discount: 5, discount_type: 'fixed', discount_value: 5 });
@@ -49,13 +56,18 @@ const server = http.createServer(async (req, res) => {
         prohibited.push({ method: req.method, path }); return send({ error: 'MUTATION BLOCKED IN LOCAL FIXTURE' }, 403);
     }
     if (path === '/auth/me') return send(fixtureUser);
-    if (path === '/products') return send(initial.Product);
+    if (path === '/products') return send(fixtureProducts);
     if (path.startsWith('/products/')) return send(initial.Product.find(row => row.id === path.split('/')[2]) || product);
     if (path === '/categories') return send(initial.Category);
     if (path === '/collections') return send(initial.Collection);
     if (path === '/banners') return send(banners);
     if (path === '/settings') return send(settings);
     if (path === '/orders') return send([order]);
+    if (path === '/admin/launch-summary') return send({ configured: true, start_at: new Date().toISOString(), orders: 0,
+        paid_orders: 0, buyers: 0, gross_paid: 0, refunds: 0, net_revenue: 0, average_paid_order: 0,
+        profit: 0, profit_note: 'Dados sintéticos; custos de vendas futuras serão conciliados.',
+        refund_inconsistencies: 0, published_products: 0, daily: [], monthly: [], statuses: [],
+        top_products: [], recent_orders: [] });
     if (path.endsWith('/events')) return send([{ id: 'fixture-event', event: 'payment_approved', status: 'pagamento_aprovado', created_at: order.created_date }]);
     if (path.startsWith('/orders/') && !path.includes('/after-sales') && !path.includes('/payment-preview')) return send(order);
     if (path.endsWith('/after-sales')) return send({ refunds: [], returns: [], refund_available: false });
@@ -73,6 +85,6 @@ process.env.VITE_SUPABASE_URL = '';
 process.env.VITE_SUPABASE_ANON_KEY = '';
 const vite = await createServer({ root: fs.realpathSync(root), mode: 'development', server: { host: '127.0.0.1', port: 5552, strictPort: true } });
 await vite.listen();
-console.log(JSON.stringify({ fixtureOnly: true, url: 'http://127.0.0.1:5552', productId: product.id, orderId, api: 'http://127.0.0.1:5562/api', financialMutationsAllowed: false }));
+console.log(JSON.stringify({ fixtureOnly: true, launchEmpty, url: 'http://127.0.0.1:5552', productId: product.id, orderId, api: 'http://127.0.0.1:5562/api', financialMutationsAllowed: false }));
 const stop = async () => { await vite.close(); server.closeAllConnections(); server.close(); process.exit(0); };
 process.once('SIGINT', stop); process.once('SIGTERM', stop);

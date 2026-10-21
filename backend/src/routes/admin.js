@@ -4,8 +4,12 @@ import { auth, requireAdmin } from '../middleware.js';
 import { notificationSchemaReady } from '../services/notificationOutbox.js';
 import { orderEmailReadiness } from '../services/orderEmail.js';
 import { readAdminAccess, changeAdminAccess } from '../services/adminAccess.js';
+import { readLaunchSummary } from '../services/launchSummary.js';
 
 const router = Router();
+router.get('/admin/launch-summary', auth, requireAdmin, async (req, res, next) => {
+    try { res.json(await readLaunchSummary(pool)); } catch (error) { next(error); }
+});
 router.get('/admin/access', auth, requireAdmin, async (req,res,next) => {
     try { res.json(await readAdminAccess({ ...req.user, authProvider: req.authProvider, identityVerified: req.supabaseUserId === req.user.id || req.user.identity_linked === true })); } catch (error) { next(error); }
 });

@@ -85,7 +85,7 @@ export function CatalogProvider({ children }) {
     // Only published products are shown in the public store
     const publishedProducts = products.filter((p) => p.status === "published");
 
-    const getProductById = useCallback((id) => products.find((p) => p.id === id), [products]);
+    const getProductById = useCallback((id) => products.find((p) => p.id === id && p.status === 'published'), [products]);
 
     const getRelated = useCallback((product, limit = 4) =>
         products.filter((p) => p.category === product?.category && p.id !== product?.id && p.status === "published").slice(0, limit),

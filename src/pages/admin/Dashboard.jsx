@@ -1,122 +1,68 @@
-import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { DollarSign, ShoppingCart, Package, Users, AlertTriangle } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
-import { base44 } from "@/api/base44Client";
-import { formatBRL, toCurrencyAmount, totalStock } from "@/data/products";
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { DollarSign, ShoppingCart, Package, Users } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { base44 } from '@/api/base44Client';
+import { formatBRL } from '@/data/products';
 
 export default function Dashboard() {
-    const [orders, setOrders] = useState([]);
-    const [products, setProducts] = useState([]);
-    const [loading, setLoading] = useState(true);
-
+    const [summary, setSummary] = useState(null);
+    const [error, setError] = useState('');
     useEffect(() => {
-        Promise.all([
-            base44.entities.Order.list("-created_date", 200).catch(() => []),
-            base44.entities.Product.list("-created_date", 200).catch(() => []),
-        ]).then(([o, p]) => { setOrders(o || []); setProducts(p || []); })
-            .finally(() => setLoading(false));
+        base44.custom.launchSummary().then(setSummary)
+            .catch(() => setError('Não foi possível consultar os indicadores do novo período.'));
     }, []);
 
-    const revenue = orders.reduce((sum, order) => sum + toCurrencyAmount(order.total), 0);
-    const published = products.filter((p) => p.status === "published");
-    const lowStock = products.filter((p) => p.status === "published" && totalStock(p) > 0 && totalStock(p) <= 6);
-    const outStock = products.filter((p) => p.status === "published" && totalStock(p) === 0);
+    if (error) return <p role="alert" className="text-destructive p-6">{error}</p>;
+    if (!summary) return <div className="h-64 bg-background animate-pulse" />;
+    if (!summary.configured) return <div className="bg-background p-8">
+        <h1 className="font-heading text-2xl">Dashboard do novo lançamento</h1>
+        <p className="mt-4 text-muted-foreground">A data de início operacional ainda não foi definida. Os pedidos históricos permanecem disponíveis em <Link to="/admin/pedidos" className="underline">Pedidos</Link>; nenhum valor será apresentado como zero antes da separação do período.</p>
+    </div>;
 
-    // last 7 days revenue
-    const days = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(); d.setDate(d.getDate() - (6 - i)); return d;
-    });
-    const chartData = days.map((d) => {
-        const key = d.toISOString().slice(0, 10);
-        const dayOrders = orders.filter((o) => (o.created_date || "").slice(0, 10) === key);
-        return {
-            day: d.toLocaleDateString("pt-BR", { weekday: "short" }).slice(0, 3),
-            vendas: dayOrders.reduce((sum, order) => sum + toCurrencyAmount(order.total), 0),
-        };
-    });
+    const chartData = summary.daily.map(row => ({
+        day: new Date(`${row.day}T12:00:00Z`).toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'UTC' }).slice(0, 3),
+        vendas: Number(row.revenue),
+    }));
 
-    // unique customers
-    const customerEmails = [...new Set(orders.map((o) => o.customer_email).filter(Boolean))];
-
-    if (loading) return <div className="h-64 bg-background animate-pulse" />;
-
-    return (
-        <div>
-            <h1 className="font-heading text-2xl tracking-[0.03em] mb-6">Dashboard</h1>
-
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <KPI icon={DollarSign} label="Receita total" value={formatBRL(revenue)} />
-                <KPI icon={ShoppingCart} label="Pedidos" value={orders.length} />
-                <KPI icon={Package} label="Produtos ativos" value={published.length} />
-                <KPI icon={Users} label="Clientes" value={customerEmails.length} />
+    return <div>
+        <h1 className="font-heading text-2xl tracking-[0.03em] mb-2">Dashboard</h1>
+        <p className="text-xs text-muted-foreground mb-6">Nova operação desde {new Date(summary.start_at).toLocaleString('pt-BR')} · <Link to="/admin/pedidos" className="underline">Consultar histórico de pedidos</Link></p>
+        {!!summary.refund_inconsistencies && <p role="alert" className="text-destructive mb-5">Há reembolsos que excedem o valor de pedidos. Concilie antes de usar os indicadores.</p>}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <KPI icon={DollarSign} label="Faturamento líquido do período" value={formatBRL(summary.net_revenue)} />
+            <KPI icon={ShoppingCart} label="Vendas pagas" value={summary.paid_orders} />
+            <KPI icon={Package} label="Produtos publicados" value={summary.published_products} />
+            <KPI icon={Users} label="Compradores do período" value={summary.buyers} />
+        </div>
+        <div className="grid lg:grid-cols-3 gap-5">
+            <div className="lg:col-span-2 bg-background p-6">
+                <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Vendas pagas nos últimos 7 dias</h2>
+                <ResponsiveContainer width="100%" height={240}><BarChart data={chartData}>
+                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#999' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#999' }} axisLine={false} tickLine={false} tickFormatter={formatBRL} />
+                    <Tooltip formatter={formatBRL} /><Bar dataKey="vendas" fill="hsl(44 69% 54%)" radius={[4, 4, 0, 0]} />
+                </BarChart></ResponsiveContainer>
             </div>
-
-            <div className="grid lg:grid-cols-3 gap-5">
-                {/* chart */}
-                <div className="lg:col-span-2 bg-background p-6">
-                    <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Vendas dos últimos 7 dias</h2>
-                    <ResponsiveContainer width="100%" height={240}>
-                        <BarChart data={chartData}>
-                            <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#999" }} axisLine={false} tickLine={false} />
-                            <YAxis tick={{ fontSize: 11, fill: "#999" }} axisLine={false} tickLine={false} tickFormatter={formatBRL} />
-                            <Tooltip formatter={(v) => formatBRL(v)} contentStyle={{ fontSize: 12, border: "1px solid #eee" }} />
-                            <Bar dataKey="vendas" fill="hsl(44 69% 54%)" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-
-                {/* alerts */}
-                <div className="bg-background p-6">
-                    <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Alertas de estoque</h2>
-                    {outStock.length === 0 && lowStock.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Tudo em ordem ✓</p>
-                    ) : (
-                        <div className="space-y-3">
-                            {outStock.map((p) => (
-                                <Link key={p.id} to="/admin/estoque" className="flex items-center gap-2 text-sm text-[hsl(var(--rose))]">
-                                    <AlertTriangle className="w-4 h-4 shrink-0" strokeWidth={1.5} /> {p.name} — Esgotado
-                                </Link>
-                            ))}
-                            {lowStock.map((p) => (
-                                <Link key={p.id} to="/admin/estoque" className="flex items-center gap-2 text-sm text-foreground/70">
-                                    <AlertTriangle className="w-4 h-4 shrink-0 text-[hsl(var(--gold))]" strokeWidth={1.5} /> {p.name} — <span className="font-numeric">{totalStock(p)}</span> un.
-                                </Link>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* recent orders */}
-            <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mt-8 mb-4">Pedidos recentes</h2>
-            <div className="bg-background">
-                {orders.length === 0 ? (
-                    <p className="text-sm text-muted-foreground p-6">Nenhum pedido ainda.</p>
-                ) : (
-                    <div className="divide-y divide-border">
-                        {orders.slice(0, 5).map((o) => (
-                            <Link key={o.id} to={`/admin/pedidos/${o.id}`} className="flex items-center justify-between p-4 hover:bg-[hsl(var(--bone))] transition-colors">
-                                <div>
-                                    <p className="text-sm font-medium font-numeric">{o.order_number}</p>
-                                    <p className="text-[11px] text-muted-foreground font-numeric">{o.customer_name} · {new Date(o.created_date).toLocaleDateString("pt-BR")}</p>
-                                </div>
-                                <span className="text-sm font-medium font-numeric">{formatBRL(o.total)}</span>
-                            </Link>
-                        ))}
-                    </div>
-                )}
+            <div className="bg-background p-6 space-y-4">
+                <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Conciliação do período</h2>
+                <p className="text-sm">Bruto recebido: <strong>{formatBRL(summary.gross_paid)}</strong></p>
+                <p className="text-sm">Reembolsos processados: <strong>{formatBRL(summary.refunds)}</strong></p>
+                <p className="text-sm">Lucro líquido: <strong>{summary.profit === null ? 'A apurar' : formatBRL(summary.profit)}</strong></p>
+                <p className="text-xs text-muted-foreground">{summary.profit_note}</p>
             </div>
         </div>
-    );
+        <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mt-8 mb-4">Pedidos do novo período</h2>
+        <div className="bg-background divide-y divide-border">
+            {summary.recent_orders.length ? summary.recent_orders.map(order => <Link key={order.id} to={`/admin/pedidos/${order.id}`} className="flex justify-between p-4 hover:bg-[hsl(var(--bone))]">
+                <span className="font-numeric text-sm">{order.order_number}</span><span className="font-numeric text-sm">{formatBRL(order.total)}</span>
+            </Link>) : <p className="p-6 text-sm text-muted-foreground">Nenhum pedido desde o início da nova operação.</p>}
+        </div>
+    </div>;
 }
 
 function KPI({ icon: Icon, label, value }) {
-    return (
-        <div className="bg-background p-5">
-            <Icon className="w-5 h-5 text-[hsl(var(--gold))] mb-3" strokeWidth={1.25} />
-            <p className="font-numeric text-2xl font-medium">{value}</p>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground mt-1">{label}</p>
-        </div>
-    );
+    return <div className="bg-background p-5"><Icon className="w-5 h-5 text-[hsl(var(--gold))] mb-3" strokeWidth={1.25} />
+        <p className="font-numeric text-2xl font-medium">{value}</p>
+        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground mt-1">{label}</p></div>;
 }

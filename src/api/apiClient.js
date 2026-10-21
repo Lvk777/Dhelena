@@ -435,6 +435,7 @@ const entities = /** @type {Record<string, ReturnType<typeof makeEntity>>} */ (n
 
 // ─── Custom analytics endpoints ───────────────────────────────────
 const custom = {
+    launchSummary: () => apiFetch('/admin/launch-summary'),
     readAdminAccess: () => apiFetch('/admin/access'),
     changeAdminAccess: (id, grant) => apiFetch(`/admin/access/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ grant }) }),
     submitContact: data => apiFetch('/contact', { method: 'POST', body: JSON.stringify(data) }),

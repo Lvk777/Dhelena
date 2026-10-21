@@ -60,7 +60,7 @@ export default function Inventory() {
 
     const stats = useMemo(() => {
         let totalUnits = 0, inStock = 0, low = 0, out = 0;
-        products.forEach((p) => {
+        products.filter((p) => p.status === "published").forEach((p) => {
             const ts = totalStock(p);
             totalUnits += ts;
             if (ts === 0) out++;
@@ -135,6 +135,7 @@ export default function Inventory() {
                 <StatCard icon={AlertTriangle} label="Estoque baixo" value={stats.low} color="text-accent" />
                 <StatCard icon={AlertTriangle} label="Esgotados" value={stats.out} color="text-destructive" />
             </div>
+            <p className="text-xs text-muted-foreground mb-5">Indicadores da loja publicada. Produtos arquivados permanecem consultáveis abaixo, sem compor o estoque do novo lançamento.</p>
 
             {/* Search + Filters */}
             <div className="flex flex-wrap items-center gap-3 mb-4">
