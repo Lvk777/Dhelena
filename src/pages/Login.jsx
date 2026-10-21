@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { client } from "@/api/apiClient";
-import { Loader2, Mail, Lock, LogIn, Eye, EyeOff } from "lucide-react";
+import { Loader2, Mail, Lock, LogIn } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
+import PasswordInput from "@/components/PasswordInput";
 import GoogleSignIn from "@/components/GoogleSignIn";
 import { safeReturnTo } from "@/lib/authReturnTo";
 import { track } from "@/lib/analytics";
@@ -10,7 +11,6 @@ import { track } from "@/lib/analytics";
 export default function Login() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const returnTo = safeReturnTo();
@@ -94,21 +94,13 @@ export default function Login() {
                             Esqueci minha senha
                         </Link>
                     </div>
-                    <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <input
-                            id="login-password" type={showPassword ? "text" : "password"}
-                            autoComplete="current-password"
-                            placeholder="••••••••"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full border border-border bg-background pl-10 pr-12 py-3.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors"
-                            required
-                        />
-                        <button type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"} aria-pressed={showPassword} title={showPassword ? "Ocultar senha" : "Mostrar senha"} className="absolute right-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(var(--gold))]">
-                            {showPassword ? <EyeOff className="h-5 w-5" aria-hidden="true" /> : <Eye className="h-5 w-5" aria-hidden="true" />}
-                        </button>
-                    </div>
+                    <PasswordInput
+                        id="login-password" name="password" leadingIcon={Lock}
+                        autoComplete="current-password" placeholder="••••••••"
+                        value={password} onChange={(e) => setPassword(e.target.value)}
+                        className="w-full border border-border bg-background pl-10 py-3.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors"
+                        required
+                    />
                 </div>
                 <button
                     type="submit"

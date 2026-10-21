@@ -5,6 +5,7 @@ import { passwordMessage } from '@/lib/supabaseAuthFlow';
 import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
 import { useAuth } from '@/lib/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import PasswordInput from '@/components/PasswordInput';
 export default function ChangePassword() {
     const dialogs = useBoutiqueDialogs();
     const { logout } = useAuth();
@@ -37,10 +38,10 @@ export default function ChangePassword() {
     return <div><h1 className="font-heading text-3xl mb-6">Segurança da conta</h1><form onSubmit={save} className="bg-bone p-6 sm:p-8 max-w-lg space-y-5">
         {!info && !error && <p role="status">Verificando sua conta...</p>}
         {info && !info.password_provider && <p className="text-sm">Você utiliza Google. Uma senha adicional pode ser cadastrada se o Supabase confirmar sua identidade. Seu acesso Google será preservado.</p>}
-        {info?.local_mode && <label className="block text-sm">Senha atual<input className="admin-field mt-2 w-full" type="password" autoComplete="current-password" value={current} onChange={e => setCurrent(e.target.value)} required /></label>}
-        <label className="block text-sm">Nova senha<input className="admin-field mt-2 w-full" type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} maxLength={128} /></label>
+        {info?.local_mode && <div><label htmlFor="current-password" className="block text-sm">Senha atual</label><PasswordInput id="current-password" name="current-password" visibilityLabel="senha atual" className="admin-field mt-2 w-full" autoComplete="current-password" value={current} onChange={e => setCurrent(e.target.value)} required /></div>}
+        <div><label htmlFor="new-password" className="block text-sm">Nova senha</label><PasswordInput id="new-password" name="new-password" visibilityLabel="nova senha" className="admin-field mt-2 w-full" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} maxLength={128} /></div>
         <p className="text-sm">Use de 8 a 128 caracteres, com letras e números.</p>
-        <label className="block text-sm">Confirme a nova senha<input className="admin-field mt-2 w-full" type="password" autoComplete="new-password" value={repeat} onChange={e => setRepeat(e.target.value)} required /></label>
+        <div><label htmlFor="confirm-new-password" className="block text-sm">Confirme a nova senha</label><PasswordInput id="confirm-new-password" name="confirm-new-password" visibilityLabel="confirmação da nova senha" className="admin-field mt-2 w-full" autoComplete="new-password" value={repeat} onChange={e => setRepeat(e.target.value)} required /></div>
         {needsNonce && <><label className="block text-sm">Código de reautenticação<input className="admin-field mt-2 w-full" autoComplete="one-time-code" inputMode="numeric" value={nonce} onChange={e => setNonce(e.target.value)} required /></label><button type="button" className="btn-outline min-h-11" disabled={busy} onClick={sendNonce}>Solicitar código</button></>}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{message && <p role="status" className="text-sm">{message}</p>}
         <button className="btn-gold min-h-11" disabled={busy || !info}>{busy ? 'Atualizando...' : 'Alterar senha'}</button><Link to="/esqueci-minha-senha" className="block text-sm underline">Recuperar acesso por e-mail</Link>

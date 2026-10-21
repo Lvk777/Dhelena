@@ -1,8 +1,9 @@
 import React, { useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { client } from "@/api/apiClient";
-import { Loader2, Mail, Lock, UserPlus, User, Eye, EyeOff } from "lucide-react";
+import { Loader2, Mail, Lock, UserPlus, User } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
+import PasswordInput from "@/components/PasswordInput";
 import GoogleSignIn from "@/components/GoogleSignIn";
 import { safeReturnTo } from "@/lib/authReturnTo";
 import { validateEmail } from "@/lib/forms";
@@ -14,8 +15,6 @@ export default function Register() {
     const [error, setError] = useState("");
     const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
     const [loading, setLoading] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
-    const [showConfirm, setShowConfirm] = useState(false);
     const [showOtp, setShowOtp] = useState(false);
     const [registrationComplete, setRegistrationComplete] = useState(false);
     const [otpCode, setOtpCode] = useState("");
@@ -136,11 +135,11 @@ export default function Register() {
             {error && <div className="mb-4 p-3 bg-[hsl(var(--rose))]/10 text-[hsl(var(--rose))] text-sm text-center">{error}</div>}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-                <Field icon={User} label="Nome completo" value={form.name} onChange={(v) => set("name", v)} required error={errors.name} />
-                <Field icon={Mail} label="E-mail" type="email" value={form.email} onChange={(v) => set("email", v)} required error={errors.email} />
+                <Field icon={User} label="Nome completo" name="name" autoComplete="name" value={form.name} onChange={(v) => set("name", v)} required error={errors.name} />
+                <Field icon={Mail} label="E-mail" name="email" autoComplete="email" type="email" value={form.email} onChange={(v) => set("email", v)} required error={errors.email} />
                 <p className="text-xs text-muted-foreground">Telefone e CPF serão solicitados apenas se você fizer um pedido.</p>
-                <Field icon={Lock} label="Senha" type="password" visible={showPassword} onToggleVisibility={() => setShowPassword((v) => !v)} value={form.password} onChange={(v) => set("password", v)} required error={errors.password} />
-                <Field icon={Lock} label="Confirmar senha" type="password" visible={showConfirm} onToggleVisibility={() => setShowConfirm((v) => !v)} value={form.confirm} onChange={(v) => set("confirm", v)} required error={errors.confirm} />
+                <Field icon={Lock} label="Senha" name="password" type="password" value={form.password} onChange={(v) => set("password", v)} required error={errors.password} />
+                <Field icon={Lock} label="Confirmar senha" name="confirm-password" type="password" value={form.confirm} onChange={(v) => set("confirm", v)} required error={errors.confirm} />
                 <button type="submit" disabled={loading} className="btn-gold w-full">
                     {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : <><UserPlus className="w-4 h-4" strokeWidth={1.5} /> {registrationComplete ? "Concluir meus dados" : "Criar conta"}</>}
                 </button>
@@ -149,29 +148,15 @@ export default function Register() {
     );
 }
 
-function Field({ icon: Icon, label, value, onChange, type = "text", required = false, error = "", max = undefined, visible = false, onToggleVisibility = undefined }) {
+function Field({ icon: Icon, label, name, autoComplete = undefined, value, onChange, type = "text", required = false, error = "", max = undefined }) {
     const id = useId();
+    const className = `w-full border bg-background pl-10 py-3.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${error ? "border-[hsl(var(--rose))]" : "border-border"}`;
     return (
         <div>
             <label htmlFor={id} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
-            <div className="relative">
-                <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input
-                    id={id} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined}
-                    type={type === "password" && visible ? "text" : type}
-                    autoComplete={type === "password" ? "new-password" : undefined}
-                    value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                    required={required}
-                    max={max}
-                    className={`w-full border bg-background pl-10 ${type === "password" ? "pr-12" : "pr-4"} py-3.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${error ? "border-[hsl(var(--rose))]" : "border-border"}`}
-                />
-                {type === "password" && onToggleVisibility && (
-                    <button type="button" onClick={onToggleVisibility} aria-label={visible ? `Ocultar ${label.toLowerCase()}` : `Mostrar ${label.toLowerCase()}`} aria-pressed={visible} title={visible ? "Ocultar senha" : "Mostrar senha"} className="absolute right-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(var(--gold))]">
-                        {visible ? <EyeOff className="h-5 w-5" aria-hidden="true" /> : <Eye className="h-5 w-5" aria-hidden="true" />}
-                    </button>
-                )}
-            </div>
+            {type === "password"
+                ? <PasswordInput id={id} name={name} leadingIcon={Icon} visibilityLabel={name === 'confirm-password' ? 'confirmação de senha' : 'senha'} autoComplete="new-password" value={value} onChange={(e) => onChange(e.target.value)} required={required} maxLength={max} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} className={className} />
+                : <div className="relative"><Icon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" /><input id={id} name={name} type={type} autoComplete={autoComplete} value={value} onChange={(e) => onChange(e.target.value)} required={required} max={max} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} className={`${className} pr-4`} /></div>}
             {error && <p id={`${id}-error`} role="alert" className="text-[11px] text-destructive mt-1.5">{error}</p>}
         </div>
     );

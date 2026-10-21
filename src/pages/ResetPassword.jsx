@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { client } from '@/api/apiClient';
 import { passwordMessage } from '@/lib/supabaseAuthFlow';
 import AuthLayout from '@/components/AuthLayout';
+import PasswordInput from '@/components/PasswordInput';
 export default function ResetPassword() {
     const [params] = useSearchParams();
     const [password, setPassword] = useState(''), [repeat, setRepeat] = useState('');
@@ -22,8 +23,8 @@ export default function ResetPassword() {
             : !ready ? <><p role="alert" className="text-sm mb-5">Abra um link válido de recuperação. Um link já utilizado não pode ser reutilizado.</p><Link className="btn-gold w-full" to="/esqueci-minha-senha">Solicitar outro link</Link></>
                 : <form onSubmit={save} className="space-y-5">
                     <p className="text-sm">Use de 8 a 128 caracteres, com letras e números.</p>
-                    <label className="block text-sm">Nova senha<input className="admin-field w-full mt-2" type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} maxLength={128} /></label>
-                    <label className="block text-sm">Confirme a nova senha<input className="admin-field w-full mt-2" type="password" autoComplete="new-password" value={repeat} onChange={e => setRepeat(e.target.value)} required /></label>
+                    <div><label htmlFor="reset-password" className="block text-sm">Nova senha</label><PasswordInput id="reset-password" name="new-password" visibilityLabel="nova senha" className="admin-field w-full mt-2" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} maxLength={128} /></div>
+                    <div><label htmlFor="reset-password-confirm" className="block text-sm">Confirme a nova senha</label><PasswordInput id="reset-password-confirm" name="confirm-password" visibilityLabel="confirmação da nova senha" className="admin-field w-full mt-2" autoComplete="new-password" value={repeat} onChange={e => setRepeat(e.target.value)} required /></div>
                     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
                     <button className="btn-gold w-full min-h-11" disabled={busy}>{busy ? 'Atualizando...' : 'Atualizar senha'}</button>
                 </form>}
