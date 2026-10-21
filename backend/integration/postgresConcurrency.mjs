@@ -32,7 +32,7 @@ async function transaction(fn) {
 async function productFixture(name, stock) {
     const colors = [{ id: colorId, name: 'Teste', stock }];
     const result = await pool.query(
-        'INSERT INTO products (name, price, sizes, colors) VALUES ($1, 50, $2, $3) RETURNING id',
+        "INSERT INTO products (name, price, sizes, colors, status) VALUES ($1, 50, $2, $3, 'published') RETURNING id",
         [name, JSON.stringify(['Único']), JSON.stringify(colors)]
     );
     return result.rows[0].id;
