@@ -7,6 +7,7 @@ import {
 } from '../afterSalesService.js';
 import { loadRefundPreview } from '../lib/refundPreview.js';
 import { resolveFailedPixAttempt } from '../failedPixResolution.js';
+import { requestWithdrawal, withdrawalRequestForOrder } from '../lib/withdrawalRequest.js';
 
 const router = Router();
 router.post('/orders/:id/refunds/operational/preview', auth, requireSupabaseAdmin, async (req, res) => {
@@ -81,11 +82,25 @@ router.get('/orders/:id/after-sales', async (req, res) => {
             `SELECT id, kind, amount, status, provider_refund_id, provider_status,
                     ${refundReason}, created_at, processed_at
              FROM order_refunds WHERE order_id = $1 ORDER BY created_at`, [req.params.id]);
+        const withdrawal = await withdrawalRequestForOrder(pool, req.params.id);
         res.json({ returns: returns.rows, refunds: refunds.rows, physical_schema_ready: schemaReady,
+            withdrawal_request: withdrawal ? { request_id: withdrawal.id, received_at: withdrawal.created_at } : null,
+            withdrawal_requests_enabled: process.env.WITHDRAWAL_REQUESTS_ENABLED === 'true',
             ...(req.user.role === 'admin' ? {
                 refunds_enabled: process.env.AFTER_SALES_REFUNDS_ENABLED === 'true',
                 pending_cancellation_enabled: process.env.AFTER_SALES_CANCELLATIONS_ENABLED === 'true',
             } : {}) });
+    } catch (error) { replyError(res, error); }
+});
+
+// Notice only. No refund, cancellation, payment-provider call or stock change.
+router.post('/orders/:id/withdrawal-request', async (req, res) => {
+    if (process.env.WITHDRAWAL_REQUESTS_ENABLED !== 'true') {
+        return res.status(503).json({ error: 'Solicitação pelo pedido indisponível. Utilize o canal de contato.' });
+    }
+    try {
+        const result = await requestWithdrawal(req.params.id, req.user);
+        res.status(result.already_received ? 200 : 201).json(result);
     } catch (error) { replyError(res, error); }
 });
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useId } from "react";
 import { Link } from "react-router-dom";
+import { downloadOrderReceipt } from '@/lib/orderReceipt';
 import { Check, CreditCard, QrCode, Banknote, Loader2 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { useCatalog } from "@/context/CatalogContext";
@@ -257,6 +258,10 @@ export default function Checkout() {
     if (paymentScreen === "pix" && order) {
         return (
             <div className="container-boutique py-14">
+                <div role="status" className="mb-6 border border-border p-4 text-sm">
+                    Pedido {order.order_number} recebido. O pagamento ainda precisa ser confirmado.
+                    <button type="button" className="block underline mt-2 min-h-11" onClick={() => downloadOrderReceipt(order)}>Salvar comprovante do pedido</button>
+                </div>
                 <PixPaymentScreen order={order} onApproved={onPaymentApproved} onAttempt={() => setCardAttempted(true)} />
                 <PaymentMethodChange order={order} blocked={cardAttempted} onChanged={updated => { setOrder(updated); setPaymentMethod(updated.payment_method); setPaymentScreen(updated.payment_method === 'pix' ? 'pix' : 'card'); }} />
                 <div className="text-center mt-8">
@@ -273,6 +278,10 @@ export default function Checkout() {
         const isDebit = order.payment_method === "debito";
         return (
             <div className="container-boutique py-14">
+                <div role="status" className="mb-6 border border-border p-4 text-sm">
+                    Pedido {order.order_number} recebido. O pagamento ainda precisa ser confirmado.
+                    <button type="button" className="block underline mt-2 min-h-11" onClick={() => downloadOrderReceipt(order)}>Salvar comprovante do pedido</button>
+                </div>
                 <CardPaymentBrick
                     order={order}
                     publicKey={paymentMethods?.public_key}

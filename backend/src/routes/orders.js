@@ -28,6 +28,7 @@ import { logSafeError } from '../lib/safeErrorLog.js';
 import installmentRoutes from './installments.js';
 import { readInstallmentSettings, publicInstallmentPolicy } from '../lib/installmentSettings.js';
 import { effectiveInstallmentPolicy, installmentOffers, confirmInstallmentOffer, installmentVersion, installmentSettingsLock, installmentError } from '../lib/installmentPolicy.js';
+import { assertNoWithdrawalRequest } from '../lib/withdrawalRequest.js';
 
 const router = Router();
 router.use(installmentRoutes);
@@ -135,6 +136,7 @@ router.patch('/orders/:id/status', auth, requireAdmin, async (req, res, next) =>
         const updated = await withTransaction(async client => {
             const { rows } = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [req.params.id]);
             if (!rows.length) return null;
+            await assertNoWithdrawalRequest(client, req.params.id);
             if (rows[0].status === 'cancelado' || rows[0].payment_status !== 'approved') {
                 throw Object.assign(new Error('Pedido não elegível à expedição'), { status: 409 });
             }
@@ -384,6 +386,7 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
         const paymentContext = paymentAttemptContext();
         attemptLock = await pool.connect();
         await attemptLock.query(`SELECT pg_advisory_lock(${orderAttemptLockSql})`, [order.id]);
+        await assertNoWithdrawalRequest(attemptLock, order.id);
         const { rows: reserved } = await attemptLock.query(
             `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'pix'
              WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
@@ -532,6 +535,7 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
         const paymentContext = paymentAttemptContext();
         attemptLock = await pool.connect();
         await attemptLock.query(`SELECT pg_advisory_lock(${orderAttemptLockSql})`, [order.id]);
+        await assertNoWithdrawalRequest(attemptLock, order.id);
         if (managedConfig && paymentType === 'credit_card') {
             // Serialize policy changes with reservation; persist the immutable provider offer before any financial request.
             const reserved = await withAttemptTransaction(attemptLock, async client => {

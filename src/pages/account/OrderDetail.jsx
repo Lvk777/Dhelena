@@ -8,6 +8,7 @@ import CustomerAfterSales from "@/components/checkout/CustomerAfterSales";
 import OrderPaymentPanel from '@/components/checkout/OrderPaymentPanel';
 import CardFinancingSummary from '@/components/checkout/CardFinancingSummary';
 import { orderDeliveryEstimateLabel, DELIVERY_BUSINESS_DAYS_NOTE } from '@/lib/deliveryEstimate';
+import { downloadOrderReceipt } from '@/lib/orderReceipt';
 
 export default function OrderDetail() {
     const { id } = useParams();
@@ -71,6 +72,9 @@ export default function OrderDetail() {
             <p className="text-sm text-muted-foreground mb-8">
                 {new Date(order.created_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
             </p>
+            <button type="button" onClick={() => downloadOrderReceipt(order)} className="btn-outline mb-8">
+                Salvar comprovante do pedido
+            </button>
 
             {/* Timeline from events */}
             {events.length > 0 ? (

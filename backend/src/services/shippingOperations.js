@@ -3,6 +3,7 @@ import { pool } from '../config/db.js';
 import * as melhorEnvio from './melhorEnvio.js';
 import { assertLabelEligible, getPersistedShippingService, normalizeBrazilianPhone, safeShippingPrintUrl } from '../lib/shipping.js';
 import { moneyCents } from '../lib/afterSalesPolicy.js';
+import { assertNoWithdrawalRequest } from '../lib/withdrawalRequest.js';
 
 const error = (message, status = 409) => Object.assign(new Error(message), { status });
 export function shippingEnvironment(order) {
@@ -45,6 +46,7 @@ export function createShippingOperations({ db = pool, provider = melhorEnvio, en
         const read = async () => {
             const { rows } = await client.query('SELECT * FROM orders WHERE id=$1 FOR UPDATE', [orderId]);
             if (!rows[0]) throw error('Pedido não encontrado.', 404);
+            await assertNoWithdrawalRequest(client, orderId, env);
             assertLabelEligible(rows[0]); shippingEnvironment(rows[0]); if(await refundInFlight(client,orderId))throw error('Reembolso pendente impede expedição.');return rows[0];
         };
         const save = async (state, shipmentId, operation = {}) => {

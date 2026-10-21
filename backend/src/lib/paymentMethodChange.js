@@ -4,6 +4,7 @@ import { orderAttemptLockSql } from './orderAttemptLock.js';
 import { normalizeIdempotencyKey } from './idempotency.js';
 import * as mp from '../services/mercadoPago.js';
 import { getPixCapability } from './pixAvailability.js';
+import { assertNoWithdrawalRequest } from './withdrawalRequest.js';
 
 const fail = (message, status = 409) => Object.assign(new Error(message), { status });
 
@@ -56,6 +57,7 @@ export async function changeOrderPaymentMethod(orderId, user, body, key, {
         const { rows } = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
         const order = rows[0];
         if (!order || (order.user_id !== user.id && user.role !== 'admin')) throw fail('Pedido não encontrado.', 404);
+        await assertNoWithdrawalRequest(client, orderId, env);
         const previous = order.snapshot?.payment_method_changes || [];
         const repeated = previous.find(change => change.key === requestKey);
         if (!preview && repeated) {

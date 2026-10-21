@@ -12,6 +12,7 @@ const EVENT_LABELS = {
     delivered: 'Entregue',
     entregue: 'Entregue',
     cancelled: 'Cancelado',
+    consumer_withdrawal_requested: 'Solicitação de arrependimento recebida',
 };
 
 export function orderEventLabel(event, paymentStatus) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
+import { Link } from 'react-router-dom';
 
 const showDate = value => value ? new Date(value).toLocaleString('pt-BR') : '—';
 
@@ -31,6 +32,20 @@ export default function CustomerAfterSales({ order, onChanged }) {
         finally { setBusy(false); }
     };
 
+    const requestWithdrawal = async () => {
+        if (!await dialogs.confirm({ title: 'Solicitar arrependimento',
+            message: 'Registrar sua solicitação para este pedido? A equipe analisará o pagamento e o envio. Nenhum estorno ou cancelamento será feito automaticamente.',
+            confirmLabel: 'Registrar solicitação' })) return;
+        setBusy(true);
+        setError('');
+        try {
+            await base44.functions.invoke('requestWithdrawal', { orderId: order.id });
+            await refresh();
+            await onChanged();
+        } catch (failure) { setError(failure.response?.data?.error || 'Não foi possível registrar a solicitação. Tente novamente.'); }
+        finally { setBusy(false); }
+    };
+
     const requestReturn = async () => {
         if (!selected || !Number.isInteger(Number(quantity)) || Number(quantity) < 1
             || Number(quantity) > selected.quantity) {
@@ -53,6 +68,12 @@ export default function CustomerAfterSales({ order, onChanged }) {
     return <section className="border-t border-border pt-6 mt-8" aria-label="Pós-venda do pedido">
         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-3">Pós-venda</h2>
         {error && <p role="alert" className="text-xs text-red-700 mb-3">{error}</p>}
+        {data?.withdrawal_request ? <p role="status" className="text-sm border border-border p-3 mb-4">
+            Solicitação de arrependimento recebida em {showDate(data.withdrawal_request.received_at)}.
+            Protocolo: {data.withdrawal_request.request_id}. A equipe avaliará o pedido; este registro não confirma um estorno.
+        </p> : data?.withdrawal_requests_enabled ? <button className="btn-outline text-xs mb-4" disabled={busy}
+            onClick={requestWithdrawal}>Solicitar arrependimento deste pedido</button> :
+            <p className="text-sm mb-4">Precisa solicitar arrependimento? <Link to="/contato" className="underline">Entre em contato</Link> e informe o número deste pedido.</p>}
         {!order.mercado_pago_order_id && !order.payment_attempt_started_at && order.payment_status === 'pending'
             && order.status !== 'cancelado' && <button className="btn-outline text-xs mb-4" disabled={busy} onClick={cancelUnpaid}>Cancelar pedido não pago</button>}
         {data?.returns?.map(entry => <div key={entry.id} className="text-sm border border-border p-3 mb-2">

@@ -329,6 +329,8 @@ const functions = {
                 return apiFetch(`/orders/${args.orderId}/events`);
             case 'getAfterSales':
                 return apiFetch(`/orders/${args.orderId}/after-sales`);
+            case 'requestWithdrawal':
+                return apiFetch(`/orders/${args.orderId}/withdrawal-request`, { method: 'POST' });
             case 'createReturn':
                 return apiFetch(`/orders/${args.orderId}/returns`, { method: 'POST', body: JSON.stringify(args) });
             case 'advanceReturn':
