@@ -20,7 +20,7 @@ export function PublicSettingsProvider({ children }) {
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const records = await base44.entities.Setting.filter({ is_public: true });
+            const records = await base44.app.listPublicSettings();
             const data = /** @type {Record<string, any>} */ ({});
             (records || []).forEach((r) => {
                 // DTO allowlist: extrair APENAS campos definidos em DEFAULTS para esta key

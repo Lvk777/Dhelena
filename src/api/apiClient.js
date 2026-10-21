@@ -8,6 +8,7 @@ import { createSupabaseAuthFlow } from '../lib/supabaseAuthFlow.js';
 import { createSessionFence } from '../lib/sessionFence.js';
 import { buildPlaceOrderRequest } from './orderRequest.js';
 import { resolveApiBase, apiUrl } from './apiBase.js';
+import { fetchPublicSettingsRecords } from './publicSettingsRequest.js';
 
 const API_BASE = resolveApiBase(import.meta.env.VITE_API_URL, import.meta.env.PROD);
 const TOKEN_KEY = 'dhelena_access_token';
@@ -414,9 +415,10 @@ const integrations = {
 
 // ─── App settings ──────────────────────────────────────────────────
 const app = {
+    listPublicSettings: () => fetchPublicSettingsRecords(API_BASE),
     async getPublicSettings() {
         try {
-            const settings = await apiFetch('/settings?is_public=true');
+            const settings = await fetchPublicSettingsRecords(API_BASE);
             const general = settings.find(s => s.key === 'general');
             return {
                 id: 'api',
