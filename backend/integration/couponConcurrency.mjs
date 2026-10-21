@@ -17,7 +17,7 @@ const colorId = 'audit-color';
 async function fixture(label, maxUses = 1, firstPurchaseOnly = false) {
     const code = `AUDIT-${label}-${runId}`;
     const { rows: products } = await pool.query(
-        'INSERT INTO products (name, price, sizes, colors) VALUES ($1, 189.90, $2, $3) RETURNING id',
+        "INSERT INTO products (name, price, sizes, colors, status) VALUES ($1, 189.90, $2, $3, 'published') RETURNING id",
         [code, JSON.stringify(['M']), JSON.stringify([{ id: colorId, name: 'Off-white', stock: { M: 2 } }])]
     );
     const { rows: coupons } = await pool.query(
