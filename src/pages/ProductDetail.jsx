@@ -132,7 +132,7 @@ export default function ProductDetail() {
                                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                             /> : <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">Imagem indisponível</div>}
                             <div className="absolute top-4 left-4 flex flex-col gap-1.5">
-                                {product.badges.novo && <span className="text-[9px] uppercase tracking-[0.18em] bg-[hsl(var(--gold))] text-white px-2.5 py-1">Novo</span>}
+                                {product.badges.novo && <span className="text-[9px] uppercase tracking-[0.18em] bg-[hsl(var(--gold))] text-charcoal px-2.5 py-1">Novo</span>}
                                 {product.badges.ultimas && <span className="text-[9px] uppercase tracking-[0.18em] bg-[hsl(var(--rose))] text-white px-2.5 py-1">Últimas peças</span>}
                             </div>
                         </div>

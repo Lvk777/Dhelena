@@ -54,7 +54,7 @@ export default function Home() {
             {/* HERO */}
             {hero.image && (
                 <section className="relative h-[88vh] min-h-[560px] w-full overflow-hidden">
-                    <img src={hero.image} alt="D'Helenas" className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={hero.image} alt="" className="absolute inset-0 w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-gradient-to-r from-black/30 via-black/10 to-transparent" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
                     <div className="relative h-full container-boutique flex items-center">
@@ -64,7 +64,7 @@ export default function Home() {
                             <p className="mt-5 font-heading text-2xl sm:text-3xl italic text-bone/90">{hero.subtitle}</p>
                             <p className="mt-4 text-sm sm:text-base text-bone/80 leading-relaxed max-w-md">{hero.text}</p>
                             <div className="mt-9 flex flex-wrap gap-3">
-                                <SafeConfiguredLink to={heroCta.href || "/novidades"} className="inline-flex items-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--rose))]/85">
+                                <SafeConfiguredLink to={heroCta.href || "/novidades"} className="inline-flex items-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:brightness-90">
                                     {heroCta.label || "Ver novidades"} <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
                                 </SafeConfiguredLink>
                                 <SafeConfiguredLink to={(!hero.secondary_cta_link || hero.secondary_cta_link === "/loja") ? "/colecoes" : hero.secondary_cta_link} className="inline-flex items-center gap-2 border border-bone/80 text-bone text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-bone hover:text-charcoal">
@@ -237,7 +237,7 @@ function LookLine({ product }) {
             </div>
             <div className="flex-1">
                 <p className="text-sm font-medium group-hover:text-[hsl(var(--rose))] transition-colors">{product.name}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">{formatBRL(product.salePrice || product.price)} · Parcelamento disponível no checkout</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{formatBRL(product.salePrice || product.price)} · Consulte as formas de pagamento no checkout</p>
             </div>
             <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-[hsl(var(--gold))] transition-colors" strokeWidth={1.25} />
         </Link>

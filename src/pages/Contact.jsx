@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useId } from "react";
 import { Instagram, MessageCircle, Mail, MapPin, Phone } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { usePublicSettings } from '@/context/PublicSettingsContext';
@@ -17,20 +17,30 @@ export default function Contact() {
     const phone = whatsappLink(general.phone) ? general.phone : '';
     const [form, setForm] = useState({ nome: "", email: "", assunto: "", mensagem: "", website: "" });
     const [sending, setSending] = useState(false);
+    const messageId = useId();
+    const [submitError, setSubmitError] = useState("");
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
     const submit = async (e) => {
         e.preventDefault();
+        setSubmitError("");
+        if (form.mensagem.trim().length < 10) {
+            setSubmitError("Escreva uma mensagem com pelo menos 10 caracteres.");
+            document.getElementById(messageId)?.focus();
+            return;
+        }
         setSending(true);
         try {
             await base44.custom.submitContact({
                     name: form.nome, email: form.email, subject: form.assunto,
                     message: form.mensagem, website: form.website, // honeypot
             });
-                showToast("Mensagem enviada. Retornaremos em breve ♡");
+                showToast("Mensagem recebida pela boutique.");
                 setForm({ nome: "", email: "", assunto: "", mensagem: "", website: "" });
-        } catch {
-            showToast("Erro de conexão. Tente novamente.", 'error');
+        } catch (error) {
+            const message = error?.response?.data?.error || "Não foi possível enviar a mensagem. Tente novamente.";
+            setSubmitError(message);
+            showToast(message, 'error');
         } finally {
             setSending(false);
         }
@@ -74,9 +84,11 @@ export default function Contact() {
                     <Field label="E-mail" value={form.email} onChange={(v) => set("email", v)} />
                     <Field label="Assunto" value={form.assunto} onChange={(v) => set("assunto", v)} />
                     <div>
-                        <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Mensagem</label>
-                        <textarea value={form.mensagem} onChange={(e) => set("mensagem", e.target.value)} rows={5} className="w-full border border-border px-4 py-3.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors resize-none" />
+                        <label htmlFor={messageId} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Mensagem</label>
+                        <textarea id={messageId} required minLength={10} maxLength={5000} value={form.mensagem} onChange={(e) => set("mensagem", e.target.value)} rows={5} aria-invalid={!!submitError} aria-describedby={submitError ? `${messageId}-error` : undefined} className="w-full border border-border px-4 py-3.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors resize-none" />
                     </div>
+                    <p className="text-sm text-muted-foreground">Os dados deste formulário são usados para atender à sua solicitação.</p>
+                    {submitError && <p id={`${messageId}-error`} role="alert" className="text-sm text-destructive">{submitError}</p>}
                     {/* Honeypot — hidden from real users, bots fill it */}
                     <input
                         type="text"

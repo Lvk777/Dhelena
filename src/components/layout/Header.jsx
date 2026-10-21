@@ -2,9 +2,11 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Search, Heart, User, ShoppingBag, Menu, X } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
+import { useCatalog } from "@/context/CatalogContext";
 import { useAuth } from "@/lib/AuthContext";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
 import { base44 } from '@/api/base44Client';
+import { useDialogKeyboard } from '@/lib/hooks/useDialogKeyboard';
 
 const NAV = [
     { label: "Início", to: "/" },
@@ -20,10 +22,14 @@ const NAV = [
 export default function Header() {
     const [scrolled, setScrolled] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
+    const mobileDialogRef = useDialogKeyboard(mobileOpen, () => setMobileOpen(false));
     const [searchOpen, setSearchOpen] = useState(false);
     const [q, setQ] = useState("");
     const [installmentMessage, setInstallmentMessage] = useState('');
-    const { cartCount, favorites, setCartOpen } = useStore();
+    const { cart, favorites, setCartOpen } = useStore();
+    const { products } = useCatalog();
+    const publishedIds = new Set(products.map(product => product.id));
+    const cartCount = cart.filter(item => publishedIds.has(item.productId)).reduce((sum, item) => sum + item.qty, 0);
     const { isAuthenticated, user } = useAuth();
     const { settings } = usePublicSettings();
     const navigate = useNavigate();
@@ -124,10 +130,10 @@ export default function Header() {
                                 <Link to={isAuthenticated ? "/minha-conta" : "/login"} className="p-2 text-foreground/80 hover:text-foreground transition-colors hidden sm:block" aria-label="Minha conta">
                                     <User className="w-[18px] h-[18px]" strokeWidth={1.25} />
                                 </Link>
-                                <button onClick={() => setCartOpen(true)} className="p-2 text-foreground/80 hover:text-foreground transition-colors relative" aria-label="Sacola">
+                                <button onClick={() => setCartOpen(true)} className="p-2 text-foreground/80 hover:text-foreground transition-colors relative" aria-label={cartCount > 0 ? `Sacola, ${cartCount} ${cartCount === 1 ? 'item' : 'itens'}` : 'Sacola'}>
                                     <ShoppingBag className="w-[18px] h-[18px]" strokeWidth={1.25} />
                                     {cartCount > 0 && (
-                                        <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[hsl(var(--gold))] text-white text-[9px] flex items-center justify-center">{cartCount}</span>
+                                        <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[hsl(var(--gold))] text-charcoal text-[9px] flex items-center justify-center">{cartCount}</span>
                                     )}
                                 </button>
                             </div>
@@ -159,7 +165,7 @@ export default function Header() {
             {mobileOpen && (
                 <div className="fixed inset-0 z-[60] xl:hidden">
                     <div className="absolute inset-0 bg-charcoal/30 backdrop-blur-sm animate-fade-in" onClick={() => setMobileOpen(false)} />
-                    <div className="absolute left-0 top-0 h-full w-[82%] max-w-sm bg-background shadow-xl flex flex-col animate-fade-in">
+                    <div ref={mobileDialogRef} role="dialog" aria-modal="true" aria-label="Menu da loja" tabIndex={-1} className="absolute left-0 top-0 h-full w-[82%] max-w-sm bg-background shadow-xl flex flex-col animate-fade-in">
                         <div className="flex items-center justify-between px-6 h-16 border-b border-border">
                             <span className="font-heading text-xl tracking-[0.08em]">D'Helenas</span>
                             <button onClick={() => setMobileOpen(false)} aria-label="Fechar menu"><X className="w-5 h-5" strokeWidth={1.25} /></button>

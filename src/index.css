@@ -10,12 +10,12 @@
         --card-foreground: 25 8% 16%;
         --popover: 30 20% 99%;
         --popover-foreground: 25 8% 16%;
-        --primary: 352 50% 70%;
+        --primary: 352 36% 45%;
         --primary-foreground: 0 0% 100%;
         --secondary: 20 30% 95%;
         --secondary-foreground: 25 8% 16%;
         --muted: 20 28% 94%;
-        --muted-foreground: 25 5% 45%;
+        --muted-foreground: 25 5% 39%;
         --accent: 44 69% 54%;
         --accent-foreground: 0 0% 100%;
         --destructive: 0 62% 50%;
@@ -32,8 +32,8 @@
         /* Brand tokens */
         --blossom: 351 52% 80%;
         /* #E6B0B8 rosa claro */
-        --rose: 352 50% 70%;
-        /* #D98C96 rosa queimado */
+        --rose: 352 36% 45%;
+        /* Rosa escuro: texto branco e texto rosa sobre fundo claro alcançam contraste AA. */
         --gold: 44 69% 54%;
         /* #DAAF37 dourado */
         --bone: 30 20% 98%;
@@ -111,6 +111,11 @@
         @apply font-heading;
         letter-spacing: 0.02em;
     }
+
+    :is(a, button, input, select, textarea, [tabindex]):focus-visible {
+        outline: 2px solid hsl(var(--foreground)) !important;
+        outline-offset: 3px;
+    }
 }
 
 @layer components {
@@ -119,11 +124,11 @@
     }
 
     .btn-gold {
-        @apply inline-flex items-center justify-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--rose))]/85 hover:tracking-[0.28em] disabled:opacity-50;
+        @apply inline-flex items-center justify-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-all duration-500 hover:brightness-90 hover:tracking-[0.28em] disabled:opacity-50;
     }
 
     .btn-outline {
-        @apply inline-flex items-center justify-center gap-2 border border-[hsl(var(--gold))] text-foreground text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--gold))] hover:text-white disabled:opacity-50;
+        @apply inline-flex items-center justify-center gap-2 border border-[hsl(var(--gold))] text-foreground text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--gold))] disabled:opacity-50;
     }
 
     .btn-ghost {
@@ -135,7 +140,7 @@
     }
 
     .eyebrow {
-        @apply text-[11px] uppercase tracking-[0.32em] text-[hsl(var(--gold))] font-medium;
+        @apply text-[11px] uppercase tracking-[0.32em] text-[hsl(var(--rose-deep))] font-medium;
     }
 
     .gold-rule {

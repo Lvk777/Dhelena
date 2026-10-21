@@ -1,16 +1,16 @@
 import React, { useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { client } from "@/api/apiClient";
-import { Loader2, Mail, Lock, UserPlus, User, Phone, Calendar } from "lucide-react";
+import { Loader2, Mail, Lock, UserPlus, User } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import GoogleSignIn from "@/components/GoogleSignIn";
 import { safeReturnTo } from "@/lib/authReturnTo";
-import { validateCPF, validateEmail, validatePhone, maskCPF, maskPhone } from "@/lib/forms";
+import { validateEmail } from "@/lib/forms";
 import { track } from "@/lib/analytics";
 import { passwordMessage } from '@/lib/supabaseAuthFlow';
 
 export default function Register() {
-    const [form, setForm] = useState({ name: "", email: "", phone: "", cpf: "", birthDate: "", password: "", confirm: "" });
+    const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
     const [error, setError] = useState("");
     const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
     const [loading, setLoading] = useState(false);
@@ -22,7 +22,7 @@ export default function Register() {
     const returnTo = safeReturnTo();
 
     const completeProfile = async () => {
-        await client.auth.updateMe({ full_name: form.name, phone: form.phone, cpf: form.cpf, birth_date: form.birthDate });
+        await client.auth.updateMe({ full_name: form.name });
         window.location.href = returnTo === '/' ? '/minha-conta' : returnTo;
     };
     const handleSubmit = async (e) => {
@@ -31,8 +31,6 @@ export default function Register() {
         const e2 = /** @type {Record<string, string>} */ ({});
         if (!form.name.trim()) e2.name = "Informe seu nome completo";
         if (!validateEmail(form.email)) e2.email = "Informe um e-mail válido";
-        if (!validatePhone(form.phone)) e2.phone = "Informe seu telefone";
-        if (!validateCPF(form.cpf)) e2.cpf = "CPF inválido";
         if (passwordMessage(form.password)) e2.password = passwordMessage(form.password);
         if (form.password !== form.confirm) e2.confirm = "As senhas não coincidem";
         setErrors(e2);
@@ -138,11 +136,7 @@ export default function Register() {
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Field icon={User} label="Nome completo" value={form.name} onChange={(v) => set("name", v)} required error={errors.name} />
                 <Field icon={Mail} label="E-mail" type="email" value={form.email} onChange={(v) => set("email", v)} required error={errors.email} />
-                <div className="grid grid-cols-2 gap-3">
-                    <Field icon={Phone} label="Telefone" value={form.phone} onChange={(v) => set("phone", maskPhone(v))} required error={errors.phone} />
-                    <Field icon={User} label="CPF" value={form.cpf} onChange={(v) => set("cpf", maskCPF(v))} required error={errors.cpf} />
-                </div>
-                <Field icon={Calendar} label="Data de nascimento (opcional)" type="date" max={new Date().toISOString().slice(0, 10)} value={form.birthDate} onChange={(v) => set("birthDate", v)} />
+                <p className="text-xs text-muted-foreground">Telefone e CPF serão solicitados apenas se você fizer um pedido.</p>
                 <Field icon={Lock} label="Senha" type="password" value={form.password} onChange={(v) => set("password", v)} required error={errors.password} />
                 <Field icon={Lock} label="Confirmar senha" type="password" value={form.confirm} onChange={(v) => set("confirm", v)} required error={errors.confirm} />
                 <button type="submit" disabled={loading} className="btn-gold w-full">

@@ -19,15 +19,15 @@ export default function Footer() {
                     {/* brand */}
                     <div className="col-span-2 lg:col-span-2">
                         <span className="font-heading text-2xl tracking-[0.08em] text-bone">D'Helenas</span>
-                        <p className="text-[8px] uppercase tracking-[0.4em] text-[hsl(var(--gold))] mt-1">Método Ponte</p>
-                        <p className="mt-5 text-sm text-bone/70 leading-relaxed max-w-xs">
+                        <p className="text-[8px] uppercase tracking-[0.4em] text-bone mt-1">Método Ponte</p>
+                        <p className="mt-5 text-sm text-bone/85 leading-relaxed max-w-xs">
                             Moda feminina e acessórios. Mais que moda, conectamos mulheres, histórias e legados.
                         </p>
                         <div className="flex items-center gap-3 mt-6">
-                            {instLink && <a href={instLink} target="_blank" rel="noopener noreferrer" className="w-11 h-11 rounded-full border border-bone/25 flex items-center justify-center text-bone/70 hover:border-[hsl(var(--gold))] hover:text-[hsl(var(--gold))] transition-colors" aria-label="Instagram">
+                            {instLink && <a href={instLink} target="_blank" rel="noopener noreferrer" className="w-11 h-11 rounded-full border border-bone/25 flex items-center justify-center text-bone/85 hover:border-bone hover:text-bone transition-colors" aria-label="Instagram">
                                 <Instagram className="w-4 h-4" strokeWidth={1.25} />
                             </a>}
-                            {wppLink && <a href={wppLink} target="_blank" rel="noopener noreferrer" className="w-11 h-11 rounded-full border border-bone/25 flex items-center justify-center text-bone/70 hover:border-[hsl(var(--gold))] hover:text-[hsl(var(--gold))] transition-colors" aria-label="WhatsApp">
+                            {wppLink && <a href={wppLink} target="_blank" rel="noopener noreferrer" className="w-11 h-11 rounded-full border border-bone/25 flex items-center justify-center text-bone/85 hover:border-bone hover:text-bone transition-colors" aria-label="WhatsApp">
                                 <MessageCircle className="w-4 h-4" strokeWidth={1.25} />
                             </a>}
                         </div>
@@ -50,15 +50,15 @@ export default function Footer() {
                     ]} />
 
                     <div>
-                        {tradeName && <p className="text-[11px] text-bone/50 mt-5 leading-relaxed break-words">{tradeName}</p>}
-                        {company && realCnpj && <p className="text-[11px] text-bone/50 mt-2 leading-relaxed break-words">{company} · CNPJ {cnpj}</p>}
+                        {tradeName && <p className="text-[11px] text-bone/85 mt-5 leading-relaxed break-words">{tradeName}</p>}
+                        {company && realCnpj && <p className="text-[11px] text-bone/85 mt-2 leading-relaxed break-words">{company} · CNPJ {cnpj}</p>}
                     </div>
                 </div>
 
                 <div className="mt-14 pt-6 border-t border-bone/15 flex flex-col sm:flex-row items-center justify-between gap-3">
-                    <p className="text-[11px] tracking-wide text-bone/50">© {new Date().getFullYear()} D'Helenas. Todos os direitos reservados.</p>
+                    <p className="text-[11px] tracking-wide text-bone/85">© {new Date().getFullYear()} D'Helenas. Todos os direitos reservados.</p>
                     <div className="flex items-center gap-4">
-                        <p className="text-[11px] tracking-[0.2em] uppercase text-bone/50">Moda que conecta histórias</p>
+                        <p className="text-[11px] tracking-[0.2em] uppercase text-bone/85">Moda que conecta histórias</p>
                     </div>
                 </div>
             </div>
@@ -69,11 +69,11 @@ export default function Footer() {
 function FooterCol({ title, links }) {
     return (
         <div>
-            <h4 className="text-[11px] uppercase tracking-[0.22em] text-[hsl(var(--gold))] mb-5">{title}</h4>
+            <h2 className="text-[11px] uppercase tracking-[0.22em] text-bone mb-5">{title}</h2>
             <ul className="space-y-3">
                 {links.map((l) => (
                     <li key={l.label}>
-                        <Link to={l.to} className="text-sm text-bone/70 hover:text-[hsl(var(--gold))] transition-colors">{l.label}</Link>
+                        <Link to={l.to} className="text-sm text-bone/85 hover:text-bone hover:underline transition-colors">{l.label}</Link>
                     </li>
                 ))}
             </ul>

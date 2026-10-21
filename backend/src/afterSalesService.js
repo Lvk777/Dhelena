@@ -327,9 +327,9 @@ export async function cancelPendingProviderOrder(orderId, actorId, provider = mp
 }
 
 export async function createReturn(orderId, actorId, items, reason, transaction = withTransaction) {
-    if (!Array.isArray(items) || !items.length || typeof reason !== 'string'
-        || reason.trim().length < 5 || reason.trim().length > 500) {
-        throw afterSalesError('Itens e motivo são obrigatórios', 400);
+    if (!Array.isArray(items) || !items.length || (reason != null && typeof reason !== 'string')
+        || String(reason || '').trim().length > 500) {
+        throw afterSalesError('Itens inválidos ou motivo muito longo', 400);
     }
     return transaction(async client => {
         const order = await queryOne(client, 'SELECT * FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
@@ -357,7 +357,7 @@ export async function createReturn(orderId, actorId, items, reason, transaction 
         }
         const created = await queryOne(client,
             `INSERT INTO order_returns (order_id, reason, requested_by) VALUES ($1, $2, $3) RETURNING *`,
-            [orderId, reason.trim(), actorId]);
+            [orderId, String(reason || '').trim() || 'Não informado', actorId]);
         for (const selected of items) {
             await client.query(
                 `INSERT INTO order_return_items (return_id, order_item_id, quantity) VALUES ($1, $2, $3)`,

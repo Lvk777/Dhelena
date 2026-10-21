@@ -4,12 +4,12 @@ import { Link } from "react-router-dom";
 export default function AuthLayout({ title, subtitle = "", footer = null, children = null, icon: Icon = null }) {
     return (
         <div className="min-h-screen flex flex-col bg-background">
-            <div className="flex-1 flex items-center justify-center px-4 py-12">
+            <main className="flex-1 flex items-center justify-center px-4 py-12">
                 <div className="w-full max-w-md">
                     <div className="text-center mb-10">
                         <Link to="/" className="inline-block">
                             <span className="block font-heading text-3xl tracking-[0.08em] text-foreground">D'Helenas</span>
-                            <span className="block text-[8px] uppercase tracking-[0.4em] text-[hsl(var(--gold))] mt-1">Método Ponte</span>
+                            <span className="block text-[8px] uppercase tracking-[0.4em] text-[hsl(var(--rose-deep))] mt-1">Método Ponte</span>
                         </Link>
                     </div>
                     <div className="text-center mb-8">
@@ -25,7 +25,7 @@ export default function AuthLayout({ title, subtitle = "", footer = null, childr
                         <p className="text-center text-sm text-muted-foreground mt-6">{footer}</p>
                     )}
                 </div>
-            </div>
+            </main>
         </div>
     );
 }

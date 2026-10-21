@@ -33,8 +33,8 @@ export default function CustomerAfterSales({ order, onChanged }) {
 
     const requestReturn = async () => {
         if (!selected || !Number.isInteger(Number(quantity)) || Number(quantity) < 1
-            || Number(quantity) > selected.quantity || reason.trim().length < 5) {
-            setError('Selecione item, quantidade válida e informe o motivo.');
+            || Number(quantity) > selected.quantity) {
+            setError('Selecione item e quantidade válida.');
             return;
         }
         setBusy(true);
@@ -75,8 +75,10 @@ export default function CustomerAfterSales({ order, onChanged }) {
                     <input className="border border-border bg-background p-2 text-sm w-20" type="number" min="1" max={selected?.quantity || 1}
                         value={quantity} onChange={event => setQuantity(Number(event.target.value))} aria-label="Quantidade" />
                 </div>
-                <textarea className="w-full border border-border bg-background p-2 text-sm" value={reason} maxLength={500}
-                    onChange={event => setReason(event.target.value)} placeholder="Motivo da devolução" />
+                <label className="block text-sm">Motivo (opcional)
+                    <textarea className="block w-full border border-border bg-background p-2 text-sm mt-1" value={reason} maxLength={500}
+                        onChange={event => setReason(event.target.value)} />
+                </label>
                 <button className="btn-outline text-xs" disabled={busy || !selected} onClick={requestReturn}>Enviar solicitação</button>
                 <p className="text-xs text-muted-foreground">Solicitar devolução não gera reembolso automático. A equipe avaliará o pedido.</p>
             </div>}

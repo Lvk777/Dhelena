@@ -129,12 +129,12 @@ test('authorization and posting never restore stock; posting instructions are re
 test('return request validates purchased quantity, order stage and closed financial evidence', async () => {
     const state = { order: { id: 'order-1', order_number: 'DH-MOCK',
         status: 'entregue', payment_status: 'approved' }, inserts: 0, selected: 0, stockWrites: 0 };
-    const client = { async query(sql) {
+    const client = { async query(sql, params) {
         if (sql.includes('SELECT * FROM orders WHERE id')) return { rows: [state.order] };
         if (sql.includes('SELECT * FROM order_items')) return { rows: [{ id: 'item-1', quantity: 1 }] };
         if (sql.includes('SELECT ri.order_item_id')) return { rows: state.selected
             ? [{ order_item_id: 'item-1', quantity: state.selected }] : [] };
-        if (sql.includes('INSERT INTO order_returns')) { state.inserts++; return { rows: [{ id: 'return-new' }] }; }
+        if (sql.includes('INSERT INTO order_returns')) { state.inserts++; state.reason = params?.[1]; return { rows: [{ id: 'return-new' }] }; }
         if (sql.includes('INSERT INTO order_return_items')) { state.selected++; return { rows: [] }; }
         if (/\b(INSERT INTO|UPDATE)\s+(stock_movements|stock_restorations|products)\b/i.test(sql)) state.stockWrites++;
         return { rows: [] };
@@ -152,8 +152,9 @@ test('return request validates purchased quantity, order stage and closed financ
     assert.equal(state.inserts, 0);
     state.order.order_number = 'DH-MOCK';
     const created = await createReturn('order-1', 'customer-1',
-        [{ order_item_id: 'item-1', quantity: 1 }], 'Tamanho errado', transaction);
+        [{ order_item_id: 'item-1', quantity: 1 }], '', transaction);
     assert.equal(created.id, 'return-new');
+    assert.equal(state.reason, 'Não informado');
     await assert.rejects(createReturn('order-1', 'customer-1',
         [{ order_item_id: 'item-1', quantity: 1 }], 'Tamanho errado', transaction), { status: 400 });
     assert.equal(state.inserts, 1);

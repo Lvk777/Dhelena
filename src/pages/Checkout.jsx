@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useId } from "react";
 import { Link } from "react-router-dom";
 import { Check, CreditCard, QrCode, Banknote, Loader2 } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
@@ -164,7 +164,10 @@ export default function Checkout() {
     };
 
     const next = () => {
-        if (!validateStep(step)) return;
+        if (!validateStep(step)) {
+            requestAnimationFrame(() => /** @type {HTMLElement | null} */ (document.querySelector('[data-checkout-form] [aria-invalid="true"]'))?.focus());
+            return;
+        }
         setStep((s) => Math.min(s + 1, STEPS.length - 1));
     };
     const prev = () => setStep((s) => Math.max(s - 1, 0));
@@ -320,16 +323,16 @@ export default function Checkout() {
             </div>
 
             <div className="grid lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2">
+                <div className="lg:col-span-2" data-checkout-form>
                     {/* Step 0: Identificação */}
                     {step === 0 && (
                         <div className="space-y-5">
                             <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Dados pessoais</h2>
                             <FormGrid>
-                                <Field label="Nome completo" value={form.nome} onChange={(v) => set("nome", v)} full error={errors.nome} />
-                                <Field label="CPF" value={form.cpf} onChange={(v) => set("cpf", maskCPF(v))} error={errors.cpf} />
-                                <Field label="Telefone / WhatsApp" value={form.telefone} onChange={(v) => set("telefone", maskPhone(v))} error={errors.telefone} />
-                                <Field label="E-mail" value={form.email} onChange={(v) => set("email", v)} full error={errors.email} />
+                                <Field label="Nome completo" value={form.nome} onChange={(v) => set("nome", v)} full error={errors.nome} autoComplete="name" />
+                                <Field label="CPF" value={form.cpf} onChange={(v) => set("cpf", maskCPF(v))} error={errors.cpf} inputMode="numeric" />
+                                <Field label="Telefone / WhatsApp" value={form.telefone} onChange={(v) => set("telefone", maskPhone(v))} error={errors.telefone} type="tel" autoComplete="tel" />
+                                <Field label="E-mail" value={form.email} onChange={(v) => set("email", v)} full error={errors.email} type="email" autoComplete="email" />
                             </FormGrid>
                         </div>
                     )}
@@ -365,7 +368,7 @@ export default function Checkout() {
                                 pickupAddress={publicSettings?.shipping?.pickup_address}
                                 pickupInstructions={publicSettings?.shipping?.pickup_instructions}
                             />
-                            {errors.shipping && <p className="text-[11px] text-[hsl(var(--rose))]">{errors.shipping}</p>}
+                            {errors.shipping && <p role="alert" className="text-[11px] text-[hsl(var(--rose))]">{errors.shipping}</p>}
                         </div>
                     )}
 
@@ -379,7 +382,7 @@ export default function Checkout() {
                                     <Loader2 className="w-4 h-4 animate-spin" /> Carregando métodos de pagamento...
                                 </div>
                             ) : paymentMethods ? (
-                                <div className="space-y-3" role="radiogroup" aria-label="Forma de pagamento">
+                                <div className="space-y-3" role="group" aria-label="Forma de pagamento">
                                     <PayOption selected={paymentMethod === "credito"} disabled={!paymentMethods.enabled?.credit_card} onClick={() => setPaymentMethod("credito")} icon={CreditCard} title="Cartão de crédito" desc={paymentMethods.interest_free_approved ? 'Consulte as opções de parcelamento disponíveis para seu cartão no formulário.' : 'À vista. Parcelamento sem juros sujeito à aprovação comercial.'} />
                                     <PayOption selected={paymentMethod === "debito"} disabled={!paymentMethods.enabled?.debit_card} onClick={() => setPaymentMethod("debito")} icon={Banknote} title="Cartão de débito" desc={`À vista. ${paymentMethods.methods?.filter(method => method.payment_type_id === 'debit_card').map(method => method.name).join(', ') || 'Modalidades disponíveis na conta Mercado Pago'}`} />
                                     <PayOption selected={paymentMethod === "pix"} disabled={!paymentMethods.enabled?.pix} onClick={() => setPaymentMethod("pix")} icon={QrCode} title="Pix" desc={paymentMethods.pix_discount?.enabled
@@ -392,7 +395,7 @@ export default function Checkout() {
                                     )}
                                 </div>
                             ) : null}
-                            {errors.payment && <p className="text-[11px] text-[hsl(var(--rose))]">{errors.payment}</p>}
+                            {errors.payment && <p role="alert" className="text-[11px] text-[hsl(var(--rose))]">{errors.payment}</p>}
                             {pricingLoading && <p role="status" className="text-sm text-muted-foreground">Conferindo descontos e total...</p>}
                             {pricingError && <p role="alert" className="text-sm text-red-700">{pricingError} <button type="button" onClick={() => setPricingRetry(value => value + 1)} className="underline min-h-11">Tentar novamente</button></p>}
                             <div className="p-4 bg-[hsl(var(--bone))] text-xs text-muted-foreground leading-relaxed">
@@ -414,7 +417,7 @@ export default function Checkout() {
                         )}
                     </div>
                     {orderError && (
-                        <div className="mt-4 p-4 bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+                        <div role="alert" className="mt-4 p-4 bg-destructive/10 border border-destructive/30 text-destructive text-sm">
                             {orderError}
                         </div>
                     )}
@@ -463,19 +466,20 @@ function FormGrid({ children }) {
     return <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">{children}</div>;
 }
 
-function Field({ label, value, onChange, full = false, error = "" }) {
+function Field({ label, value, onChange, full = false, error = "", type = "text", autoComplete = undefined, inputMode = undefined }) {
+    const id = useId();
     return (
         <div className={full ? "sm:col-span-2" : ""}>
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
-            <input value={value} onChange={(e) => onChange(e.target.value)} className={`w-full border bg-background px-4 py-3.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${error ? "border-[hsl(var(--rose))]" : "border-border"}`} />
-            {error && <p className="text-[11px] text-[hsl(var(--rose))] mt-1">{error}</p>}
+            <label htmlFor={id} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
+            <input id={id} type={type} autoComplete={autoComplete} inputMode={inputMode} value={value} onChange={(e) => onChange(e.target.value)} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} className={`w-full border bg-background px-4 py-3.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${error ? "border-[hsl(var(--rose))]" : "border-border"}`} />
+            {error && <p id={`${id}-error`} className="text-[11px] text-[hsl(var(--rose))] mt-1">{error}</p>}
         </div>
     );
 }
 
 function PayOption({ selected, disabled, onClick, icon: Icon, title, desc }) {
     return (
-        <button type="button" role="radio" aria-checked={selected} disabled={disabled} onClick={onClick} className={`w-full flex items-center gap-4 p-5 border text-left min-h-14 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${selected ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))]/5" : "border-border hover:border-foreground/40"}`}>
+        <button type="button" aria-pressed={selected} disabled={disabled} onClick={onClick} className={`w-full flex items-center gap-4 p-5 border text-left min-h-14 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${selected ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))]/5" : "border-border hover:border-foreground/40"}`}>
             <Icon className="w-5 h-5 text-[hsl(var(--gold))]" strokeWidth={1.25} />
             <div className="flex-1">
                 <p className="text-sm font-medium">{title}</p>
