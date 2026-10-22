@@ -84,14 +84,41 @@ test('a later callback in the same SPA is exchanged independently', async () => 
     const f = fixture(); await f.flow.finishCallback(); f.location.href = origin + '/auth/callback?code=next-code';
     await f.flow.finishCallback(); assert.equal(f.calls.filter(c => c[0] === 'exchange').length, 2);
 });
+test('confirmed signup with a mismatched PKCE verifier directs the customer to password login', async () => {
+    const f = fixture();
+    f.location.href = origin + '/auth/callback?code=confirmed-code&flow=signup';
+    f.a.exchangeCodeForSession = async () => ({ error: { code: 'bad_code_verifier', message: 'code challenge does not match previously saved code verifier' } });
+    await assert.rejects(f.flow.finishCallback(), error => error.reason === 'session_not_opened' && /Entre com sua senha/.test(error.message));
+    assert.equal(f.calls[0][0], 'clean');
+});
+test('signup token hash verifies directly without a PKCE code verifier', async () => {
+    const f = fixture();
+    f.location.href = origin + '/auth/callback?flow=signup&returnTo=%2Fminha-conta%2Fdados#token_hash=synthetic-hash&type=email';
+    assert.deepEqual(await f.flow.finishCallback(), { path: '/minha-conta/dados' });
+    assert.deepEqual(f.calls.find(c => c[0] === 'otp')[1], { token_hash: 'synthetic-hash', type: 'email' });
+    assert.equal(f.calls.some(c => c[0] === 'exchange'), false);
+    assert.equal(f.calls[0][0], 'clean');
+});
+test('a later token hash callback in the same SPA is verified independently', async () => {
+    const f = fixture();
+    await f.flow.finishCallback();
+    f.location.href = origin + '/auth/callback?flow=signup#token_hash=second-hash&type=email';
+    await f.flow.finishCallback();
+    assert.equal(f.calls.filter(c => c[0] === 'otp').length, 1);
+});
+test('a valid Auth session is not mistaken for an expired link when profile API is unavailable', async () => {
+    const f = fixture();
+    assert.deepEqual(await f.flow.finishCallback(), { path: '/minha-conta' });
+    assert.equal(f.calls.some(c => c[0] === 'api'), false);
+});
 test('invalid, expired, ambiguous, cancelled and implicit-token callbacks fail without password capability', async () => {
-    for (const query of ['', '?error=denied', '?access_token=synthetic#refresh_token=synthetic', '?code=a&token_hash=b&type=recovery', '?token_hash=b&type=invite']) {
+    for (const query of ['', '?error=denied', '?access_token=synthetic#refresh_token=synthetic', '?code=a&token_hash=b&type=recovery', '?token_hash=b&type=sms']) {
         const f = fixture(); f.location.href = origin + '/auth/callback' + query;
         await assert.rejects(f.flow.finishCallback()); assert.equal(f.flow.recoveryReady(), false);
         assert.equal(f.calls.some(c => ['exchange', 'update', 'otp'].includes(c[0])), false);
     }
     const f = fixture(); f.a.exchangeCodeForSession = async () => ({ error: { message: 'expired' } });
-    await assert.rejects(f.flow.finishCallback()); assert.equal(f.flow.recoveryReady(), false);
+    await assert.rejects(f.flow.finishCallback(), /expirado ou já utilizado/); assert.equal(f.flow.recoveryReady(), false);
 });
 test('forged recovery query cannot turn a login code into password recovery', async () => {
     const f = fixture(); f.location.href = origin + '/auth/callback?code=login-code&flow=recovery';

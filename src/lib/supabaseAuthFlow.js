@@ -73,27 +73,43 @@ export function createSupabaseAuthFlow({ supabase, api, origin, location, histor
         }); },
         finishCallback() {
             // StrictMode, duplicate mounts and concurrent callers exchange a single-use code only once.
-            if (callbackFlight && (location.href === callbackUrl || !new URL(location.href).searchParams.has('code') && !new URL(location.href).searchParams.has('token_hash'))) return callbackFlight;
+            const pending = new URL(location.href);
+            const pendingHash = new URLSearchParams(pending.hash.slice(1));
+            if (callbackFlight && (location.href === callbackUrl || !pending.searchParams.has('code')
+                && !pending.searchParams.has('token_hash') && !pendingHash.has('token_hash'))) return callbackFlight;
             callbackUrl = location.href;
             callbackFlight = once('callback', async () => {
                 const url = new URL(location.href);
+                const hash = new URLSearchParams(url.hash.slice(1));
                 const code = url.searchParams.get('code');
-                const tokenHash = url.searchParams.get('token_hash');
-                const otpType = url.searchParams.get('type');
+                const tokenHash = url.searchParams.get('token_hash') || hash.get('token_hash');
+                const otpType = url.searchParams.get('type') || hash.get('type');
                 const flow = url.searchParams.get('flow');
                 const next = authPath(url.searchParams.get('returnTo'), origin);
                 // Remove credentials before requests, error rendering or analytics.
                 history.replaceState(null, '', '/auth/callback');
-                if (url.searchParams.has('error') || (code && tokenHash) || (!code && !tokenHash)
-                    || (code && code.length > 2048) || (tokenHash && (tokenHash.length > 2048 || !['recovery', 'signup', 'email_change'].includes(otpType)))) throw fail('Link inválido, expirado ou autenticação cancelada. Solicite um novo link ou tente entrar novamente.');
-                const data = check(code ? await a.exchangeCodeForSession(code) : await a.verifyOtp({ token_hash: tokenHash, type: otpType }));
+                if (url.searchParams.has('error') || hash.has('error') || hash.has('access_token') || hash.has('refresh_token') || (code && tokenHash)
+                    || (url.searchParams.has('token_hash') && hash.has('token_hash')) || (!code && !tokenHash)
+                    || (code && code.length > 2048) || (tokenHash && (tokenHash.length > 2048 || !['email', 'signup', 'recovery', 'email_change', 'invite', 'magiclink'].includes(otpType)))) throw fail('Link inválido, expirado ou autenticação cancelada. Solicite um novo link ou tente entrar novamente.');
+                const result = code ? await a.exchangeCodeForSession(code) : await a.verifyOtp({ token_hash: tokenHash, type: otpType });
+                if (result.error && code && (result.error.code === 'bad_code_verifier' || /code challenge does not match/i.test(result.error.message || ''))) {
+                    throw Object.assign(fail('O e-mail foi confirmado, mas a sessão não pôde ser aberta. Entre com sua senha.'), { reason: 'session_not_opened' });
+                }
+                if (result.error) {
+                    if (result.error.status >= 500 || result.error.name === 'AuthRetryableFetchError') {
+                        throw fail('A confirmação está temporariamente indisponível. Tente novamente em instantes.');
+                    }
+                    throw fail('Link inválido, expirado ou já utilizado. Solicite um novo link.');
+                }
+                const data = result.data;
                 await verifiedUser(); await session();
                 if (flow === 'recovery') {
                     if (code ? data?.redirectType !== 'recovery' : otpType !== 'recovery') throw fail('Este link não autoriza redefinir a senha.');
                     const current = await session(); recovery = { userId: current.user.id, token: current.access_token, expiresAt: Math.min(now() + 15 * 60 * 1000, current.expires_at * 1000) };
                     return { path: '/reset-password', recovery: true };
                 }
-                await api('/auth/me');
+                // The Auth session is established. Profile loading belongs to the destination page;
+                // a backend outage must not mislabel a valid confirmation as an expired link.
                 return { path: ['/auth/callback', '/reset-password', '/login', '/cadastro'].includes(next.split('?')[0]) ? '/minha-conta' : next };
             });
             return callbackFlight;

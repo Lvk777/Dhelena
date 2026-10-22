@@ -97,7 +97,7 @@ export default function Register() {
                 subtitle={`Confira as instruções de confirmação em ${form.email}`}
             >
                 {error && <div className="mb-4 p-3 bg-[hsl(var(--rose))]/10 text-[hsl(var(--rose))] text-sm text-center">{error}</div>}
-                <p className="text-sm mb-5">Abra o link de confirmação enviado pelo Supabase. Depois, complete seus dados na área da cliente. Se o e-mail contiver um código, você também pode informá-lo abaixo.</p>
+                <p className="text-sm mb-5">Abra o link enviado pela D’Helenas ou informe o código abaixo.</p>
                 <label className="block text-sm mb-6">Código de confirmação<input className="admin-field block mt-2 w-full" autoComplete="one-time-code" inputMode="numeric" maxLength={10} value={otpCode} onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))} /></label>
                 <button onClick={handleVerify} disabled={loading || otpCode.length < 6} className="btn-gold w-full">
                     {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verificando...</> : "Verificar"}

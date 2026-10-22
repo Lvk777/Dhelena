@@ -112,9 +112,29 @@
         letter-spacing: 0.02em;
     }
 
-    :is(a, button, input, select, textarea, [tabindex]):focus-visible {
-        outline: 2px solid hsl(var(--foreground)) !important;
-        outline-offset: 3px;
+    :is(a, button, [tabindex]):focus-visible {
+        outline: 2px solid hsl(var(--rose-deep)) !important;
+        outline-offset: 2px;
+    }
+
+    :is(input, select, textarea):focus-visible {
+        outline: none !important;
+        border-color: hsl(var(--rose-deep)) !important;
+        box-shadow: 0 0 0 1px hsl(var(--rose-deep));
+    }
+
+    .dark :is(a, button, input, select, textarea, [tabindex]):focus-visible {
+        outline-color: hsl(var(--blossom)) !important;
+    }
+
+    .dark :is(input, select, textarea):focus-visible {
+        border-color: hsl(var(--blossom)) !important;
+        box-shadow: 0 0 0 1px hsl(var(--blossom));
+    }
+
+    :is(input, select, textarea)[aria-invalid="true"]:focus-visible {
+        border-color: hsl(var(--destructive)) !important;
+        box-shadow: 0 0 0 1px hsl(var(--destructive));
     }
 }
 
@@ -154,7 +174,7 @@
     /* Admin form fields — fix dark mode legibility */
     .admin-field {
         @apply w-full bg-background text-foreground border border-border px-4 py-3 text-sm transition-colors;
-        @apply focus:outline-none focus:border-accent;
+        @apply focus:border-primary;
     }
 
     .admin-field::placeholder {

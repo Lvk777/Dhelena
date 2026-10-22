@@ -208,7 +208,7 @@ const auth = {
         const { data, error } = await supabase.auth.verifyOtp({
             email,
             token: otpCode,
-            type: 'signup',
+            type: 'email',
         });
         if (error || !data.session) throw error || new Error('Código inválido ou expirado.');
         setToken(data.session.access_token);

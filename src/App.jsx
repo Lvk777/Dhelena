@@ -22,6 +22,7 @@ import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 import AuthCallback from '@/pages/AuthCallback';
+import ResendConfirmation from '@/pages/ResendConfirmation';
 import { BoutiqueDialogsProvider } from '@/components/BoutiqueDialogs';
 
 // Store pages
@@ -86,6 +87,7 @@ const AuthenticatedApp = () => {
                             <Route path="/esqueci-minha-senha" element={<ForgotPassword />} />
                             <Route path="/reset-password" element={<ResetPassword />} />
                             <Route path="/auth/callback" element={<AuthCallback />} />
+                            <Route path="/reenviar-confirmacao" element={<ResendConfirmation />} />
 
                             {/* Maintenance page */}
                             <Route path="/em-breve" element={<ComingSoon />} />
