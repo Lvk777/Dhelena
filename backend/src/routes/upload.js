@@ -35,7 +35,7 @@ const MAGIC_BYTES = {
     'image/webp': [{ offset: 0, bytes: [0x52, 0x49, 0x46, 0x46] }], // RIFF....WEBP
 };
 
-function detectRealMime(buffer) {
+export function detectRealMime(buffer) {
     for (const [mime, sigs] of Object.entries(MAGIC_BYTES)) {
         for (const sig of sigs) {
             const slice = buffer.subarray(sig.offset, sig.offset + sig.bytes.length);
@@ -61,7 +61,7 @@ const supabaseStorage = (supabaseUrl && supabaseServiceKey)
     : null;
 
 // Memory storage (don't save to disk — upload straight to Supabase)
-const upload = multer({
+export const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: MAX_SIZE },
     fileFilter: (req, file, cb) => {
@@ -193,6 +193,10 @@ router.post('/upload', auth, requireAdmin, uploadLimiter, upload.single('file'),
         }
     }
 
+    if (process.env.NODE_ENV === 'production') {
+        return res.status(503).json({ error: 'Armazenamento de imagens indisponível.' });
+    }
+
     // Fallback: local storage (dev only)
     const fs = await import('fs');
     const uploadDir = process.env.UPLOAD_DIR || './uploads';
@@ -235,6 +239,10 @@ router.delete('/upload', auth, requireAdmin, async (req, res) => {
             logSafeError('upload_delete_failed', err);
             return res.status(500).json({ error: 'Não foi possível remover o arquivo.' });
         }
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+        return res.status(503).json({ error: 'Armazenamento de imagens indisponível.' });
     }
 
     // Fallback: local delete

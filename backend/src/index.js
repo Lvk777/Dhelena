@@ -109,8 +109,10 @@ app.get('/health', async (req, res) => {
 
 // ─── Static files for uploads (dev only) ─────────────────────────
 const uploadDir = process.env.UPLOAD_DIR || './uploads';
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-app.use('/api/uploads', express.static(uploadDir));
+if (!isProduction) {
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    app.use('/api/uploads', express.static(uploadDir));
+}
 
 // ─── Auto-run migrations + seed on first start ────────────────────
 let initialized = false;
@@ -125,6 +127,9 @@ async function ensureInitialized() {
         );
         const schemaExists = !!tableCheck[0].exists;
 
+        if (!schemaExists && isProduction) {
+            throw new Error('Production schema is missing; apply migrations only through an approved manual procedure.');
+        }
         if (!schemaExists) {
             const migrationsDir = './migrations';
             if (fs.existsSync(migrationsDir)) {
@@ -157,6 +162,7 @@ async function ensureInitialized() {
         console.log('[API] Database initialized');
     } catch (err) {
         logSafeError('database_initialization_failed', err);
+        if (isProduction) process.exit(1);
         initialized = true;
     }
 }
