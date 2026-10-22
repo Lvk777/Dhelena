@@ -36,7 +36,7 @@ test('an existing profile keeps its role and fields without writes', async () =>
     const admin = { ...customer, role: 'admin' };
     const db = database([[admin]]);
     assert.deepEqual(await ensureSupabaseProfile(db, user), admin);
-    assert.equal(db.calls.length, 1);
+    assert.equal(db.calls.length, 2);
 });
 
 test('profile created while waiting on the lock is reused', async () => {
@@ -60,25 +60,35 @@ test('a verified email alone cannot claim an unlinked legacy administrator', asy
     assert.equal(db.calls.some(c => /^(INSERT|UPDATE|DELETE)/.test(c.sql)), false);
 });
 
-test('an explicit UUID link admits the legacy admin and a valid synthetic product without changing either UUID', async () => {
+test('an explicit link without the expected customer profile fails closed', async () => {
     const legacy = { ...customer, id: 'legacy-admin-id', email: 'legacy@example.invalid', role: 'admin' };
-    const updated = { ...legacy, email: customer.email };
-    const db = database([[], [], [legacy], [updated]], { linkTable: true });
+    const db = database([[legacy], []], { linkTable: true });
+    await assert.rejects(ensureSupabaseProfile(db, user), { status: 409 });
+    assert.equal(db.calls.some(call => /^(INSERT|UPDATE|DELETE)/.test(call.sql)), false);
+});
+test('an explicit link wins over a newly provisioned customer profile without changing either UUID or email', async () => {
+    const legacy = { ...customer, id: 'legacy-admin-id', email: 'legacy@example.invalid', role: 'admin' };
+    const db = database([[legacy], [customer]], { linkTable: true });
     const profile = await ensureSupabaseProfile(db, user);
     assert.equal(profile.id, legacy.id);
     assert.equal(profile.role, 'admin');
+    assert.equal(profile.email, customer.email);
     assert.equal(profile.identity_linked, true);
-    assert.deepEqual(db.calls.filter(call => /^(INSERT|UPDATE|DELETE)/.test(call.sql)).map(call => call.sql.split(' ')[0]), ['UPDATE']);
-    assert.deepEqual(db.calls.find(call => call.sql.startsWith('UPDATE')).values, [customer.email, legacy.id]);
-    const response = { status(code) { this.code = code; return this; }, json(body) { this.body = body; } };
     let admitted = false;
-    requireAdmin({ user: profile }, response, () => { admitted = true; });
+    requireAdmin({ user: profile }, { status() { throw Error('denied'); } }, () => { admitted = true; });
     assert.equal(admitted, true);
-    const product = { name: 'Peça fictícia', sku: 'TEST-001', status: 'published', price: 100,
-        sizes: ['P'], colors: [{ id: 'blue', name: 'Azul', stock: { P: 2 } }],
+    const product = { name: 'Peça fictícia', sku: 'TEST-002', status: 'published', price: 80,
+        sizes: ['P'], colors: [{ id: 'blue', name: 'Azul', stock: { P: 1 } }],
         weight: 0.3, package_height: 2, package_width: 20, package_length: 30 };
     assert.deepEqual(catalogWriteKeys('products', product), Object.keys(product));
     assert.equal(validateProductForPublication(product), undefined);
+    assert.equal(db.calls.some(call => /^(INSERT|UPDATE|DELETE)/.test(call.sql)), false);
+});
+test('a conflicting direct profile cannot be displaced by a link', async () => {
+    const legacy = { ...customer, id: 'legacy-admin-id', role: 'admin' };
+    const db = database([[legacy], [{ ...customer, role: 'admin' }]], { linkTable: true });
+    await assert.rejects(ensureSupabaseProfile(db, user), { status: 409 });
+    assert.equal(db.calls.some(call => /^(INSERT|UPDATE|DELETE)/.test(call.sql)), false);
 });
 
 test('ambiguous legacy emails fail closed and roll back', async () => {
@@ -150,7 +160,7 @@ test('confirmed Auth email synchronizes only the matching immutable profile with
 test('an unconfirmed email never replaces the profile email', async () => {
     const db = database([[customer]]);
     assert.deepEqual(await ensureSupabaseProfile(db, { ...user, new_email: 'unconfirmed@example.invalid' }), customer);
-    assert.equal(db.calls.length, 1);
+    assert.equal(db.calls.length, 2);
 });
 test('conflicting confirmed email fails closed instead of binding another account', async () => {
     const db = database([[{ ...customer, email: 'old@example.invalid' }], Object.assign(new Error('unique conflict'), { code: '23505' })]);

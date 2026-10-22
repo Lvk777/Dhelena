@@ -24,7 +24,27 @@ export async function ensureSupabaseProfile(db, user) {
         throw profileError('Confirme seu e-mail para acessar o perfil.', 401);
     }
     const email = user.email.trim().toLowerCase();
+    // An independently verified link takes precedence over a customer profile
+    // that Auth provisioning may have created for the same immutable UUID.
+    // The link table is private and never populated from an email match.
+    const schema = await db.query("SELECT to_regclass('public.profile_auth_links') AS relation");
+    let linkedProfile = null;
+    if (schema.rows[0]?.relation) {
+        const linked = await db.query(`SELECT p.id,p.email,p.full_name,p.phone,p.cpf,p.birth_date,p.role
+            FROM profiles p JOIN profile_auth_links l ON l.profile_id = p.id WHERE l.auth_user_id = $1`, [user.id]);
+        if (linked.rows.length > 1) throw profileError('Identidade ambígua.', 409);
+        if (linked.rows[0]) linkedProfile = { ...linked.rows[0], identity_linked: true };
+    }
     const existing = await db.query(`SELECT ${fields} FROM profiles WHERE id = $1 LIMIT 1`, [user.id]);
+    if (linkedProfile) {
+        const shadow = existing.rows[0];
+        if (!shadow || shadow.role !== 'customer' || shadow.email?.toLowerCase() !== email) {
+            throw profileError('Vínculo administrativo exige reconciliação.', 409);
+        }
+        // Preserve both stored emails and histories. Expose the verified
+        // Auth address to the current session without writing either row.
+        return { ...linkedProfile, email };
+    }
     if (existing.rows.length) return syncConfirmedEmail(db, existing.rows[0], user);
 
     const client = await db.connect();
@@ -36,15 +56,8 @@ export async function ensureSupabaseProfile(db, user) {
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`supabase-profile:${email}`]);
         const byId = await client.query(`SELECT ${fields} FROM profiles WHERE id = $1 LIMIT 1`, [user.id]);
         let profile = byId.rows[0];
-        if (!profile) {
-            const schema = await client.query("SELECT to_regclass('public.profile_auth_links') AS relation");
-            if (schema.rows[0]?.relation) {
-                const linked = await client.query(`SELECT p.id,p.email,p.full_name,p.phone,p.cpf,p.birth_date,p.role
-                    FROM profiles p JOIN profile_auth_links l ON l.profile_id = p.id WHERE l.auth_user_id = $1`, [user.id]);
-                if (linked.rows.length > 1) throw profileError('Identidade ambígua.', 409);
-                if (linked.rows[0]) profile = { ...linked.rows[0], identity_linked: true };
-            }
-        }
+        // A link created concurrently with this first request becomes
+        // effective on the next request; this transaction never grants it.
         if (!profile) {
             const legacy = await client.query(
                 `SELECT ${fields} FROM profiles WHERE lower(email) = $1 LIMIT 2 FOR UPDATE`, [email]);
