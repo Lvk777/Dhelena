@@ -1,6 +1,7 @@
 -- TEMPLATE ONLY. Never run against production before separate written approval.
--- Run only after backup restore verification, security phases 1/2, migration 016,
--- and independent proof that the authenticated Supabase user is Juliane.
+-- Run only after security phases 1/2, migration 016, a recent authenticated
+-- session, and independent proof that the Auth account belongs to Juliane and
+-- that she is authorized to use the existing administrative profile.
 -- Replace the two zero UUIDs privately, using the verified Auth user UUID and
 -- the existing legacy admin profile UUID. Never infer either UUID from email.
 -- Do not paste credentials, access tokens, emails, or customer data here.
@@ -36,18 +37,23 @@ BEGIN
     END IF;
     SELECT lower(u.email) INTO STRICT auth_email
       FROM auth.users u
-     WHERE u.id = verified_auth_id AND u.email_confirmed_at IS NOT NULL;
+     WHERE u.id = verified_auth_id AND u.email_confirmed_at IS NOT NULL
+       AND u.last_sign_in_at > now() - interval '7 days'
+       AND EXISTS (SELECT 1 FROM auth.sessions s WHERE s.user_id = u.id);
     SELECT lower(p.email) INTO STRICT profile_email
       FROM public.profiles p
      WHERE p.id = legacy_profile_id AND p.role = 'admin';
-    -- Matching email is an additional consistency check, never the proof.
-    IF auth_email IS DISTINCT FROM profile_email THEN
-        RAISE EXCEPTION 'Email changed; stop for independent review';
+    -- Personal and legacy administrative addresses may differ. Neither
+    -- address authorizes this link; both identities must be verified outside SQL.
+    IF auth_email IS NULL OR profile_email IS NULL THEN
+        RAISE EXCEPTION 'Expected identity records are incomplete';
     END IF;
     IF EXISTS (SELECT 1 FROM public.profiles WHERE id = verified_auth_id)
+       OR EXISTS (SELECT 1 FROM public.profiles
+                   WHERE lower(email) = auth_email AND id <> legacy_profile_id)
        OR EXISTS (SELECT 1 FROM public.profile_auth_links
                    WHERE auth_user_id = verified_auth_id OR profile_id = legacy_profile_id) THEN
-        RAISE EXCEPTION 'Existing profile or identity link requires review';
+        RAISE EXCEPTION 'Existing profile, email conflict or identity link requires review';
     END IF;
 
     INSERT INTO public.profile_auth_links (auth_user_id, profile_id)

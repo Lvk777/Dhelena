@@ -1,15 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { authenticateSupabaseProfile, ensureSupabaseProfile } from '../src/lib/supabaseProfile.js';
+import { requireAdmin } from '../src/middleware.js';
+import { catalogWriteKeys, validateProductForPublication } from '../src/routes/catalog.js';
 
 const user = { id: 'verified-id', email: 'Verified@Example.invalid', email_confirmed_at: '2026-10-12T00:00:00Z', user_metadata: { full_name: ' Customer ', role: 'admin' } };
 const customer = { id: user.id, email: user.email.toLowerCase(), role: 'customer' };
-function database(answers) {
+function database(answers, { linkTable = false } = {}) {
     const calls = [];
     let released = false;
     const client = { async query(sql, values) {
         calls.push({ sql, values });
-        if (sql.includes("to_regclass('public.profile_auth_links')")) return { rows: [{ relation: null }] };
+        if (sql.includes("to_regclass('public.profile_auth_links')")) return { rows: [{ relation: linkTable ? 'profile_auth_links' : null }] };
         if (/^(BEGIN|COMMIT|ROLLBACK|SET LOCAL|SELECT pg_advisory)/.test(sql)) return { rows: [] };
         const answer = answers.shift();
         if (answer instanceof Error) throw answer;
@@ -56,6 +58,27 @@ test('a verified email alone cannot claim an unlinked legacy administrator', asy
     await assert.rejects(ensureSupabaseProfile(db, user), { status: 409 });
     assert.equal(db.calls.at(-1).sql, 'ROLLBACK');
     assert.equal(db.calls.some(c => /^(INSERT|UPDATE|DELETE)/.test(c.sql)), false);
+});
+
+test('an explicit UUID link admits the legacy admin and a valid synthetic product without changing either UUID', async () => {
+    const legacy = { ...customer, id: 'legacy-admin-id', email: 'legacy@example.invalid', role: 'admin' };
+    const updated = { ...legacy, email: customer.email };
+    const db = database([[], [], [legacy], [updated]], { linkTable: true });
+    const profile = await ensureSupabaseProfile(db, user);
+    assert.equal(profile.id, legacy.id);
+    assert.equal(profile.role, 'admin');
+    assert.equal(profile.identity_linked, true);
+    assert.deepEqual(db.calls.filter(call => /^(INSERT|UPDATE|DELETE)/.test(call.sql)).map(call => call.sql.split(' ')[0]), ['UPDATE']);
+    assert.deepEqual(db.calls.find(call => call.sql.startsWith('UPDATE')).values, [customer.email, legacy.id]);
+    const response = { status(code) { this.code = code; return this; }, json(body) { this.body = body; } };
+    let admitted = false;
+    requireAdmin({ user: profile }, response, () => { admitted = true; });
+    assert.equal(admitted, true);
+    const product = { name: 'Peça fictícia', sku: 'TEST-001', status: 'published', price: 100,
+        sizes: ['P'], colors: [{ id: 'blue', name: 'Azul', stock: { P: 2 } }],
+        weight: 0.3, package_height: 2, package_width: 20, package_length: 30 };
+    assert.deepEqual(catalogWriteKeys('products', product), Object.keys(product));
+    assert.equal(validateProductForPublication(product), undefined);
 });
 
 test('ambiguous legacy emails fail closed and roll back', async () => {
