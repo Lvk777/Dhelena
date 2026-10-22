@@ -5,7 +5,7 @@ import { instagramLink, whatsappLink } from '../../backend/src/lib/navigation.js
 
 export default function ComingSoon() {
     const { settings } = usePublicSettings();
-    const instagram = instagramLink(settings.social?.instagram);
+    const instagram = instagramLink(settings.social?.instagram || 'd.helenasstore');
     const whatsapp = whatsappLink(settings.general?.whatsapp || settings.social?.whatsapp);
     useEffect(() => {
         // Add noindex meta tag for SEO while in maintenance
