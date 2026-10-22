@@ -137,7 +137,6 @@ export default function Register() {
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Field icon={User} label="Nome completo" name="name" autoComplete="name" value={form.name} onChange={(v) => set("name", v)} required error={errors.name} />
                 <Field icon={Mail} label="E-mail" name="email" autoComplete="email" type="email" value={form.email} onChange={(v) => set("email", v)} required error={errors.email} />
-                <p className="text-xs text-muted-foreground">Telefone e CPF serão solicitados apenas se você fizer um pedido.</p>
                 <Field icon={Lock} label="Senha" name="password" type="password" value={form.password} onChange={(v) => set("password", v)} required error={errors.password} />
                 <Field icon={Lock} label="Confirmar senha" name="confirm-password" type="password" value={form.confirm} onChange={(v) => set("confirm", v)} required error={errors.confirm} />
                 <button type="submit" disabled={loading} className="btn-gold w-full">
