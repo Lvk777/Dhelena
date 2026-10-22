@@ -1,6 +1,6 @@
 # Virada proposta para catálogo vazio — não executada
 
-Retrato público de 20/10/2026: os 14 SKUs abaixo estavam `published`. Antes da execução produtiva, reconfirmar esses estados e que nenhum outro produto esteja publicado. Nenhum dado comercial deste retrato foi aprovado.
+Retrato revalidado em leitura no Supabase em 22/10/2026: os mesmos 14 pares SKU/UUID abaixo continuam `published`; existem 15 produtos no total, nenhum criado no dia, e `operational_start` não existe. Antes da execução produtiva, reconfirmar esses estados e que nenhum outro produto esteja publicado. Nenhum dado comercial deste retrato foi aprovado.
 
 | SKU | ID | Antes → Depois |
 | --- | --- | --- |
@@ -21,9 +21,9 @@ Retrato público de 20/10/2026: os 14 SKUs abaixo estavam `published`. Antes da 
 
 Somente `products.status` e `updated_date` mudariam nesses 14 registros. Fotos, variantes, quantidades físicas, pedidos, pagamentos, estornos e movimentos históricos permaneceriam intactos. O estoque **exibido** do catálogo publicado ficaria em zero. Uma nova linha interna de `settings` com `key='operational_start'`, `is_public=false` e timestamp UTC separaria os indicadores. Lucro líquido passaria a “A apurar” após a primeira venda paga, pois não há livro completo de custos e tarifas. Saldos externos não mudariam.
 
-## Pré-condições e cópia para recuperação
+## Pré-condições e retrato para conferência
 
-Com manutenção ligada, antes de qualquer escrita: concluir backup do banco e Storage e comprovar restauração em ambiente separado; salvar privadamente `SELECT id,sku,status,updated_date,colors,images FROM products WHERE status='published' ORDER BY sku`, `SELECT status,count(*) FROM products GROUP BY status` e `SELECT key,value,is_public FROM settings WHERE key IN ('operational_start','maintenance')`. Confirmar os 14 IDs e ausência da chave operacional. Se o retrato divergir, parar e gerar nova prévia. Verificar Data API, auto deploy, etiquetas e notificações desligados.
+Com manutenção ligada, antes de qualquer escrita: salvar privadamente `SELECT id,sku,status,updated_date,colors,images FROM products WHERE status='published' ORDER BY sku`, `SELECT status,count(*) FROM products GROUP BY status` e `SELECT key,value,is_public FROM settings WHERE key IN ('operational_start','maintenance')`. Confirmar os 14 IDs e ausência da chave operacional. Se o retrato divergir, parar e gerar nova prévia. Verificar Data API e auto deploy desligados. A decisão da responsável é não incluir criação de backup nesta virada; a reversão descrita abaixo depende do estado dos registros após a execução e pode deixar de ser segura se houver vendas ou edições concorrentes.
 
 ## SQL exato proposto, sujeito a autorização específica
 
@@ -73,7 +73,7 @@ Após a virada, conferir leituras de catálogo, sacola antiga, checkout, estoque
 
 ## Recuperação
 
-Antes do `COMMIT`, qualquer falha exige `ROLLBACK`. Depois, manter manutenção ligada, conferir se surgiram pedidos desde o marco e usar o retrato privado anterior. Se os 14 ainda estiverem arquivados e **não houver vendas novas**, a reversão autorizada é uma transação que restaura `status='published'` para esses mesmos IDs, atualiza `updated_date`, exclui a chave `operational_start` somente se criada nesta virada, confere contagens e faz `COMMIT`. Se houver vendas novas ou mudança concorrente, não remover o marco nem republicar em lote; conciliar e recuperar individualmente. O backup restaurado em ambiente isolado é a segunda via de recuperação.
+Antes do `COMMIT`, qualquer falha exige `ROLLBACK`. Depois, manter manutenção ligada, conferir se surgiram pedidos desde o marco e usar o retrato privado anterior. Se os 14 ainda estiverem arquivados e **não houver vendas novas**, a reversão autorizada é uma transação que restaura `status='published'` para esses mesmos IDs, atualiza `updated_date`, exclui a chave `operational_start` somente se criada nesta virada, confere contagens e faz `COMMIT`. Se houver vendas novas ou mudança concorrente, não remover o marco nem republicar em lote; conciliar e recuperar individualmente.
 
 Após essas verificações e uma **nova autorização específica de recuperação**, a ação exata é:
 
