@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { CreditCard, Truck, Mail, Check, Copy, AlertCircle, Plug } from "lucide-react";
+import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
 
 export default function IntegrationsTab() {
     const [copied, setCopied] = useState(false);
@@ -47,6 +48,7 @@ export default function IntegrationsTab() {
 }
 
 function IntegrationCard({ icon: Icon, name, status, environment, description }) {
+    const dialogs = useBoutiqueDialogs();
     const isActive = status === "Ativo" || status === "Conectado";
     return (
         <div className="border border-border rounded-xl p-5 bg-background/50">
@@ -62,7 +64,7 @@ function IntegrationCard({ icon: Icon, name, status, environment, description })
                     <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
                     <p className="text-[11px] text-muted-foreground mt-1">Ambiente: {environment}</p>
                 </div>
-                <button onClick={() => alert(`Configure os secrets necessários no ambiente seguro da Base44 (Dashboard → Settings → Environment Variables) para ativar ${name}.`)} className="btn-outline text-xs whitespace-nowrap">
+                <button onClick={() => dialogs.notify({ title: name, message: 'A configuração é realizada pelo painel de Integrações e pelo ambiente seguro do backend. Credenciais privadas não devem ser enviadas por mensagens.' })} className="btn-outline text-xs whitespace-nowrap">
                     Configurar
                 </button>
             </div>

@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Heart } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
-import { COLOR_SWATCHES, formatBRL, installmentValue, isAvailable } from "@/data/products";
+import { COLOR_SWATCHES, formatBRL, isAvailable } from "@/data/products";
 
 export default function ProductCard({ product, index = 0 }) {
     const { toggleFavorite, isFavorite } = useStore();
@@ -32,7 +32,8 @@ export default function ProductCard({ product, index = 0 }) {
                     />
                     <img
                         src={product.images[1] || product.images[0]}
-                        alt={`${product.name} — detalhe`}
+                        alt=""
+                        aria-hidden="true"
                         loading="lazy"
                         className="absolute inset-0 w-full h-full object-cover opacity-0 transition-all duration-1000 ease-out group-hover:opacity-100 group-hover:scale-[1.03]"
                     />
@@ -48,8 +49,9 @@ export default function ProductCard({ product, index = 0 }) {
                 {/* favorite */}
                 <button
                     onClick={() => toggleFavorite(product.id)}
-                    className="absolute top-3 right-3 w-9 h-9 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center transition-all duration-300 hover:bg-background"
-                    aria-label="Favoritar"
+                    className="absolute top-3 right-3 w-11 h-11 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center transition-all duration-300 hover:bg-background"
+                    aria-label={`Favoritar ${product.name}`}
+                    aria-pressed={fav}
                 >
                     <Heart className={`w-4 h-4 transition-colors ${fav ? "fill-[hsl(var(--rose))] text-[hsl(var(--rose))]" : "text-foreground/70"}`} strokeWidth={1.5} />
                 </button>
@@ -84,7 +86,7 @@ export default function ProductCard({ product, index = 0 }) {
                     ) : (
                         <p className="text-sm font-medium text-foreground">{formatBRL(product.price)}</p>
                     )}
-                    <p className="text-[11px] text-muted-foreground mt-1">ou {product.installments}x de {formatBRL(installmentValue(price, product.installments))}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">Consulte as formas de pagamento no checkout</p>
                 </div>
             </div>
         </div>
@@ -94,7 +96,7 @@ export default function ProductCard({ product, index = 0 }) {
 function Badge({ children, tone }) {
     const tones = {
         rose: "bg-[hsl(var(--rose))] text-white",
-        gold: "bg-[hsl(var(--gold))] text-white",
+        gold: "bg-[hsl(var(--gold))] text-charcoal",
         sale: "bg-[hsl(352_45%_58%)] text-white",
     };
     return <span className={`text-[9px] uppercase tracking-[0.18em] px-2.5 py-1 ${tones[tone]}`}>{children}</span>;

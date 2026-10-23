@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Layers, Loader2, Check, Tag, Image, Settings, Eye } from "lucide-react";
+import { Layers, Check, Tag, Image, Settings, Eye } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import AdminWizard from "@/components/admin/AdminWizard";
 import AdminInput from "@/components/admin/AdminInput";

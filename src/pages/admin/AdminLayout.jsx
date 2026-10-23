@@ -16,6 +16,7 @@ const MENU = [
     { to: "/admin/colecoes", label: "Coleções", icon: Layers },
     { to: "/admin/estoque", label: "Estoque", icon: Boxes },
     { to: "/admin/clientes", label: "Clientes", icon: Users },
+    { to: '/admin/colaboradores', label: 'Colaboradores', icon: Users },
     { to: "/admin/cupons", label: "Cupons", icon: Ticket },
     { to: "/admin/banners", label: "Banners", icon: Image },
     { to: "/admin/promocoes", label: "Promoções", icon: Tag },
@@ -68,10 +69,9 @@ export default function AdminLayout() {
         }
     };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         sessionStorage.removeItem("dh_admin_login_logged");
-        logout(false);
-        window.location.href = "/";
+        try { await logout(false); } finally { window.location.href = '/login'; }
     };
 
     const Sidebar = () => (
@@ -142,7 +142,7 @@ export default function AdminLayout() {
             )}
 
             {/* content */}
-            <main className="flex-1 lg:ml-60 pt-14 lg:pt-0 min-h-screen">
+            <main className="flex-1 min-w-0 lg:ml-60 pt-14 lg:pt-0 min-h-screen">
                 <div className="hidden lg:flex items-center justify-end h-12 px-8 border-b border-border bg-background">
                     <button onClick={toggleTheme} className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors" aria-label="Alternar tema">
                         {theme === "dark" ? <><Sun className="w-4 h-4" strokeWidth={1.5} /> Claro</> : <><Moon className="w-4 h-4" strokeWidth={1.5} /> Escuro</>}

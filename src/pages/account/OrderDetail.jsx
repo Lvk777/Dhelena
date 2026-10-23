@@ -4,6 +4,11 @@ import { ArrowLeft, Check, Truck, MapPin, QrCode, CreditCard, Banknote, Loader2 
 import { base44 } from "@/api/base44Client";
 import { formatBRL, ORDER_STATUS, ORDER_TIMELINE, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
 import OrderTimeline from "@/components/checkout/OrderTimeline";
+import CustomerAfterSales from "@/components/checkout/CustomerAfterSales";
+import OrderPaymentPanel from '@/components/checkout/OrderPaymentPanel';
+import CardFinancingSummary from '@/components/checkout/CardFinancingSummary';
+import { orderDeliveryEstimateLabel, DELIVERY_BUSINESS_DAYS_NOTE } from '@/lib/deliveryEstimate';
+import { downloadOrderReceipt } from '@/lib/orderReceipt';
 
 export default function OrderDetail() {
     const { id } = useParams();
@@ -13,7 +18,7 @@ export default function OrderDetail() {
     const [trackingInfo, setTrackingInfo] = useState(null);
     const [trackingLoading, setTrackingLoading] = useState(false);
 
-    useEffect(() => {
+    const load = () => {
         Promise.all([
             base44.entities.Order.get(id).catch(() => null),
             base44.functions.invoke("getOrderEvents", { orderId: id }).catch(() => []),
@@ -22,7 +27,8 @@ export default function OrderDetail() {
             setEvents(Array.isArray(evs) ? evs : []);
             setLoading(false);
         });
-    }, [id]);
+    };
+    useEffect(() => { load(); }, [id]);
 
     const fetchTracking = async () => {
         setTrackingLoading(true);
@@ -66,11 +72,14 @@ export default function OrderDetail() {
             <p className="text-sm text-muted-foreground mb-8">
                 {new Date(order.created_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
             </p>
+            <button type="button" onClick={() => downloadOrderReceipt(order)} className="btn-outline mb-8">
+                Salvar comprovante do pedido
+            </button>
 
             {/* Timeline from events */}
             {events.length > 0 ? (
                 <div className="mb-10">
-                    <OrderTimeline events={events} />
+                    <OrderTimeline events={events} paymentStatus={order.payment_status} />
                 </div>
             ) : !isCancelled && (
                 <div className="mb-10">
@@ -124,6 +133,8 @@ export default function OrderDetail() {
                 </div>
             </div>
 
+            <OrderPaymentPanel key={order.id} order={order} onChanged={setOrder} onRefresh={load} />
+
             {/* Payment + Delivery info */}
             <div className="grid sm:grid-cols-2 gap-6 mb-8">
                 <InfoBlock title="Pagamento">
@@ -138,7 +149,8 @@ export default function OrderDetail() {
                                 {PAYMENT_STATUS_PT[order.payment_status] || order.payment_status}
                             </span>
                         </p>
-                        {order.installments > 1 && <p className="text-muted-foreground">{order.installments}x de {formatBRL(Number(order.total) / order.installments)}</p>}
+                        {!order.snapshot?.card_installment_offer && order.installments > 1 && <p className="text-muted-foreground">{order.installments} parcelas · Total {formatBRL(Number(order.total))}</p>}
+                        <CardFinancingSummary order={order} />
                     </div>
                 </InfoBlock>
                 <InfoBlock title="Entrega">
@@ -148,7 +160,8 @@ export default function OrderDetail() {
                             {SHIPPING_LABELS[order.shipping_method] || order.shipping_method || "—"}
                         </p>
                         {order.shipping_carrier && <p className="text-muted-foreground">{order.shipping_carrier} · {order.shipping_service_name}</p>}
-                        {order.shipping_delivery_time && <p className="text-muted-foreground">{order.shipping_delivery_time} dia(s) úteis</p>}
+                        <p className="text-muted-foreground">{orderDeliveryEstimateLabel(order)}</p>
+                        {order.snapshot?.delivery_estimate?.total_business_days != null && <p className="text-xs text-muted-foreground">{DELIVERY_BUSINESS_DAYS_NOTE}</p>}
                         {order.tracking_code && (
                             <p className="text-muted-foreground">Rastreio: {order.tracking_code}</p>
                         )}
@@ -180,6 +193,7 @@ export default function OrderDetail() {
                     </p>
                 </InfoBlock>
             </div>
+            <CustomerAfterSales order={order} onChanged={load} />
         </div>
     );
 }
@@ -188,7 +202,7 @@ function Row({ label, value }) {
     return <div className="flex justify-between"><span className="text-muted-foreground">{label}</span><span>{value}</span></div>;
 }
 
-function InfoBlock({ title, children, full }) {
+function InfoBlock({ title, children, full = false }) {
     return (
         <div className={full ? "sm:col-span-2" : ""}>
             <h3 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-2">{title}</h3>

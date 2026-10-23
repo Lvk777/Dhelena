@@ -2,6 +2,7 @@ import React from "react";
 import { useReveal } from "@/hooks/useReveal";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
 import useSEO from "@/lib/useSEO";
+import { publishedPolicyText } from '@/lib/policyContent';
 
 const POLICIES = {
     "trocas-e-devolucoes": {
@@ -71,7 +72,7 @@ export default function PolicyPage({ slug }) {
         url: `/${slug}`,
     });
 
-    const content = settings.policies?.[config.policyKey] || "";
+    const content = publishedPolicyText(settings.policies?.[config.policyKey]);
 
     return (
         <div>

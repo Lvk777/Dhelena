@@ -1,5 +1,9 @@
 import jwt from 'jsonwebtoken';
+import { authenticateSupabaseProfile } from './lib/supabaseProfile.js';
 import { pool } from './config/db.js';
+import { logSafeError } from './lib/safeErrorLog.js';
+
+const isProduction = process.env.NODE_ENV === 'production';
 
 // ─── Supabase admin client (lazy init, only when configured) ───────
 let _supabaseAdmin = undefined;
@@ -19,7 +23,7 @@ async function getSupabaseAdmin() {
         );
         console.log('[Auth] Supabase mode active');
     } catch (e) {
-        console.warn('[Auth] @supabase/supabase-js not installed, using Express JWT');
+        console.warn('[Auth] Supabase client unavailable');
         _supabaseAdmin = null;
     }
     return _supabaseAdmin;
@@ -29,6 +33,7 @@ export const isSupabaseMode = () => _supabaseAdmin !== null && _supabaseAdmin !=
 
 // ─── Auth middleware: validates Supabase JWT or Express JWT ────────
 export async function auth(req, res, next) {
+    if (req.authProvider === 'supabase' && req.user) return next();
     const header = req.headers.authorization;
     if (!header?.startsWith('Bearer ')) return next();
 
@@ -38,27 +43,28 @@ export async function auth(req, res, next) {
     if (supabaseAdmin) {
         // ── Supabase mode: validate Supabase access token ──
         try {
-            const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-            if (!error && user) {
-                // Look up by Supabase Auth ID first, then by email as fallback
-                // (IDs may differ if profile was created by seed, not by Supabase Auth)
-                const { rows } = await pool.query(
-                    'SELECT id, email, full_name, phone, role FROM profiles WHERE id = $1 OR email = $2 LIMIT 1',
-                    [user.id, user.email]
-                );
-                if (rows.length > 0) req.user = rows[0];
+            const profile = await authenticateSupabaseProfile(supabaseAdmin, pool, token, identity => { req.supabaseUserId = identity.id; });
+            if (profile) {
+                req.user = profile;
+                req.authProvider = 'supabase';
             }
-        } catch {
-            // Supabase unreachable — fall back to Express JWT (dev/preview mode)
+        } catch (error) {
+            // A provisioning failure is retryable; never impersonate an anonymous
+            // user or accept another token issuer after a verified Auth request.
+            const status = [401, 409].includes(error.status) ? error.status : 503;
+            return next(Object.assign(new Error(status === 503
+                ? 'Perfil temporariamente indisponível.' : error.message), { status }));
         }
     }
 
-    // ── Express JWT fallback (dev mode, or Supabase unreachable) ──
-    if (!req.user) {
+    // Express JWT is strictly a local-development compatibility mode.  In
+    // production a Supabase outage or invalid Supabase token must never turn
+    // into acceptance of a different JWT issuer.
+    if (!req.user && !isProduction && !process.env.SUPABASE_URL && !supabaseAdmin) {
         try {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
             const { rows } = await pool.query(
-                'SELECT id, email, full_name, phone, role FROM profiles WHERE id = $1', [decoded.id]
+                'SELECT id, email, full_name, phone, cpf, birth_date, role FROM profiles WHERE id = $1', [decoded.id]
             );
             if (rows.length > 0) req.user = rows[0];
         } catch { /* invalid token — continue as anonymous */ }
@@ -73,9 +79,18 @@ export function requireAdmin(req, res, next) {
     next();
 }
 
+/** Financial administration requires a token verified by Supabase Auth. */
+export function requireSupabaseAdmin(req, res, next) {
+    if (!req.user || req.authProvider !== 'supabase') {
+        return res.status(401).json({ error: 'Sessão Supabase necessária' });
+    }
+    return requireAdmin(req, res, next);
+}
+
 // ─── Error handler ─────────────────────────────────────────────────
 export function errorHandler(err, req, res, next) {
-    console.error('[API Error]', err.message);
-    const status = err.status || 500;
-    res.status(status).json({ error: err.message || 'Erro interno do servidor' });
+    logSafeError('api_request_failed', err);
+    const status = Number.isInteger(err?.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
+    res.status(status).json({ error: status >= 500 ? 'Erro interno do servidor'
+        : err instanceof SyntaxError ? 'JSON inválido' : (err.message || 'Requisição inválida') });
 }

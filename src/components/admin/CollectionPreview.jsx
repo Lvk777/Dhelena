@@ -10,7 +10,7 @@ import StorefrontFrame, { DeviceToggle } from "@/components/admin/StorefrontFram
  *  - form: collection form data (name, slug, description, image, banner_image)
  *  - device: "desktop" | "mobile" (if controlled by parent)
  */
-export default function CollectionPreview({ form, device: deviceProp }) {
+export default function CollectionPreview({ form, device: deviceProp = undefined }) {
     const [internalDevice, setInternalDevice] = React.useState("desktop");
     const device = deviceProp || internalDevice;
     const isMobile = device === "mobile";

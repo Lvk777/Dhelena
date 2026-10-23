@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Search, Filter, Archive, ShieldAlert, Loader2, X, ChevronDown } from "lucide-react";
+import { Search, Filter, Archive, ShieldAlert, Loader2, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { logAdminAction } from "@/lib/audit";
 

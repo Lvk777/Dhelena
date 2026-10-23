@@ -4,10 +4,12 @@ import { X, Plus, Minus, ShoppingBag } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { useCatalog } from "@/context/CatalogContext";
 import { COLOR_SWATCHES, formatBRL, stockFor } from "@/data/products";
+import { useDialogKeyboard } from "@/lib/hooks/useDialogKeyboard";
 
 export default function CartDrawer() {
     const { cart, cartOpen, setCartOpen, removeFromCart, updateQty } = useStore();
     const { products } = useCatalog();
+    const dialogRef = useDialogKeyboard(cartOpen, () => setCartOpen(false));
 
     const lines = cart.map((item) => {
         const product = products.find((p) => p.id === item.productId);
@@ -21,10 +23,10 @@ export default function CartDrawer() {
             {cartOpen && (
                 <div className="fixed inset-0 z-[70]">
                     <div className="absolute inset-0 bg-charcoal/30 backdrop-blur-sm animate-fade-in" onClick={() => setCartOpen(false)} />
-                    <div className="absolute right-0 top-0 h-full w-full max-w-md bg-background shadow-2xl flex flex-col animate-fade-in">
+                    <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="cart-drawer-title" tabIndex={-1} className="absolute right-0 top-0 h-full w-full max-w-md bg-background shadow-2xl flex flex-col animate-fade-in">
                         {/* header */}
                         <div className="flex items-center justify-between px-6 h-16 border-b border-border">
-                            <h3 className="text-[11px] uppercase tracking-[0.24em]">Sua sacola ({lines.length})</h3>
+                            <h2 id="cart-drawer-title" className="text-[11px] uppercase tracking-[0.24em]">Sua sacola ({lines.length})</h2>
                             <button onClick={() => setCartOpen(false)} aria-label="Fechar"><X className="w-5 h-5" strokeWidth={1.25} /></button>
                         </div>
 

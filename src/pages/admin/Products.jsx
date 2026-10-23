@@ -5,6 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { formatBRL, totalStock } from "@/data/products";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import { logAdminAction } from "@/lib/audit";
+import { loadProductPages } from "@/lib/catalogPaging";
 
 const STATUS = {
     draft: { label: "Rascunho", color: "text-muted-foreground bg-[hsl(var(--bone))]" },
@@ -15,14 +16,16 @@ const STATUS = {
 export default function AdminProducts() {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState("all");
+    const [filter, setFilter] = useState("published");
     const [q, setQ] = useState("");
+    const [loadError, setLoadError] = useState(false);
 
     const load = () => {
         setLoading(true);
-        base44.entities.Product.list("-created_date", 200)
+        setLoadError(false);
+        loadProductPages((limit, page) => base44.entities.Product.list("-created_date", limit, page), 200)
             .then(setProducts)
-            .catch(() => { })
+            .catch(() => setLoadError(true))
             .finally(() => setLoading(false));
     };
 
@@ -35,7 +38,15 @@ export default function AdminProducts() {
     });
 
     const duplicate = async (p) => {
-        const { id, created_date, updated_date, created_by_id, ...data } = p;
+        const copyFields = [
+            'category', 'subcategory', 'collection', 'description',
+            'short_description', 'details', 'price', 'sale_price', 'cost_price',
+            'installments', 'images', 'colors', 'sizes', 'badges', 'composition',
+            'modeling', 'length', 'lining', 'transparency', 'elasticity', 'care',
+            'measurements', 'weight', 'package_height', 'package_width',
+            'package_length', 'size_guide_id', 'custom_measurements',
+        ];
+        const data = Object.fromEntries(copyFields.filter(field => p[field] !== undefined).map(field => [field, p[field]]));
         const newProduct = await base44.entities.Product.create({ ...data, name: `${p.name} (cópia)`, sku: "", status: "draft" });
         await logAdminAction("product_create", "Product", newProduct.id, `${p.name} (cópia)`, `Produto duplicado de "${p.name}"`);
         load();
@@ -68,6 +79,7 @@ export default function AdminProducts() {
 
     return (
         <div>
+            {loadError && <div role="alert" className="mb-4 text-sm text-destructive">Não foi possível carregar os produtos. <button onClick={load} className="underline">Tentar novamente</button></div>}
             <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
                 <h1 className="font-heading text-2xl tracking-[0.03em]">Produtos</h1>
                 <Link to="/admin/produtos/novo" className="btn-gold">
@@ -92,7 +104,9 @@ export default function AdminProducts() {
                 <div className="h-64 bg-background animate-pulse" />
             ) : filtered.length === 0 ? (
                 <div className="bg-background p-12 text-center">
-                    <p className="text-sm text-muted-foreground">Nenhum produto encontrado.</p>
+                    <p className="font-heading text-2xl">{filter === "published" && !q ? "A nova coleção começa aqui" : "Nenhum produto encontrado."}</p>
+                    {filter === "published" && !q && <p className="text-sm text-muted-foreground mt-3">Os produtos arquivados continuam disponíveis no filtro “Arquivados”. Cadastre e publique uma nova peça para iniciar a vitrine.</p>}
+                    {filter === "published" && !q && <Link to="/admin/produtos/novo" className="btn-gold inline-block mt-6">Cadastrar produto</Link>}
                 </div>
             ) : (
                 <div className="bg-background overflow-x-auto">
@@ -128,7 +142,7 @@ export default function AdminProducts() {
                                     </td>
                                     <td className="py-2 px-3">
                                         <div className="flex items-center justify-end gap-1">
-                                            <Link to={`/produto/${p.id}`} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Visualizar"><Eye className="w-4 h-4" strokeWidth={1.25} /></Link>
+                                            {p.status === 'published' && <Link to={`/produto/${p.id}`} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Visualizar"><Eye className="w-4 h-4" strokeWidth={1.25} /></Link>}
                                             <Link to={`/admin/produtos/${p.id}`} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Editar"><Pencil className="w-4 h-4" strokeWidth={1.25} /></Link>
                                             <button onClick={() => duplicate(p)} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Duplicar"><Copy className="w-4 h-4" strokeWidth={1.25} /></button>
                                             {p.status !== "archived" ? (

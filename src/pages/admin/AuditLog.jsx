@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { ShieldCheck, Search, Filter, Eye, X, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { ShieldCheck, Search, Filter, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import AdminModal from "@/components/admin/AdminModal";
 
@@ -240,7 +240,7 @@ export default function AuditLog() {
     );
 }
 
-function Detail({ label, value, mono }) {
+function Detail({ label, value, mono = false }) {
     return (
         <div>
             <label className="block text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-1">{label}</label>

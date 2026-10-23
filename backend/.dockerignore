@@ -1,0 +1,10 @@
+*
+!Dockerfile
+!package.json
+!package-lock.json
+!src/
+!src/**
+**/.env
+**/.env.*
+**/node_modules
+**/*.log

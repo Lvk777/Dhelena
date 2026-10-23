@@ -7,15 +7,21 @@ import { formatBRL, ORDER_STATUS } from "@/data/products";
 export default function Orders() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [retry, setRetry] = useState(0);
 
     useEffect(() => {
+        let active = true;
+        setLoading(true); setError('');
         base44.entities.Order.list("-created_date", 50)
-            .then(setOrders)
-            .catch(() => { })
-            .finally(() => setLoading(false));
-    }, []);
+            .then(data => { if (active) setOrders(data); })
+            .catch(() => { if (active) setError('Não foi possível consultar seus pedidos. Tente novamente.'); })
+            .finally(() => { if (active) setLoading(false); });
+        return () => { active = false; };
+    }, [retry]);
 
     if (loading) return <div className="h-40 bg-bone animate-pulse" />;
+    if (error) return <div role="alert"><p>{error}</p><button className="btn-outline mt-4" onClick={() => setRetry(value => value + 1)}>Tentar novamente</button></div>;
 
     if (orders.length === 0) {
         return (

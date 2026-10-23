@@ -1,7 +1,8 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import SafeConfiguredLink from '@/components/SafeConfiguredLink';
 import { ArrowRight } from "lucide-react";
 import { useCatalog } from "@/context/CatalogContext";
+import { primaryBannerCta } from '@/lib/banners';
 
 /**
  * Renders a banner at a specific position on public pages.
@@ -20,6 +21,7 @@ export default function PositionBanner({ position, variant = "full" }) {
 
     // Priority mode: show only the highest priority banner
     const display = positionBanners[0].display_mode === "carousel" ? positionBanners : [positionBanners[0]];
+    const cta = primaryBannerCta(display[0]);
 
     if (variant === "compact") {
         // Compact variant for cart/checkout top — thin banner strip
@@ -33,10 +35,10 @@ export default function PositionBanner({ position, variant = "full" }) {
                         {b.eyebrow && <p className="text-[10px] uppercase tracking-[0.3em] text-gold mb-1">{b.eyebrow}</p>}
                         {b.title && <h2 className="font-heading text-xl sm:text-2xl tracking-wide">{b.title}</h2>}
                         {b.subtitle && <p className="font-heading text-sm italic text-bone/80 mt-0.5">{b.subtitle}</p>}
-                        {b.button_text && (
-                            <Link to={b.button_link || "#"} className="inline-flex items-center gap-1.5 mt-3 bg-rose text-white text-[10px] uppercase tracking-[0.2em] px-5 py-2.5">
-                                {b.button_text} <ArrowRight className="w-3.5 h-3.5" strokeWidth={1.5} />
-                            </Link>
+                        {cta.label && (
+                            <SafeConfiguredLink to={cta.href} className="inline-flex items-center gap-1.5 mt-3 bg-rose text-white text-[10px] uppercase tracking-[0.2em] px-5 py-2.5">
+                                {cta.label} <ArrowRight className="w-3.5 h-3.5" strokeWidth={1.5} />
+                            </SafeConfiguredLink>
                         )}
                     </div>
                 </div>
@@ -56,15 +58,15 @@ export default function PositionBanner({ position, variant = "full" }) {
                     {b.title && <h2 className="mt-3 font-heading text-4xl sm:text-5xl tracking-[0.03em]">{b.title}</h2>}
                     {b.subtitle && <p className="mt-3 font-heading text-xl italic text-bone/85">{b.subtitle}</p>}
                     {b.text && <p className="mt-4 text-sm text-bone/80 max-w-md mx-auto">{b.text}</p>}
-                    {b.button_text && (
-                        <Link to={b.button_link || "#"} className="mt-6 inline-flex items-center gap-2 bg-rose text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-rose/85">
-                            {b.button_text} <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
-                        </Link>
+                    {cta.label && (
+                        <SafeConfiguredLink to={cta.href} className="mt-6 inline-flex items-center gap-2 bg-rose text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-rose/85">
+                            {cta.label} <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
+                        </SafeConfiguredLink>
                     )}
                     {b.secondary_cta_label && (
-                        <Link to={b.secondary_cta_link || "#"} className="mt-6 ml-3 inline-flex items-center gap-2 border border-bone/70 text-bone text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-bone hover:text-charcoal">
+                        <SafeConfiguredLink to={b.secondary_cta_link} className="mt-6 ml-3 inline-flex items-center gap-2 border border-bone/70 text-bone text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-bone hover:text-charcoal">
                             {b.secondary_cta_label}
-                        </Link>
+                        </SafeConfiguredLink>
                     )}
                 </div>
             </div>

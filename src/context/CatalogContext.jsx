@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
-import { COLOR_SWATCHES, SIZES_LIST } from "@/data/products";
+import { COLOR_SWATCHES } from "@/data/products";
+import { loadProductPages } from "@/lib/catalogPaging";
 
 const CatalogContext = createContext(null);
 
@@ -16,7 +17,7 @@ export const dbToProduct = (p) => ({
     short_description: p.short_description || "",
     details: p.details || "",
     price: p.price || 0,
-    salePrice: p.sale_price ?? null,
+    salePrice: Number(p.sale_price) > 0 ? Number(p.sale_price) : null,
     cost: p.cost_price ?? 0,
     installments: p.installments ?? 6,
     images: p.images || [],
@@ -27,7 +28,7 @@ export const dbToProduct = (p) => ({
         image: c.image || "",
         stock: c.stock || {},
     })),
-    sizes: p.sizes && p.sizes.length ? p.sizes : SIZES_LIST,
+    sizes: p.sizes?.length ? p.sizes : ['Único'],
     badges: p.badges || { novo: false, destaque: false, maisVendido: false, promocao: false, ultimas: false, exclusivo: false },
     composition: p.composition || "",
     modeling: p.modeling || "",
@@ -55,12 +56,14 @@ export function CatalogProvider({ children }) {
     const [collections, setCollections] = useState([]);
     const [banners, setBanners] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
 
     const loadAll = useCallback(async () => {
         setLoading(true);
+        setError(false);
         try {
             const [prodRes, catRes, colRes, banRes] = await Promise.all([
-                base44.entities.Product.list("-created_date", 200).catch(() => []),
+                loadProductPages((limit, page) => base44.entities.Product.list("-created_date", limit, page), 60),
                 base44.entities.Category.list("sort_order", 100).catch(() => []),
                 base44.entities.Collection.list("sort_order", 100).catch(() => []),
                 base44.entities.Banner.filter({ active: true }, "-priority", 20).catch(() => []),
@@ -71,6 +74,7 @@ export function CatalogProvider({ children }) {
             setBanners(banRes || []);
         } catch (e) {
             console.error("Catalog load error:", e);
+            setError(true);
         } finally {
             setLoading(false);
         }
@@ -81,7 +85,7 @@ export function CatalogProvider({ children }) {
     // Only published products are shown in the public store
     const publishedProducts = products.filter((p) => p.status === "published");
 
-    const getProductById = useCallback((id) => products.find((p) => p.id === id), [products]);
+    const getProductById = useCallback((id) => products.find((p) => p.id === id && p.status === 'published'), [products]);
 
     const getRelated = useCallback((product, limit = 4) =>
         products.filter((p) => p.category === product?.category && p.id !== product?.id && p.status === "published").slice(0, limit),
@@ -100,6 +104,7 @@ export function CatalogProvider({ children }) {
                 collections,
                 banners,
                 loading,
+                error,
                 reload: loadAll,
                 getProductById,
                 getRelated,

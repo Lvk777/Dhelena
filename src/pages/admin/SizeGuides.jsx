@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Trash2, ChevronUp, ChevronDown, X } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { base44 } from '@/api/base44Client';
+import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
 
 const GUIDE_TYPES = ["Feminino padrão", "Vestidos", "Blusas", "Calças", "Conjuntos"];
 const DEFAULT_ROWS = [
@@ -12,6 +13,7 @@ const DEFAULT_ROWS = [
 ];
 
 export default function SizeGuides() {
+    const dialogs = useBoutiqueDialogs();
     const [guides, setGuides] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(null); // guide being edited
@@ -19,9 +21,7 @@ export default function SizeGuides() {
     const load = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem("dhelena_access_token");
-            const res = await fetch("/api/size-guides", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-            const data = await res.json();
+            const data = await base44.entities.SizeGuide.list();
             setGuides(data || []);
         } catch { /* */ }
         finally { setLoading(false); }
@@ -30,21 +30,18 @@ export default function SizeGuides() {
     useEffect(() => { load(); }, []);
 
     const handleSave = async (guide) => {
-        const token = localStorage.getItem("dhelena_access_token");
-        const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
         if (guide.id) {
-            await fetch(`/api/size-guides/${guide.id}`, { method: "PATCH", headers, body: JSON.stringify(guide) });
+            await base44.entities.SizeGuide.update(guide.id, guide);
         } else {
-            await fetch("/api/size-guides", { method: "POST", headers, body: JSON.stringify(guide) });
+            await base44.entities.SizeGuide.create(guide);
         }
         setEditing(null);
         load();
     };
 
     const handleDelete = async (id) => {
-        if (!confirm("Excluir este guia?")) return;
-        const token = localStorage.getItem("dhelena_access_token");
-        await fetch(`/api/size-guides/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+        if (!await dialogs.confirm({ title: 'Excluir guia de medidas', message: 'Excluir este guia? Esta ação não poderá ser desfeita.' })) return;
+        await base44.entities.SizeGuide.delete(id);
         load();
     };
 
