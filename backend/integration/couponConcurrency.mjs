@@ -74,8 +74,8 @@ try {
     const rejected = competing.find(result => result.status === 'rejected');
     assert.equal(rejected.reason.status, 400);
     assert.match(rejected.reason.message, /Cupom esgotado/);
-    assert.deepEqual(await state(last), { uses: 1, orders: 1, sales: 1, stock: 1 });
-    console.log('LAST USE: 1 winner, 1 controlled rejection, 1 use, 1 order, stock 1/2');
+    assert.deepEqual(await state(last), { uses: 1, orders: 1, sales: 0, stock: 2 });
+    console.log('LAST USE: 1 winner, 1 controlled rejection, 1 use, 1 order, no sale before payment');
 
     const same = await fixture('SAMEKEY');
     const sameUser = await user('same-key');
@@ -85,8 +85,8 @@ try {
         placeOrder(sameUser, request(same), key),
     ]);
     assert.equal(sameA.id, sameB.id);
-    assert.deepEqual(await state(same), { uses: 1, orders: 1, sales: 1, stock: 1 });
-    console.log('SAME KEY: same order, one use and one stock movement');
+    assert.deepEqual(await state(same), { uses: 1, orders: 1, sales: 0, stock: 2 });
+    console.log('SAME KEY: same order, one use and no stock movement before payment');
 
     const rollback = await fixture('ROLLBACK');
     const rollbackUser = await user('rollback');
@@ -110,7 +110,7 @@ try {
     assert.deepEqual(await state(rollback), { uses: 0, orders: 0, sales: 0, stock: 2 });
     await pool.query('DROP TRIGGER audit_coupon_rollback ON audit_logs');
     await pool.query('DROP FUNCTION audit_reject_after_coupon_usage()');
-    console.log('ROLLBACK: use, order and stock movement absent; stock restored 2/2');
+    console.log('ROLLBACK: use, order and stock movement absent; stock remains 2/2');
 
     const exhausted = await fixture('EXHAUSTED');
     const exhaustedA = await user('exhausted-a');
@@ -120,7 +120,7 @@ try {
         placeOrder(exhaustedB, request(exhausted), `exhausted-b-${runId}-0001`),
         error => error.status === 400 && error.message === 'Cupom esgotado'
     );
-    assert.deepEqual(await state(exhausted), { uses: 1, orders: 1, sales: 1, stock: 1 });
+    assert.deepEqual(await state(exhausted), { uses: 1, orders: 1, sales: 0, stock: 2 });
     console.log('EXHAUSTED: rejected before order/payment; no extra stock movement');
 
     const firstPurchase = await fixture('FIRSTPURCHASE', 2, true);
@@ -131,7 +131,7 @@ try {
     ]);
     assert.equal(firstPurchaseResults.filter(result => result.status === 'fulfilled').length, 1);
     assert.match(firstPurchaseResults.find(result => result.status === 'rejected').reason.message, /primeira compra/);
-    assert.deepEqual(await state(firstPurchase), { uses: 1, orders: 1, sales: 1, stock: 1 });
+    assert.deepEqual(await state(firstPurchase), { uses: 1, orders: 1, sales: 0, stock: 2 });
     console.log('FIRST PURCHASE: concurrent customer orders cannot both use the coupon');
 } finally {
     await pool.end();
