@@ -29,6 +29,7 @@ import installmentRoutes from './installments.js';
 import { readInstallmentSettings, publicInstallmentPolicy } from '../lib/installmentSettings.js';
 import { effectiveInstallmentPolicy, installmentOffers, confirmInstallmentOffer, installmentVersion, installmentSettingsLock, installmentError } from '../lib/installmentPolicy.js';
 import { assertNoWithdrawalRequest } from '../lib/withdrawalRequest.js';
+import { reserveOrderStockInTransaction, releaseOrderStockInTransaction } from '../lib/deferredStock.js';
 
 const router = Router();
 router.use(installmentRoutes);
@@ -298,7 +299,7 @@ router.get('/payments/methods', auth, async (req, res) => {
             },
             methods,
             ...(installmentConfig ? publicInstallmentPolicy(installmentConfig) : creditInstallmentPolicy(payConfig)),
-            public_key: process.env.MERCADO_PAGO_PUBLIC_KEY || null,
+            public_key: mp.getMercadoPagoPublicKey(),
             environment: mp.getMercadoPagoEnvironment(),
         });
     } catch (err) {
@@ -387,14 +388,19 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
         attemptLock = await pool.connect();
         await attemptLock.query(`SELECT pg_advisory_lock(${orderAttemptLockSql})`, [order.id]);
         await assertNoWithdrawalRequest(attemptLock, order.id);
-        const { rows: reserved } = await attemptLock.query(
-            `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'pix'
-             WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
-               AND mercado_pago_order_id IS NULL AND payment_attempt_started_at IS NULL
-               AND payment_method = 'pix' AND total = $2 RETURNING id`,
-            [order.id, order.total]);
-        if (!reserved.length) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
-        await attemptLock.query("UPDATE orders SET snapshot = jsonb_set(COALESCE(snapshot,'{}'::jsonb),'{payment_context}',$2::jsonb) WHERE id = $1", [order.id, JSON.stringify(paymentContext)]);
+        const pixReserved = await withAttemptTransaction(attemptLock, async client => {
+            const { rows: reserved } = await client.query(
+                `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'pix'
+                 WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
+                   AND mercado_pago_order_id IS NULL AND payment_attempt_started_at IS NULL
+                   AND payment_method = 'pix' AND total = $2 RETURNING id`,
+                [order.id, order.total]);
+            if (!reserved.length) return false;
+            await reserveOrderStockInTransaction(client, order);
+            await client.query("UPDATE orders SET snapshot = jsonb_set(COALESCE(snapshot,'{}'::jsonb),'{payment_context}',$2::jsonb) WHERE id = $1", [order.id, JSON.stringify(paymentContext)]);
+            return true;
+        });
+        if (!pixReserved) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
 
         diagnostic.setStage('build_payload');
         const idempotencyKey = `pix-${order.id}`;
@@ -428,6 +434,7 @@ router.post('/orders/:id/payment/pix', auth, async (req, res) => {
                 diagnostic.setStage('commit_transaction', result.mp_order_id);
                 return applied.payment_status;
             }
+            if (internalStatus === 'rejected') await releaseOrderStockInTransaction(client, current);
             await client.query(
                 `UPDATE orders SET payment_provider = 'mercado_pago', mercado_pago_order_id = $1,
                     mercado_pago_payment_id = $2, mercado_pago_status = $3, mercado_pago_status_detail = $4,
@@ -546,22 +553,28 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
                 const { rows: currentMethods } = await client.query("SELECT value FROM settings WHERE key = 'payments' FOR SHARE");
                 validateCardPaymentChoice(order.payment_method, methods, payment_method_id, requestedInstallments,
                     { ...(currentMethods[0]?.value || {}), max_installments: effectiveInstallmentPolicy(current, mp.getMercadoPagoEnvironment()).max_installments }, order.total);
-                return client.query(`UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'card',
+                const result = await client.query(`UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'card',
                     snapshot = jsonb_set(COALESCE(snapshot,'{}'::jsonb),'{card_installment_offer}',$4::jsonb)
                     WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
                     AND mercado_pago_order_id IS NULL AND payment_attempt_started_at IS NULL
                     AND payment_method = $2 AND total = $3 RETURNING id`, [order.id, order.payment_method, order.total, JSON.stringify(confirmedOffer)]);
+                if (result.rows.length) await reserveOrderStockInTransaction(client, order);
+                return result;
             });
             if (!reserved.rows.length) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
             order.snapshot = { ...order.snapshot, card_installment_offer: confirmedOffer };
         } else {
-            const { rows: reserved } = await attemptLock.query(
-                `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'card'
-                 WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
-                   AND mercado_pago_order_id IS NULL AND payment_attempt_started_at IS NULL
-                   AND payment_method = $2 AND total = $3 RETURNING id`,
-                [order.id, order.payment_method, order.total]);
-            if (!reserved.length) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
+            const reserved = await withAttemptTransaction(attemptLock, async client => {
+                const result = await client.query(
+                    `UPDATE orders SET payment_attempt_started_at = now(), payment_attempt_method = 'card'
+                     WHERE id = $1 AND status <> 'cancelado' AND payment_status = 'pending'
+                       AND mercado_pago_order_id IS NULL AND payment_attempt_started_at IS NULL
+                       AND payment_method = $2 AND total = $3 RETURNING id`,
+                    [order.id, order.payment_method, order.total]);
+                if (result.rows.length) await reserveOrderStockInTransaction(client, order);
+                return result.rows.length;
+            });
+            if (!reserved) return res.status(409).json({ error: 'Pagamento existente ou pedido em cancelamento' });
         }
 
         const idempotencyKey = `card-${order.id}`;

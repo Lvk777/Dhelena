@@ -38,7 +38,9 @@ const COMMUNICATION_CAUSES = new Set(['get_card_bin_payment_methods_failed', 'ge
 
 export function classifyCardBrickError(error) {
     // Do not retain SDK messages, field values, token details or raw responses.
-    const cause = typeof error?.cause === 'string' && /^[a-z_]{1,80}$/.test(error.cause) ? error.cause : null;
+    const rawCause = error?.cause;
+    const cause = VALIDATION_CAUSES.has(rawCause) || INITIALIZATION_CAUSES.has(rawCause)
+        || TOKEN_CAUSES.has(rawCause) || COMMUNICATION_CAUSES.has(rawCause) ? rawCause : null;
     const category = VALIDATION_CAUSES.has(cause) ? 'validation' : TOKEN_CAUSES.has(cause) ? 'tokenization'
         : COMMUNICATION_CAUSES.has(cause) ? 'communication'
             : INITIALIZATION_CAUSES.has(cause) || error?.type === 'critical' ? 'initialization' : 'recoverable';
@@ -47,24 +49,29 @@ export function classifyCardBrickError(error) {
 
 // Cleanup also covers controllers resolving after timeout/navigation/StrictMode.
 export function mountCardBrick({ publicKey, amount, isDebit, maxInstallments, containerId,
-    onReady, onError, onSubmit, onBinChange = (_bin) => {}, onIssue = (_issue) => {}, loadSdk = loadMercadoPagoSdk, timeoutMs = 20000 }) {
+    onReady, onError, onSubmit, onBinChange = (_bin) => {}, onIssue = (_issue) => {},
+    onDiagnostic = (_issue) => {}, loadSdk = loadMercadoPagoSdk, timeoutMs = 20000 }) {
     let disposed = false;
     let ready = false;
     let controller;
-    const fatal = () => {
+    const fatal = (message = 'Não foi possível carregar o formulário de cartão. Tente novamente.', issue = { category: 'initialization', cause: null }) => {
         if (disposed) return;
         disposed = true;
         clearTimeout(timer);
-        controller?.unmount?.();
-        onError('Não foi possível carregar o formulário de cartão. Tente novamente.');
+        try { Promise.resolve(controller?.unmount?.()).catch(() => {}); } catch { /* already disposed */ }
+        onDiagnostic(issue);
+        onError(message);
     };
     const handleError = event => {
         if (disposed) return;
         const issue = classifyCardBrickError(event);
-        if (issue.critical) fatal();
+        if (issue.critical || (!ready && issue.category !== 'validation')) {
+            fatal('Não foi possível iniciar o formulário de cartão. Tente novamente.', issue);
+        }
         else onIssue(issue);
     };
-    const timer = setTimeout(fatal, timeoutMs);
+    const timer = setTimeout(() => fatal('O formulário demorou para carregar. Tente novamente.',
+        { category: 'timeout', cause: null }), timeoutMs);
     const started = Promise.resolve().then(async () => {
         if (!(Number(amount) > 0)) throw new Error('Valor inválido');
         const mp = await loadSdk(publicKey);
@@ -82,8 +89,12 @@ export function mountCardBrick({ publicKey, amount, isDebit, maxInstallments, co
                 } },
         });
         if (disposed) await controller?.unmount?.();
-    }).catch(fatal);
-    return { started, dispose: () => { disposed = true; clearTimeout(timer); controller?.unmount?.(); } };
+    }).catch(() => fatal('Não foi possível carregar o formulário de cartão. Tente novamente.',
+        { category: 'sdk_load', cause: null }));
+    return { started, dispose: () => {
+        disposed = true; clearTimeout(timer);
+        try { Promise.resolve(controller?.unmount?.()).catch(() => {}); } catch { /* already disposed */ }
+    } };
 }
 
 export function safeChallengeUrl(value) {

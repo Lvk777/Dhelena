@@ -12,6 +12,8 @@ import { calculateCheckoutShippingCost, calculateServerOrderTotal, resolveCatalo
 import { reserveVariantStock } from './lib/variantStock.js';
 import { getPixCapability } from './lib/pixAvailability.js';
 import { getMercadoPagoReadiness } from './services/mercadoPago.js';
+import { reservationExpiryAt } from './lib/orderReservationExpiry.js';
+import { isDeferredStockOrder, releaseOrderStockInTransaction } from './lib/deferredStock.js';
 
 // ─── placeOrder: atomic order creation ──────────────────────────────
 export async function placeOrder(userId, body, idempotencyKey, {
@@ -57,31 +59,26 @@ export async function placeOrder(userId, body, idempotencyKey, {
 
         let subtotal = 0;
         const orderItems = [];
+        const lockedProducts = new Map();
 
         // Process each item: lock product, verify stock, calculate price
         for (const item of items) {
             const { productId, colorId, size, qty } = item;
             // Lock product row
-            const { rows: prodRows } = await client.query('SELECT * FROM products WHERE id = $1 FOR UPDATE', [productId]);
-            if (prodRows.length === 0) throw Object.assign(new Error(`Produto não encontrado: ${productId}`), { status: 404 });
-
-            const product = prodRows[0];
+            if (!lockedProducts.has(productId)) {
+                const { rows: prodRows } = await client.query('SELECT * FROM products WHERE id = $1 FOR UPDATE', [productId]);
+                if (prodRows.length === 0) throw Object.assign(new Error(`Produto não encontrado: ${productId}`), { status: 404 });
+                lockedProducts.set(productId, structuredClone(prodRows[0]));
+            }
+            const product = lockedProducts.get(productId);
 
             // Resolve price and stock exclusively from the locked catalog row.
-            const colors = product.colors || [];
-            const { color, currentStock, quantity, unitPrice, itemSubtotal } = resolveCatalogLine(product, { colorId, size, qty });
+            const { color, quantity, unitPrice, itemSubtotal } = resolveCatalogLine(product, { colorId, size, qty });
             subtotal = (checkoutCents(subtotal) + checkoutCents(itemSubtotal)) / 100;
 
-            // Update stock in colors JSONB
+            // Validate repeated variants against a detached copy; checkout creates
+            // no reservation, stock movement or sale before a payment attempt.
             reserveVariantStock(product, color, size, quantity);
-            await client.query('UPDATE products SET colors = $1, sold_count = sold_count + $2, updated_date = now() WHERE id = $3', [JSON.stringify(colors), quantity, productId]);
-
-            // Record stock movement
-            await client.query(
-                `INSERT INTO stock_movements (product_id, type, quantity, color_id, size, previous_stock, new_stock)
-                 VALUES ($1, 'sale', $2, $3, $4, $5, $6)`,
-                [productId, -quantity, colorId, size, currentStock, currentStock - quantity]
-            );
 
             orderItems.push({
                 product_id: productId,
@@ -199,6 +196,7 @@ export async function placeOrder(userId, body, idempotencyKey, {
         const orderNum = `DH-${year}-${String(Number(countRows[0].last_number) + 1).padStart(6, '0')}`;
 
         // Build snapshot
+        const reservationExpiresAt = reservationExpiryAt(env);
         const snapshot = {
             order_number: orderNum,
             items: orderItems.map(i => ({ ...i, unit_price: Number(i.unit_price), subtotal: Number(i.subtotal) })),
@@ -223,6 +221,8 @@ export async function placeOrder(userId, body, idempotencyKey, {
             shipping_address,
             customer: customer || {},
             idempotency_fingerprint: idempotencyFingerprint,
+            stock_model: 'deferred_sale_v1',
+            ...(reservationExpiresAt ? { reservation_expires_at: reservationExpiresAt } : {}),
             created_at: new Date().toISOString(),
         };
 
@@ -290,8 +290,11 @@ export async function cancelOrderInTransaction(client, order, userId = null, res
     if (!cancellable) {
         throw Object.assign(new Error('Pedido com pagamento no provedor exige conciliação antes do cancelamento'), { status: 409 });
     }
-    const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id = $1', [orderId]);
-    for (const item of items) await restoreStock(client, order, item, item.quantity, 'cancellation', null, userId);
+    if (isDeferredStockOrder(order)) await releaseOrderStockInTransaction(client, order);
+    else {
+        const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id = $1', [orderId]);
+        for (const item of items) await restoreStock(client, order, item, item.quantity, 'cancellation', null, userId);
+    }
 
     const { rows: updated } = await client.query(
         "UPDATE orders SET status = 'cancelado', updated_at = now() WHERE id = $1 RETURNING *",
@@ -299,7 +302,7 @@ export async function cancelOrderInTransaction(client, order, userId = null, res
     );
     await client.query(
         `INSERT INTO order_events (order_id, event, description, metadata)
-         VALUES ($1, 'order_cancelled', 'Pedido cancelado; estoque devolvido', $2)`,
+         VALUES ($1, 'order_cancelled', 'Pedido cancelado; reserva liberada quando aplicável', $2)`,
         [orderId, JSON.stringify(notificationMetadata())]
     );
     await client.query(

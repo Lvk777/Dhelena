@@ -16,7 +16,8 @@
     "test:operations-postgres": "node integration/operationalReadiness.mjs",
     "test:coupon-postgres": "node integration/couponConcurrency.mjs",
     "test:security-postgres": "node supabase/security/rehearse_local.mjs",
-    "test:launch-postgres": "node integration/launchZeroReadiness.mjs"
+    "test:launch-postgres": "node integration/launchZeroReadiness.mjs",
+    "test:stock-postgres": "node integration/runReservationRehearsals.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

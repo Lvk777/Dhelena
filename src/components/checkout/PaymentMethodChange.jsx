@@ -38,7 +38,7 @@ export default function PaymentMethodChange({ order, onChanged, blocked = false 
     return <div className="my-6 border border-border p-4 space-y-4">
         {!open ? <button type="button" className="btn-outline min-h-11" onClick={start}>Alterar método de pagamento</button> : <>
             <h3 className="font-heading text-xl">Alterar método de pagamento</h3>
-            <p className="text-sm text-muted-foreground">A alteração preserva este pedido, o estoque reservado e o cupom. Confira o novo total antes de confirmar.</p>
+            <p className="text-sm text-muted-foreground">A alteração preserva este pedido e o cupom. O estoque só é reservado ao iniciar o pagamento. Confira o novo total antes de confirmar.</p>
             <div role="radiogroup" aria-label="Novo método de pagamento" className="flex flex-wrap gap-3">
                 {[['credito', 'credit_card', 'Cartão de crédito'], ['debito', 'debit_card', 'Cartão de débito à vista'], ['pix', 'pix', 'Pix']].map(([value, type, label]) =>
                     <button type="button" role="radio" aria-checked={method === value} disabled={busy || !methods?.enabled?.[type] || order.payment_method === value}

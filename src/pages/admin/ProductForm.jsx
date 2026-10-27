@@ -232,7 +232,8 @@ export default function ProductForm() {
                         {/* Colors */}
                         <div>
                             <div className="flex items-center justify-between mb-3">
-                                <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Cores e estoque</span>
+                                <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Cores e estoque disponível</span>
+                                <p className="text-xs text-muted-foreground">Informe unidades livres para novas compras. Reservas em pagamento aparecem separadamente no painel Estoque.</p>
                                 <button onClick={addCustomColor} className="text-xs text-[hsl(var(--rose))] flex items-center gap-1"><Plus className="w-3 h-3" /> Cor personalizada</button>
                             </div>
                             <div className="flex flex-wrap gap-2 mb-4">

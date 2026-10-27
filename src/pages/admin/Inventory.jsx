@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Search, SlidersHorizontal, X, ChevronDown, ChevronRight, Package, AlertTriangle, Boxes, History, ArrowUpDown } from "lucide-react";
+import { Search, SlidersHorizontal, X, ChevronDown, ChevronRight, Package, Boxes, History, ArrowUpDown } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { totalStock } from "@/data/products";
 import AdjustStockModal from "@/components/admin/inventory/AdjustStockModal";
@@ -59,16 +59,16 @@ export default function Inventory() {
     }, [products]);
 
     const stats = useMemo(() => {
-        let totalUnits = 0, inStock = 0, low = 0, out = 0;
+        let onHand = 0, reserved = 0, available = 0, sold = 0;
         products.filter((p) => p.status === "published").forEach((p) => {
             const ts = totalStock(p);
-            totalUnits += ts;
-            if (ts === 0) out++;
-            else if (ts <= lowStockThreshold) low++;
-            else inStock++;
+            onHand += p.stock_summary?.on_hand ?? ts;
+            reserved += p.stock_summary?.reserved ?? 0;
+            available += p.stock_summary?.available ?? ts;
+            sold += p.stock_summary?.sold_confirmed_new ?? 0;
         });
-        return { totalUnits, inStock, low, out };
-    }, [products, lowStockThreshold]);
+        return { onHand, reserved, available, sold };
+    }, [products]);
 
     const filtered = useMemo(() => {
         let result = [...products];
@@ -130,12 +130,12 @@ export default function Inventory() {
 
             {/* Stats cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-                <StatCard icon={Boxes} label="Total de unidades" value={stats.totalUnits} />
-                <StatCard icon={Package} label="Produtos em estoque" value={stats.inStock} color="text-emerald-600 dark:text-emerald-400" />
-                <StatCard icon={AlertTriangle} label="Estoque baixo" value={stats.low} color="text-accent" />
-                <StatCard icon={AlertTriangle} label="Esgotados" value={stats.out} color="text-destructive" />
+                <StatCard icon={Boxes} label="Estoque físico" value={stats.onHand} />
+                <StatCard icon={Package} label="Reservadas" value={stats.reserved} color="text-accent" />
+                <StatCard icon={Package} label="Disponíveis" value={stats.available} color="text-emerald-600 dark:text-emerald-400" />
+                <StatCard icon={Boxes} label="Vendas líquidas (novo ciclo)" value={stats.sold} />
             </div>
-            <p className="text-xs text-muted-foreground mb-5">Indicadores da loja publicada. Produtos arquivados permanecem consultáveis abaixo, sem compor o estoque do novo lançamento.</p>
+            <p className="text-xs text-muted-foreground mb-5">Estoque físico = disponível + reservado. Vendas líquidas contam aprovações do novo modelo após devoluções registradas; o contador legado não foi reinterpretado. Produtos arquivados ficam fora destes totais.</p>
 
             {/* Search + Filters */}
             <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -218,7 +218,7 @@ export default function Inventory() {
                                     <th className="py-3 px-3">Produto</th>
                                     <th className="py-3 px-3">SKU</th>
                                     <th className="py-3 px-3 hidden lg:table-cell">Categoria</th>
-                                    <th className="py-3 px-3 text-right">Estoque</th>
+                                    <th className="py-3 px-3 text-right">Físico / reservado / disponível / vendido</th>
                                     <th className="py-3 px-3">Status</th>
                                     <th className="py-3 px-3 hidden lg:table-cell">Atualização</th>
                                     <th className="py-3 px-3 text-right">Ações</th>
@@ -245,7 +245,7 @@ export default function Inventory() {
                                                 </td>
                                                 <td className="py-2.5 px-3 text-muted-foreground font-numeric">{p.sku || "—"}</td>
                                                 <td className="py-2.5 px-3 hidden lg:table-cell text-muted-foreground">{p.category || "—"}</td>
-                                                <td className="py-2.5 px-3 text-right font-numeric font-medium">{ts}</td>
+                                                <td className="py-2.5 px-3 text-right font-numeric font-medium whitespace-nowrap">{p.stock_summary?.on_hand ?? ts} / {p.stock_summary?.reserved ?? 0} / {ts} / {p.stock_summary?.sold_confirmed_new ?? 0}</td>
                                                 <td className="py-2.5 px-3">
                                                     <span className={`text-[10px] uppercase tracking-[0.1em] px-2 py-1 rounded ${badge.cls}`}>{badge.label}</span>
                                                 </td>
@@ -281,7 +281,7 @@ export default function Inventory() {
                                                             </td>
                                                             <td className="py-2 px-3"></td>
                                                             <td className="py-2 px-3 hidden lg:table-cell"></td>
-                                                            <td className="py-2 px-3 text-right font-numeric">{qty}</td>
+                                                            <td className="py-2 px-3 text-right font-numeric whitespace-nowrap">{qty + (p.stock_summary?.reserved_by_variant?.[`${c.id}:${size}`] ?? 0)} / {p.stock_summary?.reserved_by_variant?.[`${c.id}:${size}`] ?? 0} / {qty} / {p.stock_summary?.sold_by_variant?.[`${c.id}:${size}`] ?? 0}</td>
                                                             <td className="py-2 px-3"><span className={`text-[10px] uppercase tracking-[0.1em] px-1.5 py-0.5 rounded ${vBadge.cls}`}>{vBadge.label}</span></td>
                                                             <td className="py-2 px-3 hidden lg:table-cell"></td>
                                                             <td className="py-2 px-3">
@@ -325,7 +325,7 @@ export default function Inventory() {
                                         <span className={`text-[10px] uppercase tracking-[0.1em] px-2 py-1 rounded shrink-0 ${badge.cls}`}>{badge.label}</span>
                                     </div>
                                     <div className="flex items-center justify-between text-sm">
-                                        <span className="text-muted-foreground">Total: <span className="font-numeric font-medium text-foreground">{ts}</span></span>
+                                        <span className="text-muted-foreground">Físico {p.stock_summary?.on_hand ?? ts} · Reservado {p.stock_summary?.reserved ?? 0} · Disponível {ts} · Vendido {p.stock_summary?.sold_confirmed_new ?? 0}</span>
                                         <div className="flex gap-1">
                                             <button onClick={() => openHistory(p.id)} className="p-1.5 hover:bg-muted rounded" title="Histórico"><History className="w-4 h-4" strokeWidth={1.25} /></button>
                                             <button onClick={() => toggleRow(p.id)} className="p-1.5 hover:bg-muted rounded" title="Variações">

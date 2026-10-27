@@ -3,6 +3,7 @@ import { verifyPaymentResourceForOrder, hasPaymentStateChanged } from './payment
 import { shouldApplyProviderPayment } from './afterSalesPolicy.js';
 import { refundInFlight } from './refundState.js';
 import { mapPaymentStatus } from '../services/mercadoPago.js';
+import { confirmOrderStockInTransaction, isDeferredStockOrder, releaseOrderStockInTransaction } from './deferredStock.js';
 
 // This historical TEST attempt requires a fresh read-only preview before any local mutation.
 const MANUAL_RECONCILIATION_ONLY = new Set(['DH-2026-000006']);
@@ -33,7 +34,7 @@ export function reconciliationPlan(order, resource, hasRefundInFlight = false) {
         transaction_status_detail: resource.transaction_status_detail,
         would_set_paid_at: approved && !order.paid_at,
         manual_reconciliation_only: MANUAL_RECONCILIATION_ONLY.has(order.order_number),
-        would_change_stock: false,
+        would_change_stock: isDeferredStockOrder(order) && approved && order.payment_status !== 'approved',
         would_create_charge: false,
     };
 }
@@ -51,6 +52,8 @@ export async function applyVerifiedOrderInTransaction(client, orderId, resource,
     const changed = hasPaymentStateChanged(current, resource, plan.payment_status)
         || (plan.would_set_paid_at || current.status !== plan.order_status || !!current.payment_attempt_started_at);
     if (!changed) return { outcome: 'already_reconciled', payment_status: current.payment_status };
+
+    await confirmOrderStockInTransaction(client, current);
 
     await client.query(
         `UPDATE orders SET payment_provider = 'mercado_pago',
@@ -93,6 +96,7 @@ export async function recordVerifiedNonApprovedOrderInTransaction(client, orderI
     if (!hasPaymentStateChanged(current, resource, paymentStatus) && !current.payment_attempt_started_at) {
         return { outcome: 'already_recorded', payment_status: current.payment_status };
     }
+    if (paymentStatus === 'rejected') await releaseOrderStockInTransaction(client, current);
     await client.query(
         `UPDATE orders SET payment_provider = 'mercado_pago', mercado_pago_order_id = $1,
             mercado_pago_payment_id = $2, mercado_pago_external_reference = $3,

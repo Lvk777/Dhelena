@@ -30,7 +30,7 @@ export default function StockMovementHistory({ open, onClose, productId }) {
             open={open}
             onClose={onClose}
             title="Histórico de movimentações"
-            subtitle="Registro completo de entradas, saídas e ajustes"
+            subtitle="Movimentos legados e ajustes; reservas e vendas do novo ciclo aparecem nos totais de Estoque"
             size="xl"
             icon={History}
             footer={<button onClick={onClose} className="btn-ghost">Fechar</button>}

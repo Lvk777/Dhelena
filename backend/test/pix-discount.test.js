@@ -229,17 +229,17 @@ test('repeated variants are checked against aggregate stock without reserving it
     assert.equal(f.state.movements.length, 0);
 });
 
-test('final order matches preview, debits stock once, and retry does not reprice', async () => {
+test('final order matches preview without reserving stock, and retry does not reprice', async () => {
     const f = fixture({ price: 199.90 });
     const preview = await f.preview(request());
     const body = request({ expected_pricing: ack(preview), subtotal: 1, discount: 199, total: 1 });
     const order = await f.place(body);
     assert.deepEqual(ack(order), ack(preview));
     assert.equal(order.snapshot.discount_breakdown.pix, 10);
-    assert.equal(f.state.products[0].colors[0].stock.M, 2);
-    assert.equal(f.state.movements.length, 1);
+    assert.equal(f.state.products[0].colors[0].stock.M, 3);
+    assert.equal(f.state.movements.length, 0);
     assert.equal((await f.place(body)).id, order.id);
-    assert.equal(f.state.orders.length, 1); assert.equal(f.state.movements.length, 1);
+    assert.equal(f.state.orders.length, 1); assert.equal(f.state.movements.length, 0);
 });
 
 test('missing or stale preview causes transactional rollback without losing stock', async () => {

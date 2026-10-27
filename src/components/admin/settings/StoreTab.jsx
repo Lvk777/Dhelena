@@ -19,7 +19,7 @@ export default function StoreTab({ data, onChange }) {
             </AdminFormSection>
             <AdminFormSection title="Controle de estoque">
                 <div className="sm:col-span-2 space-y-1">
-                    <p className="text-sm text-muted-foreground">O checkout confirma e reserva estoque no servidor antes de criar o pedido.</p>
+                    <p className="text-sm text-muted-foreground">O checkout apenas consulta disponibilidade. A reserva ocorre ao iniciar o pagamento; a venda é contabilizada após confirmação oficial.</p>
                     <AdminToggle label="Mostrar alerta de estoque baixo" checked={data.show_low_stock} onChange={(v) => set("show_low_stock", v)} description="Exibe alerta no painel quando o estoque está abaixo do limite" />
                 </div>
                 <AdminInput label="Limite de estoque baixo" type="number" value={data.low_stock_threshold} onChange={(v) => set("low_stock_threshold", parseInt(v) || 0)} description="Unidades abaixo das quais o estoque é considerado baixo" />

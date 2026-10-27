@@ -61,6 +61,7 @@ export default function CardPaymentBrick({ order, publicKey, amount, maxInstallm
             },
             onReady: () => { setLoading(false); setLoadError(''); },
             onError: message => { setLoadError(message); setLoading(false); },
+            onDiagnostic: issue => console.warn('[Card Brick] Falha na inicialização', issue.category, issue.cause || 'sem_causa'),
             onIssue: issue => {
                 // Validation belongs to the SDK's inline field messages.
                 setSdkNotice(issue.category === 'validation' ? '' : issue.category === 'tokenization'

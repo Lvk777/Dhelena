@@ -1,5 +1,6 @@
 import { reconciliationPlan } from './paymentReconciliation.js';
 import { refundInFlight } from './refundState.js';
+import { isDeferredStockOrder } from './deferredStock.js';
 
 const HISTORICAL_ORDER = 'DH-2026-000006';
 
@@ -23,6 +24,16 @@ export async function loadLocalPaymentEvidence(db, order) {
         'SELECT id, product_id, color_id, size, quantity FROM order_items WHERE order_id = $1 ORDER BY id', [order.id]);
     const stockItems = [];
     for (const item of items) {
+        if (isDeferredStockOrder(order)) {
+            const { rows: ledger } = await db.query(
+                `SELECT status, quantity, created_at FROM stock_reservations WHERE order_item_id = $1`, [item.id]);
+            stockItems.push({ product_id: item.product_id, color_id: item.color_id, size: item.size,
+                purchased_quantity: Number(item.quantity), reservation_count: ledger.length,
+                reservation: ledger[0] ? { status: ledger[0].status, quantity: Number(ledger[0].quantity),
+                    attribution: 'order_item_id', created_at: ledger[0].created_at } : null,
+                stock_model: 'deferred_sale_v1' });
+            continue;
+        }
         const { rows: products } = await db.query('SELECT colors FROM products WHERE id = $1', [item.product_id]);
         const color = colorsOf(products[0]?.colors).find(entry => String(entry.id) === String(item.color_id));
         const currentStock = color?.stock?.[item.size];

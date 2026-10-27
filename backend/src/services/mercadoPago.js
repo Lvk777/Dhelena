@@ -25,12 +25,23 @@ export function getMercadoPagoMode() {
     return mode === 'test' || mode === 'production' ? mode : 'INDETERMINADO';
 }
 
+export function getMercadoPagoPublicKey(env = process.env) {
+    if (env.MERCADO_PAGO_MODE === 'production') {
+        // A generic key may still belong to TEST after the private credentials switch.
+        return env.MERCADO_PAGO_PRODUCTION_PUBLIC_KEY?.trim() || null;
+    }
+    if (env.MERCADO_PAGO_MODE === 'test') {
+        return env.MERCADO_PAGO_TEST_PUBLIC_KEY?.trim() || env.MERCADO_PAGO_PUBLIC_KEY?.trim() || null;
+    }
+    return null;
+}
+
 export function getMercadoPagoReadiness() {
     const context = activePaymentContext();
     return {
         mode: getMercadoPagoMode(),
         configured: !!context,
-        public_key_configured: !!process.env.MERCADO_PAGO_PUBLIC_KEY,
+        public_key_configured: !!getMercadoPagoPublicKey(),
         webhook_configured: !!context,
     };
 }

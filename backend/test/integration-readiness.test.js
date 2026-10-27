@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { encrypt, decrypt } from '../src/lib/crypto.js';
-import { getMercadoPagoMode, getMercadoPagoEnvironment, getMercadoPagoReadiness } from '../src/services/mercadoPago.js';
+import { getMercadoPagoMode, getMercadoPagoEnvironment, getMercadoPagoReadiness, getMercadoPagoPublicKey } from '../src/services/mercadoPago.js';
+import { getPixCapability } from '../src/lib/pixAvailability.js';
 import { createMelhorEnvioTokenManager, MELHOR_ENVIO_USER_AGENT_FALLBACK } from '../src/services/melhorEnvioToken.js';
 
 const KEYS = [
     'MERCADO_PAGO_MODE', 'MERCADO_PAGO_ACCESS_TOKEN', 'MERCADO_PAGO_WEBHOOK_SECRET', 'MERCADO_PAGO_APPLICATION_ID',
+    'MERCADO_PAGO_PUBLIC_KEY', 'MERCADO_PAGO_TEST_PUBLIC_KEY', 'MERCADO_PAGO_PRODUCTION_PUBLIC_KEY',
+    'MERCADO_PAGO_TEST_ACCESS_TOKEN', 'MERCADO_PAGO_TEST_WEBHOOK_SECRET', 'MERCADO_PAGO_TEST_APPLICATION_ID',
+    'MERCADO_PAGO_PRODUCTION_ACCESS_TOKEN', 'MERCADO_PAGO_PRODUCTION_WEBHOOK_SECRET', 'MERCADO_PAGO_PRODUCTION_APPLICATION_ID',
     'MELHOR_ENVIO_MODE', 'MELHOR_ENVIO_TOKEN_MODE', 'MELHOR_ENVIO_TOKEN',
     'MELHOR_ENVIO_CLIENT_ID', 'MELHOR_ENVIO_CLIENT_SECRET', 'MELHOR_ENVIO_REDIRECT_URI',
     'MELHOR_ENVIO_WEBHOOK_SECRET', 'MELHOR_ENVIO_USER_AGENT', 'INTEGRATION_ENCRYPTION_KEY',
@@ -76,6 +80,26 @@ test('Mercado Pago mode is explicit and APP_USR is not environment evidence', as
     await withEnv({ MERCADO_PAGO_MODE: 'production', MERCADO_PAGO_ACCESS_TOKEN: 'APP_USR-private',
         MERCADO_PAGO_WEBHOOK_SECRET: 'synthetic-signature-key' }, () => {
         assert.equal(getMercadoPagoReadiness().configured, false);
+    });
+});
+
+test('production cards require their own public key; Pix credentials remain independent', async () => {
+    const credentials = { MERCADO_PAGO_MODE: 'production', MERCADO_PAGO_PRODUCTION_ACCESS_TOKEN: 'private-production',
+        MERCADO_PAGO_PRODUCTION_WEBHOOK_SECRET: 'synthetic-secret', MERCADO_PAGO_PRODUCTION_APPLICATION_ID: '54321',
+        MERCADO_PAGO_PUBLIC_KEY: 'public-test' };
+    await withEnv(credentials, () => {
+        assert.equal(getMercadoPagoPublicKey(), null);
+        assert.equal(getMercadoPagoReadiness().public_key_configured, false);
+        assert.equal(getMercadoPagoReadiness().configured, true);
+        assert.equal(getPixCapability({ pix_enabled: true }, getMercadoPagoReadiness()).enabled, true);
+    });
+    await withEnv({ ...credentials, MERCADO_PAGO_PRODUCTION_PUBLIC_KEY: 'public-production' }, () => {
+        assert.equal(getMercadoPagoPublicKey(), 'public-production');
+        assert.equal(getMercadoPagoReadiness().public_key_configured, true);
+    });
+    await withEnv({ MERCADO_PAGO_MODE: 'test', MERCADO_PAGO_PUBLIC_KEY: 'public-test',
+        MERCADO_PAGO_TEST_PUBLIC_KEY: 'public-test-scoped' }, () => {
+        assert.equal(getMercadoPagoPublicKey(), 'public-test-scoped');
     });
 });
 

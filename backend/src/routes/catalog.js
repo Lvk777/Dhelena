@@ -5,8 +5,49 @@ import { logAudit } from '../services.js';
 import { searchLimiter } from '../middleware/rateLimiters.js';
 import { publicSetting, validateSettingValue } from '../lib/publicSettings.js';
 import { safeNavigation } from '../lib/navigation.js';
+import { effectiveSizes, stockForSize } from '../lib/variantStock.js';
 
 const router = Router();
+
+export async function withStockSummary(products, db = pool) {
+    if (!products.length) return products;
+    const { rows } = await db.query(
+        `SELECT r.product_id, r.color_id, r.size, r.status,
+                SUM(CASE WHEN r.status = 'sold' THEN r.quantity - COALESCE(restored.quantity, 0)
+                         ELSE r.quantity END)::integer AS quantity
+         FROM stock_reservations r
+         LEFT JOIN LATERAL (
+             SELECT COALESCE(SUM(quantity), 0)::integer AS quantity
+             FROM stock_restorations WHERE order_item_id = r.order_item_id
+         ) restored ON true
+         WHERE r.product_id = ANY($1::uuid[]) AND r.status IN ('active', 'sold')
+         GROUP BY r.product_id, r.color_id, r.size, r.status`,
+        [products.map(product => product.id)]);
+    const byProduct = new Map();
+    for (const row of rows) {
+        const summary = byProduct.get(row.product_id) || { reserved: 0, sold: 0, variants: {}, soldVariants: {} };
+        const key = `${row.color_id}:${row.size}`;
+        if (row.status === 'active') {
+            summary.reserved += row.quantity;
+            summary.variants[key] = (summary.variants[key] || 0) + row.quantity;
+        } else {
+            summary.sold += row.quantity;
+            summary.soldVariants[key] = (summary.soldVariants[key] || 0) + row.quantity;
+        }
+        byProduct.set(row.product_id, summary);
+    }
+    return products.map(product => {
+        const summary = byProduct.get(product.id) || { reserved: 0, sold: 0, variants: {}, soldVariants: {} };
+        const available = (product.colors || []).reduce((sum, color) =>
+            sum + effectiveSizes(product).reduce((value, size) => value + stockForSize(product, color, size), 0), 0);
+        return { ...product, stock_summary: {
+            on_hand: available + summary.reserved, reserved: summary.reserved, available,
+            sold_confirmed_new: summary.sold, reserved_by_variant: summary.variants,
+            sold_by_variant: summary.soldVariants,
+            legacy_sold_count: product.sold_count,
+        } };
+    });
+}
 
 // Identifiers cannot be bound as SQL parameters. Keep writable columns
 // explicit even for admin requests; never interpolate a JSON key directly.
@@ -194,7 +235,7 @@ router.get('/products', searchLimiter, async (req, res, next) => {
         query += ` LIMIT ${limit} OFFSET ${(page - 1) * limit}`;
 
         const { rows } = await pool.query(query, allParams);
-        res.json(rows);
+        res.json(isAdmin ? await withStockSummary(rows) : rows);
     } catch (err) { next(err); }
 });
 
@@ -206,7 +247,7 @@ router.get('/products/:id', async (req, res, next) => {
         if (req.user?.role !== 'admin' && rows[0].status !== 'published') {
             return res.status(404).json({ error: 'Produto não encontrado' });
         }
-        res.json(rows[0]);
+        res.json(req.user?.role === 'admin' ? (await withStockSummary(rows))[0] : rows[0]);
     } catch (err) { next(err); }
 });
 

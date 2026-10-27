@@ -10,6 +10,7 @@ import {
 import { isAuthorizedTestOrder, isAuthorizedTestRefund } from './lib/testRefundScope.js';
 import { isRefundPhysicalBaseline, loadRefundPhysicalState } from './lib/refundPhysicalState.js';
 import { restoreVariantStock } from './lib/variantStock.js';
+import { isDeferredStockOrder, releaseOrderStockInTransaction } from './lib/deferredStock.js';
 
 const queryOne = async (client, sql, values) => (await client.query(sql, values)).rows[0];
 const processedAmount = rows => rows.filter(row => row.status === 'processed')
@@ -310,8 +311,11 @@ export async function cancelPendingProviderOrder(orderId, actorId, provider = mp
             || ['approved', 'processed', 'refunded'].includes(remote.payment?.status)) {
             throw afterSalesError('Pagamento não foi confirmado como cancelado no provedor');
         }
-        const items = (await client.query('SELECT * FROM order_items WHERE order_id = $1', [orderId])).rows;
-        for (const item of items) await restoreStock(client, order, item, item.quantity, 'cancellation', null, actorId);
+        if (isDeferredStockOrder(order)) await releaseOrderStockInTransaction(client, order);
+        else {
+            const items = (await client.query('SELECT * FROM order_items WHERE order_id = $1', [orderId])).rows;
+            for (const item of items) await restoreStock(client, order, item, item.quantity, 'cancellation', null, actorId);
+        }
         const updated = await queryOne(client,
             `UPDATE orders SET status = 'cancelado', payment_status = 'rejected',
              mercado_pago_status = $1, updated_at = now() WHERE id = $2 RETURNING *`,

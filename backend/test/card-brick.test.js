@@ -130,20 +130,42 @@ for (const cause of ['incorrect_initialization', 'container_not_found', 'fields_
     });
 }
 
-test('non-critical pre-ready error does not mark the form ready or suppress real startup timeout', async t => {
-    t.mock.timers.enable({ apis: ['setTimeout'] }); let callbacks; let errors = 0; let ready = 0;
+test('pre-ready communication error fails promptly and leaves a safe retry path', async () => {
+    let callbacks; let errors = 0; let ready = 0; let unmounts = 0; const diagnostics = [];
     const mounted = mountCardBrick({ amount: 50, containerId: 'not-ready', onReady: () => ready++, onError: () => errors++,
+        onDiagnostic: issue => diagnostics.push(issue),
         onSubmit: async () => {}, loadSdk: async () => ({ bricks: () => ({ create: async (_type, _id, settings) => {
-            callbacks = settings.callbacks; return { unmount: () => {} };
+            callbacks = settings.callbacks; return { unmount: () => unmounts++ };
         } }) }) });
     await mounted.started; callbacks.onError({ type: 'non_critical', cause: 'get_payment_methods_failed' });
-    assert.equal(ready, 0); assert.equal(errors, 0); t.mock.timers.tick(20001); assert.equal(errors, 1);
+    assert.equal(ready, 0); assert.equal(errors, 1); assert.equal(unmounts, 1);
+    assert.deepEqual(diagnostics, [{ category: 'communication', cause: 'get_payment_methods_failed', critical: false }]);
     callbacks.onReady(); assert.equal(ready, 0);
+});
+
+for (const isDebit of [false, true]) test(`${isDebit ? 'debit' : 'credit'} SDK failure can retry without submitting payment`, async () => {
+    let loads = 0; let ready = 0; let submits = 0; const errors = [];
+    const loadSdk = async () => {
+        if (++loads === 1) throw new Error('synthetic CDN failure with private details');
+        return { bricks: () => ({ create: async (_type, _id, settings) => {
+            settings.callbacks.onReady(); return { unmount: () => {} };
+        } }) };
+    };
+    const options = { publicKey: 'mock-public', amount: 16.15, maxInstallments: 1, isDebit,
+        onReady: () => ready++, onError: message => errors.push(message), onSubmit: async () => submits++, loadSdk };
+    const first = mountCardBrick({ ...options, containerId: 'first' }); await first.started;
+    assert.equal(ready, 0); assert.equal(errors.length, 1);
+    assert.equal(errors[0].includes('private details'), false);
+    first.dispose();
+    const retried = mountCardBrick({ ...options, containerId: 'retry' }); await retried.started;
+    assert.equal(ready, 1); assert.equal(submits, 0); retried.dispose();
 });
 
 test('error classification never retains PAN, CVV, SDK message or raw provider data', () => {
     const event = { type: 'non_critical', cause: 'missing_payment_information', message: 'synthetic PAN and CVV', raw: { token: 'mock-private' } };
     assert.deepEqual(classifyCardBrickError(event), { category: 'validation', cause: 'missing_payment_information', critical: false });
+    assert.deepEqual(classifyCardBrickError({ type: 'non_critical', cause: 'syntheticsecrettoken' }),
+        { category: 'recoverable', cause: null, critical: false });
     assert.equal(classifyCardBrickError({ type: 'critical', cause: 'new_fatal_sdk_error' }).critical, true);
     assert.equal(classifyCardBrickError({ type: 'non_critical', cause: 'new_sdk_error' }).critical, false);
 });
