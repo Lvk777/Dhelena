@@ -12,10 +12,11 @@ import PositionBanner from "@/components/PositionBanner";
 import { base44 } from "@/api/base44Client";
 import { selectedDeliveryCost, shippingContextKey } from "@/lib/shippingSelection";
 import { deliveryEstimateLabel, DELIVERY_BUSINESS_DAYS_NOTE } from '@/lib/deliveryEstimate';
+import { reconcileCart } from '@/lib/cartReconciliation';
 
 export default function Cart() {
     const { cart, clearCart, removeFromCart, updateQty, showToast, couponCode, couponResult, couponLoading, applyCoupon: applyCouponCtx, clearCoupon } = useStore();
-    const { products, loading: catalogLoading } = useCatalog();
+    const { products, loading: catalogLoading, error: catalogError, reload: reloadCatalog } = useCatalog();
     const { user } = useAuth();
     const { isFreeShipping } = usePublicSettings();
     const navigate = useNavigate();
@@ -30,11 +31,9 @@ export default function Cart() {
     const promos = useActivePromotions();
     const activePromo = promos[0] || null;
 
-    const lines = cart.map((i) => ({ ...i, product: products.find((p) => p.id === i.productId) })).filter((l) => l.product);
-    const invalidLines = lines.filter((line) => !Number.isInteger(line.qty) || line.qty <= 0
-        || stockFor(line.product, line.colorId, line.size) < line.qty);
+    const { lines, unavailableItems, invalidLines } = reconcileCart(cart, products);
     const handleCheckout = () => {
-        if (invalidLines.length || lines.length !== cart.length) { showToast("Revise os itens sem estoque antes de continuar", "error"); return; }
+        if (catalogLoading || catalogError || invalidLines.length || unavailableItems.length) { showToast("Revise os itens sem estoque antes de continuar", "error"); return; }
         if (user) navigate("/checkout");
         else setAuthModalOpen(true);
     };
@@ -83,6 +82,14 @@ export default function Cart() {
             setShippingError(error.response?.data?.error || error.message || "Não foi possível calcular o frete.");
         } finally { if (quoteVersion.current === version) setShippingLoading(false); }
     };
+
+    if (catalogError) {
+        return <div className="container-boutique py-32 text-center">
+            <h1 className="font-heading text-4xl sm:text-5xl">Sua sacola</h1>
+            <p role="alert" className="mt-8 text-muted-foreground">Não foi possível carregar o catálogo. Seus itens foram preservados.</p>
+            <button type="button" onClick={reloadCatalog} className="btn-outline mt-6">Tentar novamente</button>
+        </div>;
+    }
 
     if (lines.length === 0) {
         return (
@@ -192,8 +199,12 @@ export default function Cart() {
                             </div>
                         </div>
 
-                        {(invalidLines.length > 0 || lines.length !== cart.length) && <p role="alert" className="text-xs text-destructive">Há itens indisponíveis ou sem estoque suficiente. Ajuste a sacola para continuar.</p>}
-                        <button onClick={handleCheckout} disabled={invalidLines.length > 0 || lines.length !== cart.length} className="btn-gold w-full disabled:opacity-50">Finalizar compra <ArrowRight className="w-4 h-4" strokeWidth={1.5} /></button>
+                        {unavailableItems.length > 0 && !catalogLoading && <div role="alert" className="text-xs text-destructive space-y-2">
+                            <p>{unavailableItems.length} {unavailableItems.length === 1 ? 'item saiu' : 'itens saíram'} do catálogo. Remova {unavailableItems.length === 1 ? 'esse item' : 'esses itens'} para continuar.</p>
+                            <button type="button" className="underline min-h-11" onClick={() => unavailableItems.forEach(({ productId, colorId, size }) => removeFromCart({ productId, colorId, size }))}>Remover itens indisponíveis</button>
+                        </div>}
+                        {invalidLines.length > 0 && <p role="alert" className="text-xs text-destructive">Há itens sem estoque suficiente. Ajuste a sacola para continuar.</p>}
+                        <button onClick={handleCheckout} disabled={catalogLoading || invalidLines.length > 0 || unavailableItems.length > 0} className="btn-gold w-full disabled:opacity-50">Finalizar compra <ArrowRight className="w-4 h-4" strokeWidth={1.5} /></button>
                     </div>
                 </div>
             </div>

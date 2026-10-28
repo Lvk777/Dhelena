@@ -7,7 +7,7 @@ import { useCatalog } from "@/context/CatalogContext";
 import { useAuth } from "@/lib/AuthContext";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
 import { base44 } from "@/api/base44Client";
-import { COLOR_SWATCHES, formatBRL, stockFor } from "@/data/products";
+import { COLOR_SWATCHES, formatBRL } from "@/data/products";
 import AddressFields from "@/components/AddressFields";
 import { validateCPF, validateEmail, validatePhone, validateCEP, maskCPF, maskPhone } from "@/lib/forms";
 import { track } from "@/lib/analytics";
@@ -17,12 +17,13 @@ import CardPaymentBrick from "@/components/checkout/CardPaymentBrick";
 import PaymentMethodChange from '@/components/checkout/PaymentMethodChange';
 import { selectedDelivery, selectedDeliveryCost, shippingContextKey } from "@/lib/shippingSelection";
 import { deliveryEstimateLabel, DELIVERY_BUSINESS_DAYS_NOTE } from '@/lib/deliveryEstimate';
+import { reconcileCart } from '@/lib/cartReconciliation';
 
 const STEPS = ["Identificação", "Endereço", "Entrega", "Pagamento"];
 
 export default function Checkout() {
     const { cart, clearCart, couponCode, couponResult } = useStore();
-    const { products } = useCatalog();
+    const { products, loading: catalogLoading, error: catalogError } = useCatalog();
     const { user } = useAuth();
     const { settings: publicSettings } = usePublicSettings();
 
@@ -92,9 +93,7 @@ export default function Checkout() {
         }
     };
 
-    const lines = cart.map((i) => ({ ...i, product: products.find((p) => p.id === i.productId) })).filter((l) => l.product);
-    const invalidLines = lines.filter((line) => !Number.isInteger(line.qty) || line.qty <= 0
-        || stockFor(line.product, line.colorId, line.size) < line.qty);
+    const { lines, unavailableItems, invalidLines } = reconcileCart(cart, products);
     const subtotal = lines.reduce((s, l) => s + (l.product.salePrice || l.product.price) * l.qty, 0);
     const couponDiscount = couponResult?.valid ? (couponResult.discount || 0) : 0;
     const freeShippingFromCoupon = couponResult?.valid && couponResult.freeShipping;
@@ -196,7 +195,7 @@ export default function Checkout() {
 
     const finish = async () => {
         if (placingRef.current) return;
-        if (invalidLines.length || lines.length !== cart.length) { setOrderError("Revise os itens e o estoque da sacola antes de continuar."); return; }
+        if (catalogLoading || catalogError || invalidLines.length || unavailableItems.length) { setOrderError("Revise os itens e o estoque da sacola antes de continuar."); return; }
         if (!validateStep(2)) { setStep(2); return; }
         if (!validateStep(3)) return;
         if (!pricing || pricingLoading) {
@@ -304,6 +303,20 @@ export default function Checkout() {
     }
 
     // ─── Empty cart ───
+    if (catalogLoading || catalogError) {
+        return <div className="container-boutique py-32 text-center max-w-lg">
+            <p role="status" className="text-muted-foreground">{catalogError ? 'Não foi possível conferir o catálogo. Sua sacola foi preservada.' : 'Conferindo sua sacola...'}</p>
+            <Link to="/sacola" className="btn-outline mt-6">Voltar à sacola</Link>
+        </div>;
+    }
+
+    if (unavailableItems.length || invalidLines.length) {
+        return <div className="container-boutique py-32 text-center max-w-lg">
+            <p role="alert" className="text-muted-foreground">Há itens indisponíveis ou sem estoque suficiente na sacola. Nenhum pedido foi criado.</p>
+            <Link to="/sacola" className="btn-outline mt-6">Revisar sacola</Link>
+        </div>;
+    }
+
     if (lines.length === 0) {
         return (
             <div className="container-boutique py-32 text-center">
