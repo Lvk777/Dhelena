@@ -45,19 +45,19 @@ export default function ShippingStep({ cep, products, quoteContextKey, shippingM
         {pickupEnabled && <button type="button" aria-pressed={shippingMethod === "retirada"}
             onClick={() => onShippingSelect({ method: "retirada", cost: 0, quoteId: null })}
             className={`w-full flex items-center gap-4 p-5 border text-left min-h-14 ${shippingMethod === "retirada" ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))]/5" : "border-border hover:border-foreground/40"}`}>
-            <Store className="w-5 h-5 text-[hsl(var(--gold))]" />
+            <Store className="w-5 h-5 text-gold-ink" />
             <span className="flex-1 min-w-0"><span className="block text-sm font-medium">{pickupName || "Retirada"}</span><span className="block text-xs text-muted-foreground break-words">{pickupTime || "A combinar após a confirmação"}</span></span>
             <span className="text-sm">Grátis</span><SelectionDot selected={shippingMethod === "retirada"} />
         </button>}
         {pickupEnabled && shippingMethod === 'retirada' && (pickupAddress || pickupInstructions) && <div className="text-sm text-muted-foreground whitespace-pre-line break-words">{pickupAddress && <p>{pickupAddress}</p>}{pickupInstructions && <p className="mt-2">{pickupInstructions}</p>}</div>}
         {loading && <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status"><Loader2 className="w-4 h-4 animate-spin" /> Calculando frete...</p>}
-        {error && !loading && <p className="flex items-center gap-2 text-sm text-amber-700" role="alert"><AlertCircle className="w-4 h-4" /> {error}</p>}
+        {error && !loading && <p className="flex items-center gap-2 text-sm text-warning-ink" role="alert"><AlertCircle className="w-4 h-4" /> {error}</p>}
         {!loading && options.map((opt) => {
             const selected = shippingMethod === "melhor_envio" && String(shippingQuoteId) === String(opt.id);
             return <button key={opt.id} type="button" aria-pressed={selected}
                 onClick={() => onShippingSelect({ method: "melhor_envio", cost: Number(opt.price), carrier: opt.company, serviceName: opt.name, deliveryTime: opt.delivery_time, quoteId: opt.id })}
                 className={`w-full flex items-center gap-4 p-5 border text-left min-h-14 ${selected ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))]/5" : "border-border hover:border-foreground/40"}`}>
-                <Truck className="w-5 h-5 text-[hsl(var(--gold))] shrink-0" />
+                <Truck className="w-5 h-5 text-gold-ink shrink-0" />
                 <span className="flex-1"><span className="block text-sm font-medium">{opt.company} · {opt.name}</span><span className="block text-xs text-muted-foreground">{deliveryEstimateLabel(opt)}</span></span>
                 <span className="text-sm font-medium">{freeShipping ? "Grátis" : formatBRL(opt.price)}</span><SelectionDot selected={selected} />
             </button>;

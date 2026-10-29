@@ -44,12 +44,12 @@ export default function Addresses() {
         <div>
             <div className="flex items-center justify-between mb-6">
                 <h1 className="font-heading text-3xl tracking-[0.03em]">Meus endereços</h1>
-                <button onClick={() => setEditing({})} className="btn-ghost text-[hsl(var(--rose))]">
+                <button onClick={() => setEditing({})} className="btn-ghost text-rose-ink">
                     <Plus className="w-4 h-4" strokeWidth={1.5} /> Novo endereço
                 </button>
             </div>
 
-            {loadError && <p role="alert" className="text-red-700 mb-3">{loadError}</p>}
+            {loadError && <p role="alert" className="text-error-ink mb-3">{loadError}</p>}
             {loading ? (
                 <div className="h-32 bg-bone animate-pulse" />
             ) : addresses.length === 0 ? (
@@ -63,7 +63,7 @@ export default function Addresses() {
                         <div key={a.id} className="bg-[hsl(var(--bone))] p-6">
                             <div className="flex items-start justify-between gap-4">
                                 <div>
-                                    {a.is_primary && <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] text-[hsl(var(--gold))] mb-2"><Star className="w-3 h-3 fill-[hsl(var(--gold))]" strokeWidth={0} /> Principal</span>}
+                                    {a.is_primary && <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] text-gold-ink mb-2"><Star className="w-3 h-3 fill-[hsl(var(--gold))]" strokeWidth={0} /> Principal</span>}
                                     <p className="text-sm font-medium">{a.street}, {a.number}{a.complement ? ` - ${a.complement}` : ""}</p>
                                     <p className="text-sm text-muted-foreground mt-1">{a.district} · {a.city}/{a.state}</p>
                                     <p className="text-[11px] text-muted-foreground mt-1">CEP {a.cep}</p>
@@ -141,7 +141,7 @@ function AddressForm({ address, onClose, onSaved }) {
 
     return (
         <AdminModal open onClose={onClose} busy={saving} title={address.id ? 'Editar endereço' : 'Novo endereço'}>
-                {saveError && <p role="alert" className="text-red-700 mb-3">{saveError}</p>}
+                {saveError && <p role="alert" className="text-error-ink mb-3">{saveError}</p>}
                 <AddressFields form={form} set={set} errors={errors} disabled={saving} />
                 <button onClick={save} disabled={saving} className="btn-gold w-full mt-6">{saving ? "Salvando..." : "Salvar endereço"}</button>
         </AdminModal>

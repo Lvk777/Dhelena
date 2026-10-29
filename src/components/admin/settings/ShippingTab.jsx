@@ -62,13 +62,13 @@ export default function ShippingTab({ data, onChange }) {
                                 : "bg-red-500/5 border-red-500/20"
                         }`}>
                             {testResult.connected ? (
-                                <Check className="w-4 h-4 text-green-600 shrink-0 mt-0.5" strokeWidth={1.5} />
+                                <Check className="w-4 h-4 text-success-ink shrink-0 mt-0.5" strokeWidth={1.5} />
                             ) : (
-                                <X className="w-4 h-4 text-red-600 shrink-0 mt-0.5" strokeWidth={1.5} />
+                                <X className="w-4 h-4 text-error-ink shrink-0 mt-0.5" strokeWidth={1.5} />
                             )}
                             <div className="text-xs">
                                 <p className="font-medium">
-                                    Status: <span className={testResult.connected ? "text-green-600" : "text-red-600"}>
+                                    Status: <span className={testResult.connected ? "text-success-ink" : "text-error-ink"}>
                                         {testResult.connected ? "Conectado" : "Erro"}
                                     </span>
                                 </p>
@@ -76,7 +76,7 @@ export default function ShippingTab({ data, onChange }) {
                                     <p className="text-muted-foreground mt-0.5">Ambiente: {testResult.environment}</p>
                                 )}
                                 {testResult.error && (
-                                    <p className="text-red-600 mt-0.5">{testResult.error}</p>
+                                    <p className="text-error-ink mt-0.5">{testResult.error}</p>
                                 )}
                             </div>
                         </div>

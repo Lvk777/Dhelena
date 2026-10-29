@@ -167,10 +167,10 @@ export default function AdminImageUploader({
             {label && (
                 <div className="flex items-center justify-between mb-1.5">
                     <label className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-                        {label}{required && <span className="text-rose ml-0.5">*</span>}
+                        {label}{required && <span className="text-rose-ink ml-0.5">*</span>}
                     </label>
                     {showAspectLabel && (
-                        <span className="text-[10px] text-muted-foreground/70">{aspectStr}</span>
+                        <span className="text-[10px] text-muted-foreground">{aspectStr}</span>
                     )}
                 </div>
             )}
@@ -182,12 +182,12 @@ export default function AdminImageUploader({
                     <div className="relative bg-muted" style={{ aspectRatio: String(presetData.aspect), maxHeight: "200px" }}>
                         <img src={value} alt={label || "preview"} className="w-full h-full object-cover" />
                         {status === STATES.DONE && (
-                            <div className="absolute top-1.5 right-1.5 bg-green-500/90 text-white text-[9px] uppercase tracking-[0.1em] px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                            <div className="absolute top-1.5 right-1.5 bg-green-800 text-white text-[9px] uppercase tracking-[0.1em] px-1.5 py-0.5 rounded flex items-center gap-0.5">
                                 <Check className="w-2.5 h-2.5" strokeWidth={2} /> Anexada
                             </div>
                         )}
                         {status === STATES.UPLOADING && (
-                            <div className="absolute inset-0 bg-charcoal/50 flex items-center justify-center">
+                            <div className="absolute inset-0 bg-charcoal/80 flex items-center justify-center">
                                 <div className="flex items-center gap-2 text-white text-xs">
                                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                                     Enviando...
@@ -203,7 +203,7 @@ export default function AdminImageUploader({
                                 <span className="truncate max-w-[120px]">{fileInfo.name}</span>
                                 {fileInfo.width && <span>{fileInfo.width}×{fileInfo.height}px</span>}
                                 <span>{formatFileSize(fileInfo.size)}</span>
-                                <span className="text-foreground/50">WEBP</span>
+                                <span className="text-muted-foreground">WEBP</span>
                             </div>
                         )}
                         <div className="flex gap-1.5">
@@ -212,7 +212,7 @@ export default function AdminImageUploader({
                                 <RefreshCw className="w-3 h-3" strokeWidth={1.5} /> Trocar
                             </button>
                             <button type="button" onClick={() => setShowRemoveConfirm(true)} disabled={isBusy}
-                                className="flex-1 text-[9px] uppercase tracking-[0.1em] py-1.5 border border-rose/30 text-rose rounded hover:bg-rose/5 transition-colors flex items-center justify-center gap-1 disabled:opacity-50">
+                                className="flex-1 text-[9px] uppercase tracking-[0.1em] py-1.5 border border-rose/30 text-rose-ink rounded hover:bg-rose/5 transition-colors flex items-center justify-center gap-1 disabled:opacity-50">
                                 <Trash2 className="w-3 h-3" strokeWidth={1.5} /> Remover
                             </button>
                         </div>
@@ -226,10 +226,10 @@ export default function AdminImageUploader({
                     className="rounded-lg border-2 border-rose/30 bg-rose/5 p-4 text-center"
                     style={{ minHeight: "100px" }}
                 >
-                    <AlertCircle className="w-6 h-6 text-rose mx-auto mb-2" strokeWidth={1.5} />
-                    <p className="text-xs text-rose mb-3">{errorMsg || "Não foi possível enviar a imagem."}</p>
+                    <AlertCircle className="w-6 h-6 text-rose-ink mx-auto mb-2" strokeWidth={1.5} />
+                    <p className="text-xs text-rose-ink mb-3">{errorMsg || "Não foi possível enviar a imagem."}</p>
                     <button type="button" onClick={handleRetry}
-                        className="text-[10px] uppercase tracking-[0.1em] px-4 py-1.5 border border-rose/40 text-rose rounded hover:bg-rose/10 transition-colors">
+                        className="text-[10px] uppercase tracking-[0.1em] px-4 py-1.5 border border-rose/40 text-rose-ink rounded hover:bg-rose/10 transition-colors">
                         Tentar novamente
                     </button>
                 </div>
@@ -263,14 +263,14 @@ export default function AdminImageUploader({
                             <Upload className="w-5 h-5 text-muted-foreground" strokeWidth={1.25} />
                             <p className="text-[11px] text-foreground font-medium">Enviar imagem</p>
                             <p className="text-[10px] text-muted-foreground">ou arraste aqui</p>
-                            <p className="text-[9px] text-muted-foreground/60">JPEG, PNG ou WEBP · até 10 MB</p>
+                            <p className="text-[9px] text-muted-foreground">JPEG, PNG ou WEBP · até 10 MB</p>
                         </>
                     )}
                 </div>
             )}
 
             {description && <p className="text-[11px] text-muted-foreground mt-1.5">{description}</p>}
-            {error && <p className="text-xs text-rose mt-1.5 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {error}</p>}
+            {error && <p className="text-xs text-rose-ink mt-1.5 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {error}</p>}
 
             {/* Hidden file input — unique per instance */}
             <input

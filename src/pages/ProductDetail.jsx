@@ -189,7 +189,7 @@ export default function ProductDetail() {
                                             key={s}
                                             disabled={disabled}
                                             onClick={() => setSize(s)}
-                                            className={`relative min-w-[52px] h-12 border text-sm transition-colors ${size === s ? "border-foreground bg-foreground text-white" : disabled ? "border-border text-muted-foreground/40 cursor-not-allowed line-through" : "border-border hover:border-foreground"}`}
+                                            className={`relative min-w-[52px] h-12 border text-sm transition-colors ${size === s ? "border-foreground bg-foreground text-background" : disabled ? "border-border text-muted-foreground cursor-not-allowed line-through" : "border-border hover:border-foreground"}`}
                                         >
                                             {s}
                                         </button>
@@ -197,7 +197,7 @@ export default function ProductDetail() {
                                 })}
                             </div>
                             {size && sizeStock <= 3 && sizeStock > 0 && (
-                                <p className="text-[11px] text-[hsl(var(--rose))] mt-2">Apenas {sizeStock} em estoque</p>
+                                <p className="text-[11px] text-rose-ink mt-2">Apenas {sizeStock} em estoque</p>
                             )}
                         </div>
 
@@ -224,13 +224,13 @@ export default function ProductDetail() {
                                 onClick={() => toggleFavorite(product.id)}
                                 className="btn-outline w-full py-4"
                             >
-                                <Heart className={`w-4 h-4 ${fav ? "fill-[hsl(var(--rose))] text-[hsl(var(--rose))]" : ""}`} strokeWidth={1.5} /> {fav ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                                <Heart className={`w-4 h-4 ${fav ? "fill-[hsl(var(--rose))] text-rose-ink" : ""}`} strokeWidth={1.5} /> {fav ? "Remover dos favoritos" : "Adicionar aos favoritos"}
                             </button>
                         </div>
 
                         {/* frete */}
                         <div className="mt-8 pt-6 border-t border-border">
-                            <p className="text-[11px] uppercase tracking-[0.2em] mb-3 flex items-center gap-2"><Truck className="w-4 h-4 text-[hsl(var(--gold))]" strokeWidth={1.25} /> Calcular frete</p>
+                            <p className="text-[11px] uppercase tracking-[0.2em] mb-3 flex items-center gap-2"><Truck className="w-4 h-4 text-gold-ink" strokeWidth={1.25} /> Calcular frete</p>
                             <form onSubmit={calcFrete} className="flex gap-2">
                                 <input
                                     value={cep}
@@ -240,8 +240,8 @@ export default function ProductDetail() {
                                 />
                                 <button type="submit" disabled={shippingLoading} className="btn-outline px-6 disabled:opacity-50">{shippingLoading ? "Calculando..." : "Calcular"}</button>
                             </form>
-                            {frete?.options?.map((option) => <p key={option.id} className="text-sm text-muted-foreground mt-3 flex items-center gap-2"><Check className="w-4 h-4 text-[hsl(var(--gold))]" strokeWidth={1.5} /> {option.company} · {option.name} · {isFreeShipping(price * qty) ? "Grátis" : formatBRL(option.price)} · {deliveryEstimateLabel(option)}</p>)}
-                            {frete?.erro && <p className="text-sm text-[hsl(var(--rose))] mt-3">{frete.erro}</p>}
+                            {frete?.options?.map((option) => <p key={option.id} className="text-sm text-muted-foreground mt-3 flex items-center gap-2"><Check className="w-4 h-4 text-gold-ink" strokeWidth={1.5} /> {option.company} · {option.name} · {isFreeShipping(price * qty) ? "Grátis" : formatBRL(option.price)} · {deliveryEstimateLabel(option)}</p>)}
+                            {frete?.erro && <p className="text-sm text-rose-ink mt-3">{frete.erro}</p>}
                         </div>
                     </div>
                 </div>

@@ -27,7 +27,7 @@ export default function AccountLayout() {
     const SidebarContent = () => (
         <>
             <div className="px-6 py-8 border-b border-border">
-                <p className="text-[10px] uppercase tracking-[0.3em] text-[hsl(var(--gold))]">Minha conta</p>
+                <p className="text-[10px] uppercase tracking-[0.3em] text-gold-ink">Minha conta</p>
                 <h2 className="font-heading text-2xl tracking-[0.04em] mt-1">Olá, {firstName}</h2>
             </div>
             <nav className="flex-1 py-4">
@@ -48,7 +48,7 @@ export default function AccountLayout() {
             </nav>
             {user?.role === 'admin' && <NavLink to="/admin" className="min-h-11 px-6 py-4 text-sm text-foreground border-t border-border">Painel Administrativo</NavLink>}
             <div className="border-t border-border p-4">
-                <button onClick={handleLogout} className="flex items-center gap-3 px-2 py-3 text-sm text-foreground/70 hover:text-[hsl(var(--rose))] transition-colors w-full">
+                <button onClick={handleLogout} className="flex items-center gap-3 px-2 py-3 text-sm text-foreground/70 hover:text-rose-ink transition-colors w-full">
                     <LogOut className="w-4 h-4" strokeWidth={1.5} />
                     <span className="tracking-wide">Sair da conta</span>
                 </button>
@@ -63,7 +63,7 @@ export default function AccountLayout() {
                 <div className="px-6 py-6 border-b border-border">
                     <NavLink to="/" className="block">
                         <span className="font-heading text-2xl tracking-[0.08em]">D'Helenas</span>
-                        <span className="block text-[8px] uppercase tracking-[0.4em] text-[hsl(var(--gold))] mt-1">Método Ponte</span>
+                        <span className="block text-[8px] uppercase tracking-[0.4em] text-gold-ink mt-1">Método Ponte</span>
                     </NavLink>
                 </div>
                 <SidebarContent />

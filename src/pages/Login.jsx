@@ -46,7 +46,7 @@ export default function Login() {
                     Ainda não tem conta?{" "}
                     <Link
                         to={"/cadastro" + (returnTo !== "/" ? "?returnTo=" + encodeURIComponent(returnTo) : "")}
-                        className="text-[hsl(var(--rose))] font-medium hover:underline"
+                        className="text-rose-ink font-medium hover:underline"
                     >
                         Criar conta
                     </Link>
@@ -65,7 +65,7 @@ export default function Login() {
             </div>
 
             {error && (
-                <div role="alert" className="mb-4 p-3 bg-[hsl(var(--rose))]/10 text-destructive text-sm text-center">
+                <div role="alert" className="mb-4 p-3 bg-[hsl(var(--rose))]/10 text-error-ink text-sm text-center">
                     {error}
                 </div>
             )}
@@ -90,7 +90,7 @@ export default function Login() {
                 <div>
                     <div className="flex items-center justify-between mb-2">
                         <label htmlFor="login-password" className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Senha</label>
-                        <Link to="/esqueci-minha-senha" className="text-xs text-[hsl(var(--rose))] hover:underline">
+                        <Link to="/esqueci-minha-senha" className="text-xs text-rose-ink hover:underline">
                             Esqueci minha senha
                         </Link>
                     </div>

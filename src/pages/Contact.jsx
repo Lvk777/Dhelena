@@ -88,7 +88,7 @@ export default function Contact() {
                         <textarea id={messageId} required minLength={10} maxLength={5000} value={form.mensagem} onChange={(e) => set("mensagem", e.target.value)} rows={5} aria-invalid={!!submitError} aria-describedby={submitError ? `${messageId}-error` : undefined} className="w-full border border-border px-4 py-3.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors resize-none" />
                     </div>
                     <p className="text-sm text-muted-foreground">Os dados deste formulário são usados para atender à sua solicitação.</p>
-                    {submitError && <p id={`${messageId}-error`} role="alert" className="text-sm text-destructive">{submitError}</p>}
+                    {submitError && <p id={`${messageId}-error`} role="alert" className="text-sm text-error-ink">{submitError}</p>}
                     {/* Honeypot — hidden from real users, bots fill it */}
                     <input
                         type="text"
@@ -112,7 +112,7 @@ export default function Contact() {
 function ContactRow({ icon: Icon, label, value, link = "" }) {
     const content = (
         <div className="flex items-center gap-4">
-            <div className="w-11 h-11 shrink-0 rounded-full border border-border flex items-center justify-center text-[hsl(var(--gold))]">
+            <div className="w-11 h-11 shrink-0 rounded-full border border-border flex items-center justify-center text-gold-ink">
                 <Icon className="w-5 h-5" strokeWidth={1.25} />
             </div>
             <div className="min-w-0 flex-1">

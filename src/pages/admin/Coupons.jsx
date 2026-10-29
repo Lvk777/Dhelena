@@ -81,8 +81,8 @@ export default function Coupons() {
                                     <td className="py-3 px-4 font-numeric">{c.discount_type === "percentage" ? `${c.discount_value}%` : formatBRL(c.discount_value)}</td>
                                     <td className="py-3 px-4 hidden sm:table-cell text-muted-foreground font-numeric">{c.uses ?? "—"}{c.max_uses ? `/${c.max_uses}` : " ∞"}</td>
                                     <td className="py-3 px-4 hidden md:table-cell text-muted-foreground font-numeric">{c.valid_until ? new Date(c.valid_until).toLocaleDateString("pt-BR") : "—"}</td>
-                                    <td className="py-3 px-4"><span className={`text-[10px] uppercase tracking-[0.12em] px-2 py-1 rounded ${c.active ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground"}`}>{c.active ? "Ativo" : "Inativo"}</span></td>
-                                    <td className="py-3 px-4"><div className="flex gap-1"><button type="button" aria-label={`Editar cupom ${c.code}`} onClick={() => setEditing(c)} className="min-w-11 min-h-11 inline-flex items-center justify-center hover:bg-muted rounded transition-colors"><Pencil className="w-4 h-4" strokeWidth={1.25} /></button><button type="button" aria-label={`Desativar cupom ${c.code}`} onClick={() => setDeleteTarget(c)} className="min-w-11 min-h-11 inline-flex items-center justify-center hover:bg-muted rounded transition-colors text-rose"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button></div></td>
+                                    <td className="py-3 px-4"><span className={`text-[10px] uppercase tracking-[0.12em] px-2 py-1 rounded ${c.active ? "bg-accent/10 text-gold-ink" : "bg-muted text-muted-foreground"}`}>{c.active ? "Ativo" : "Inativo"}</span></td>
+                                    <td className="py-3 px-4"><div className="flex gap-1"><button type="button" aria-label={`Editar cupom ${c.code}`} onClick={() => setEditing(c)} className="min-w-11 min-h-11 inline-flex items-center justify-center hover:bg-muted rounded transition-colors"><Pencil className="w-4 h-4" strokeWidth={1.25} /></button><button type="button" aria-label={`Desativar cupom ${c.code}`} onClick={() => setDeleteTarget(c)} className="min-w-11 min-h-11 inline-flex items-center justify-center hover:bg-muted rounded transition-colors text-rose-ink"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button></div></td>
                                 </tr>
                             ))}
                         </tbody>
@@ -212,9 +212,9 @@ function CouponWizard({ item, onClose, onSaved }) {
             case "review":
                 return (
                     <div className="max-w-2xl mx-auto">
-                        {saveError && <p role="alert" className="text-sm text-destructive mb-4">Não foi possível salvar o cupom. Revise os dados e tente novamente.</p>}
+                        {saveError && <p role="alert" className="text-sm text-error-ink mb-4">Não foi possível salvar o cupom. Revise os dados e tente novamente.</p>}
                         <div className="bg-muted/30 rounded-lg border border-border p-6 space-y-2">
-                            <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-accent mb-3">Resumo do Cupom</h3>
+                            <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-gold-ink mb-3">Resumo do Cupom</h3>
                             <SummaryRow label="Código" value={form.code || "—"} />
                             <SummaryRow label="Tipo" value={form.type === "percentage" ? "Percentual" : "Fixo"} />
                             <SummaryRow label="Valor" value={form.type === "percentage" ? `${form.value}%` : formatBRL(form.value)} />

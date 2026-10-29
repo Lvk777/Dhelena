@@ -85,7 +85,7 @@ export default function AuditLog() {
     return (
         <div>
             <div className="flex items-center gap-3 mb-6">
-                <ShieldCheck className="w-6 h-6 text-[hsl(var(--gold))]" strokeWidth={1.5} />
+                <ShieldCheck className="w-6 h-6 text-gold-ink" strokeWidth={1.5} />
                 <h1 className="font-heading text-2xl tracking-[0.03em]">Central de Auditoria</h1>
             </div>
 
@@ -165,7 +165,7 @@ export default function AuditLog() {
                                 <tr key={log.id} className="hover:bg-[hsl(var(--bone))]/50 transition-colors">
                                     <td className="py-2.5 px-4 text-muted-foreground font-numeric text-xs whitespace-nowrap">{new Date(log.created_date).toLocaleString("pt-BR")}</td>
                                     <td className="py-2.5 px-4 hidden md:table-cell text-muted-foreground text-xs truncate max-w-[160px]">{log.admin_email || "—"}</td>
-                                    <td className="py-2.5 px-4"><span className="text-[10px] uppercase tracking-[0.1em] px-2 py-1 rounded bg-[hsl(var(--gold))]/10 text-[hsl(var(--gold))]">{ACTION_LABELS[log.action] || log.action}</span></td>
+                                    <td className="py-2.5 px-4"><span className="text-[10px] uppercase tracking-[0.1em] px-2 py-1 rounded bg-[hsl(var(--gold))]/10 text-gold-ink">{ACTION_LABELS[log.action] || log.action}</span></td>
                                     <td className="py-2.5 px-4 hidden lg:table-cell text-muted-foreground text-xs">{log.entity_type || "—"}</td>
                                     <td className="py-2.5 px-4 font-medium truncate max-w-[180px]">{log.entity_name || "—"}</td>
                                     <td className="py-2.5 px-4 hidden xl:table-cell text-muted-foreground text-xs truncate max-w-[240px]">{log.details || "—"}</td>

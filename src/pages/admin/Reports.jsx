@@ -13,7 +13,7 @@ export default function Reports() {
         base44.custom.launchSummary().then(setSummary)
             .catch(() => setError('Não foi possível carregar os relatórios do novo período.'));
     }, []);
-    if (error) return <p role="alert" className="text-destructive p-6">{error}</p>;
+    if (error) return <p role="alert" className="text-error-ink p-6">{error}</p>;
     if (!summary) return <div className="h-64 bg-background animate-pulse" />;
     if (!summary.configured) return <div className="bg-background p-8">
         <h1 className="font-heading text-2xl">Relatórios</h1>
@@ -26,7 +26,7 @@ export default function Reports() {
     return <div>
         <h1 className="font-heading text-2xl tracking-[0.03em] mb-2">Relatórios</h1>
         <p className="text-xs text-muted-foreground mb-6">Nova operação desde {new Date(summary.start_at).toLocaleString('pt-BR')} · <Link to="/admin/pedidos" className="underline">Histórico completo</Link></p>
-        {!!summary.refund_inconsistencies && <p role="alert" className="text-destructive mb-5">Há divergência nos reembolsos. Concilie antes de usar os resultados.</p>}
+        {!!summary.refund_inconsistencies && <p role="alert" className="text-error-ink mb-5">Há divergência nos reembolsos. Concilie antes de usar os resultados.</p>}
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             <Stat label="Faturamento líquido" value={formatBRL(summary.net_revenue)} />
             <Stat label="Pedidos criados" value={summary.orders} />
@@ -48,7 +48,7 @@ export default function Reports() {
                 <div className="bg-background p-6"><h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Pedidos por status</h2>
                     <ResponsiveContainer width="100%" height={250}><PieChart><Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
                         {statusData.map((_, i) => <Cell key={i} fill={STATUS_COLORS[i % STATUS_COLORS.length]} />)}
-                    </Pie><Legend wrapperStyle={{ fontSize: 11 }} /></PieChart></ResponsiveContainer>
+                    </Pie><Legend wrapperStyle={{ fontSize: 11 }} formatter={(value) => <span className="text-foreground">{value}</span>} /></PieChart></ResponsiveContainer>
                 </div>
             </div>
             <div className="bg-background p-6"><h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Produtos vendidos · valor bruto dos itens</h2>

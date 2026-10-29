@@ -77,7 +77,7 @@ export default function StockMovementHistory({ open, onClose, productId }) {
                                         <td className="py-2.5 px-3 text-muted-foreground">{m.size || "—"}</td>
                                         <td className="py-2.5 px-3 text-right font-numeric text-muted-foreground">{m.previous_qty ?? 0}</td>
                                         <td className="py-2.5 px-3 text-center">
-                                            <span className={`inline-flex items-center gap-0.5 font-numeric text-xs px-1.5 py-0.5 rounded ${isNeutral ? "bg-muted text-muted-foreground" : isPositive ? "bg-accent/10 text-accent" : "bg-destructive/10 text-destructive"}`}>
+                                            <span className={`inline-flex items-center gap-0.5 font-numeric text-xs px-1.5 py-0.5 rounded ${isNeutral ? "bg-muted text-muted-foreground" : isPositive ? "bg-accent/10 text-gold-ink" : "bg-destructive/10 text-error-ink"}`}>
                                                 {isNeutral ? <Equal className="w-3 h-3" strokeWidth={2} /> : isPositive ? <ArrowUp className="w-3 h-3" strokeWidth={2} /> : <ArrowDown className="w-3 h-3" strokeWidth={2} />}
                                                 {isPositive ? "+" : ""}{m.change}
                                             </span>

@@ -49,6 +49,6 @@ export default function PaymentMethodChange({ order, onChanged, blocked = false 
                 <button type="button" disabled={busy} onClick={save} className="btn-gold min-h-11">Confirmar alteração</button></div>}
             <button type="button" disabled={busy} className="underline min-h-11" onClick={() => { setOpen(false); setPricing(null); }}>Voltar ao pagamento atual</button>
         </>}
-        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        {error && <p role="alert" className="text-sm text-error-ink">{error}</p>}
     </div>;
 }

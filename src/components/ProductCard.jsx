@@ -53,7 +53,7 @@ export default function ProductCard({ product, index = 0 }) {
                     aria-label={`Favoritar ${product.name}`}
                     aria-pressed={fav}
                 >
-                    <Heart className={`w-4 h-4 transition-colors ${fav ? "fill-[hsl(var(--rose))] text-[hsl(var(--rose))]" : "text-foreground/70"}`} strokeWidth={1.5} />
+                    <Heart className={`w-4 h-4 transition-colors ${fav ? "fill-[hsl(var(--rose))] text-rose-ink" : "text-foreground/70"}`} strokeWidth={1.5} />
                 </button>
 
                 {soldOut && (
@@ -67,7 +67,7 @@ export default function ProductCard({ product, index = 0 }) {
             <div className="pt-4 text-center">
                 <p className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">{product.collection}</p>
                 <Link to={`/produto/${product.id}`} className="block mt-1.5">
-                    <h3 className="text-base font-heading tracking-wide text-foreground hover:text-[hsl(var(--rose))] transition-colors">{product.name}</h3>
+                    <h3 className="text-base font-heading tracking-wide text-foreground hover:text-rose-ink transition-colors">{product.name}</h3>
                 </Link>
 
                 {/* color swatches */}

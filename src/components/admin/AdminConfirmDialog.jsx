@@ -16,13 +16,13 @@ export default function AdminConfirmDialog({ open, onClose, onConfirm, title = '
         <Dialog.Overlay className="fixed inset-0 z-[60] bg-charcoal/40 backdrop-blur-sm" />
         <Dialog.Content onOpenAutoFocus={e => { e.preventDefault(); cancel.current?.focus(); }} onPointerDownOutside={e => e.preventDefault()} onEscapeKeyDown={e => { if (busy) e.preventDefault(); }}
             className="fixed z-[61] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background w-[calc(100%_-_2rem)] max-w-md max-h-[90dvh] overflow-y-auto rounded-xl shadow-2xl p-6 space-y-5">
-            <AlertTriangle className={danger ? 'text-destructive' : 'text-accent'} />
+            <AlertTriangle className={danger ? 'text-error-ink' : 'text-gold-ink'} />
             <Dialog.Title className="font-heading text-xl">{title}</Dialog.Title>
             <Dialog.Description className="text-sm text-foreground/80">{message || 'Confirme para continuar.'}</Dialog.Description>
             {itemName && <p className="text-sm font-medium break-words">{itemName}</p>}
             {requireTyping && <div><label htmlFor={id} className="text-sm">Digite “{itemName}” para confirmar</label><input id={id} value={typed} onChange={e => setTyped(e.target.value)} disabled={busy} className="admin-field mt-2" /></div>}
             {note && <p className="text-xs text-muted-foreground">{note}</p>}
-            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+            {error && <p role="alert" className="text-sm text-error-ink">{error}</p>}
             <div className="flex flex-wrap justify-end gap-3"><button ref={cancel} type="button" disabled={busy} onClick={onClose} className="btn-outline min-h-11">{cancelLabel}</button>
                 <button type="button" disabled={busy || (requireTyping && typed !== itemName)} onClick={confirm} className={`${danger ? 'btn-danger' : 'btn-gold'} min-h-11`}>{busy ? <Loader2 className="w-4 h-4 animate-spin" aria-label="Confirmando" /> : confirmLabel}</button></div>
         </Dialog.Content>

@@ -23,14 +23,14 @@ export default function ShippingOperations({ order, onChanged }) {
     const eligible = order.payment_status === 'approved' && order.status !== 'cancelado';
     const state = ready?.status || order.shipping_status;
     return <div className="mt-4 space-y-3 text-sm" aria-label="Expedição Melhor Envio">
-        {error && <p role="alert" className="text-red-700">{error}</p>}
+        {error && <p role="alert" className="text-error-ink">{error}</p>}
         {!eligible ? <p>Expedição disponível após a confirmação do pagamento.</p> : !ready?.environment ?
             <p>O ambiente deste envio precisa de análise antes de preparar ou comprar etiquetas.</p> : <>
                 <p>Ambiente do envio: {ready.environment === 'production' ? 'Produção' : 'Sandbox'}. Preparar a etiqueta não compra frete.</p>
                 {!order.melhor_envio_shipment_id && <>
                     <label className="block">Chave da NF-e {ready.environment === 'production' ? '(obrigatória)' : '(opcional em Sandbox)'}
                         <input aria-label="Chave da NF-e" value={invoice} onChange={e=>setInvoice(e.target.value.replace(/\D/g,'').slice(0,44))}
-                            className="block w-full border border-border bg-background p-3 mt-1" inputMode="numeric" />
+                            className="block w-full admin-field p-3 mt-1" inputMode="numeric" />
                     </label>
                     <button className="btn-outline text-xs" disabled={busy || ['cart_inflight','cart_uncertain'].includes(state)} onClick={()=>run('prepare')}>Preparar etiqueta</button>
                 </>}

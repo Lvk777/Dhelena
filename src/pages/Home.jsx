@@ -55,25 +55,25 @@ export default function Home() {
             {hero.image && (
                 <section className="relative h-[88vh] min-h-[560px] w-full overflow-hidden">
                     <img src={hero.image} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/30 via-black/10 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-charcoal/80 via-charcoal/60 to-charcoal/40" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
                     <div className="relative h-full container-boutique flex items-center">
-                        <div className="max-w-xl text-bone animate-fade-rise">
+                        <div className="max-w-xl text-on-dark animate-fade-rise">
                             <p className="eyebrow text-[hsl(var(--gold))]">{hero.eyebrow}</p>
                             <h1 className="mt-5 font-heading text-6xl sm:text-7xl lg:text-8xl leading-[0.95] tracking-[0.04em]">{hero.title}</h1>
-                            <p className="mt-5 font-heading text-2xl sm:text-3xl italic text-bone/90">{hero.subtitle}</p>
-                            <p className="mt-4 text-sm sm:text-base text-bone/80 leading-relaxed max-w-md">{hero.text}</p>
+                            <p className="mt-5 font-heading text-2xl sm:text-3xl italic text-on-dark/90">{hero.subtitle}</p>
+                            <p className="mt-4 text-sm sm:text-base text-on-dark/90 leading-relaxed max-w-md">{hero.text}</p>
                             <div className="mt-9 flex flex-wrap gap-3">
                                 <SafeConfiguredLink to={heroCta.href || "/novidades"} className="inline-flex items-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:brightness-90">
                                     {heroCta.label || "Ver novidades"} <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
                                 </SafeConfiguredLink>
-                                <SafeConfiguredLink to={(!hero.secondary_cta_link || hero.secondary_cta_link === "/loja") ? "/colecoes" : hero.secondary_cta_link} className="inline-flex items-center gap-2 border border-bone/80 text-bone text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-bone hover:text-charcoal">
+                                <SafeConfiguredLink to={(!hero.secondary_cta_link || hero.secondary_cta_link === "/loja") ? "/colecoes" : hero.secondary_cta_link} className="inline-flex items-center gap-2 border border-on-dark/80 text-on-dark text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-on-dark hover:text-charcoal">
                                     {hero.secondary_cta_label || "Conhecer a coleção"}
                                 </SafeConfiguredLink>
                             </div>
                         </div>
                     </div>
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-bone/70 text-[10px] uppercase tracking-[0.3em] animate-fade-in">Role para descobrir</div>
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-on-dark/90 text-[10px] uppercase tracking-[0.3em] animate-fade-in">Role para descobrir</div>
                 </section>
             )}
 
@@ -114,15 +114,15 @@ export default function Home() {
             {concept.image && (
                 <section className="relative h-[60vh] min-h-[420px] overflow-hidden">
                     <img src={concept.image} alt={concept.title} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
-                    <div className="absolute inset-0 bg-charcoal/35" />
+                    <div className="absolute inset-0 bg-charcoal/70" />
                     <div className="relative h-full container-boutique flex items-center justify-center text-center">
-                        <div className="max-w-2xl text-bone animate-fade-rise">
+                        <div className="max-w-2xl text-on-dark animate-fade-rise">
                             <div className="flex justify-center mb-6"><BridgeHeart /></div>
                             <p className="eyebrow text-[hsl(var(--gold))]">{concept.eyebrow}</p>
                             <h2 className="mt-4 font-heading text-5xl sm:text-6xl tracking-[0.03em]">{concept.title}</h2>
-                            <p className="mt-5 text-base text-bone/85 leading-relaxed max-w-xl mx-auto">{concept.text}</p>
+                            <p className="mt-5 text-base text-on-dark/90 leading-relaxed max-w-xl mx-auto">{concept.text}</p>
                             {conceptCta.href && (
-                                <SafeConfiguredLink to={conceptCta.href} className="mt-8 inline-flex items-center gap-2 bg-[hsl(var(--gold))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--gold))]/85">
+                                <SafeConfiguredLink to={conceptCta.href} className="mt-8 inline-flex items-center gap-2 bg-[hsl(var(--gold))] text-accent-foreground text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--gold))]/85">
                                     {conceptCta.label}
                                 </SafeConfiguredLink>
                             )}
@@ -178,7 +178,7 @@ export default function Home() {
                             <a key={i} href={instagram} target="_blank" rel="noopener noreferrer" className="group relative aspect-square overflow-hidden bg-bone">
                                 <img src={src} alt="Instagram D'Helenas" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
                                 <div className="absolute inset-0 bg-charcoal/0 group-hover:bg-charcoal/30 transition-colors duration-500 flex items-center justify-center">
-                                    <Instagram className="w-5 h-5 text-bone opacity-0 group-hover:opacity-100 transition-opacity duration-500" strokeWidth={1.25} />
+                                    <Instagram className="w-5 h-5 text-on-dark opacity-0 group-hover:opacity-100 transition-opacity duration-500" strokeWidth={1.25} />
                                 </div>
                             </a>
                         ))}
@@ -219,10 +219,10 @@ function CategoryCard({ category, index }) {
         <div ref={ref} className={`reveal ${visible ? "is-visible" : ""}`} style={{ transitionDelay: `${index * 90}ms` }}>
             <Link to={`/loja?cat=${category.slug}`} className="group block relative overflow-hidden aspect-[3/4] bg-bone">
                 <img src={category.image} alt={category.name} className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-105" loading="lazy" />
-                <div className="absolute inset-0 bg-gradient-to-t from-charcoal/55 via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-charcoal/75 via-charcoal/20 to-transparent" />
                 <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5 text-center">
-                    <h3 className="font-heading text-xl sm:text-2xl text-bone tracking-[0.04em]">{category.name}</h3>
-                    <span className="block mt-1 text-[9px] uppercase tracking-[0.28em] text-bone/70 group-hover:text-[hsl(var(--gold))] transition-colors">Ver peças →</span>
+                    <h3 className="font-heading text-xl sm:text-2xl text-on-dark tracking-[0.04em]">{category.name}</h3>
+                    <span className="block mt-1 text-[9px] uppercase tracking-[0.28em] text-on-dark/90 group-hover:text-[hsl(var(--gold))] transition-colors">Ver peças →</span>
                 </div>
             </Link>
         </div>
@@ -236,10 +236,10 @@ function LookLine({ product }) {
                 <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
             </div>
             <div className="flex-1">
-                <p className="text-sm font-medium group-hover:text-[hsl(var(--rose))] transition-colors">{product.name}</p>
+                <p className="text-sm font-medium group-hover:text-rose-ink transition-colors">{product.name}</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">{formatBRL(product.salePrice || product.price)} · Consulte as formas de pagamento no checkout</p>
             </div>
-            <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-[hsl(var(--gold))] transition-colors" strokeWidth={1.25} />
+            <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-gold-ink transition-colors" strokeWidth={1.25} />
         </Link>
     );
 }

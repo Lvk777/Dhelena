@@ -77,11 +77,11 @@ export default function CartDrawer() {
 
                                 {/* footer */}
                                 <div className="border-t border-border px-6 py-5 space-y-4">
-                                    {unavailableItems.length > 0 && <div role="alert" className="text-xs text-destructive">
+                                    {unavailableItems.length > 0 && <div role="alert" className="text-xs text-error-ink">
                                         <p>{unavailableItems.length} {unavailableItems.length === 1 ? 'item saiu' : 'itens saíram'} do catálogo.</p>
                                         <button type="button" className="underline min-h-11" onClick={removeUnavailable}>Remover itens indisponíveis</button>
                                     </div>}
-                                    {invalidLines.length > 0 && <p role="alert" className="text-xs text-destructive">Há itens sem estoque suficiente.</p>}
+                                    {invalidLines.length > 0 && <p role="alert" className="text-xs text-error-ink">Há itens sem estoque suficiente.</p>}
                                     <div className="flex justify-between text-sm">
                                         <span className="text-muted-foreground">Subtotal</span>
                                         <span className="font-medium">{formatBRL(subtotal)}</span>

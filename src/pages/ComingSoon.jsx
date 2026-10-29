@@ -23,7 +23,7 @@ export default function ComingSoon() {
                 <h1 className="font-heading text-5xl sm:text-6xl tracking-[0.04em] text-foreground">
                     D'Helenas
                 </h1>
-                <p className="text-[11px] uppercase tracking-[0.3em] text-[hsl(var(--gold))] mt-2">
+                <p className="text-[11px] uppercase tracking-[0.3em] text-gold-ink mt-2">
                     Método Ponte
                 </p>
 

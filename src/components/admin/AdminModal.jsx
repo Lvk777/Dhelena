@@ -19,7 +19,7 @@ export default function AdminModal({ open, onClose, title, subtitle = '', size =
         <Dialog.Content onChangeCapture={() => { dirty.current = true; }} onPointerDownOutside={e => e.preventDefault()} onEscapeKeyDown={e => { e.preventDefault(); close(); }}
             className={`fixed z-50 bottom-0 sm:bottom-auto sm:top-1/2 left-1/2 -translate-x-1/2 sm:-translate-y-1/2 bg-background w-full ${SIZES[size]} max-h-[100dvh] sm:max-h-[90vh] rounded-t-2xl sm:rounded-xl shadow-2xl flex flex-col overflow-hidden`}>
             <div className="flex items-start justify-between px-6 py-5 border-b border-border shrink-0">
-                <div className="flex items-start gap-3 min-w-0">{Icon && <Icon className="w-6 h-6 text-accent shrink-0" />}
+                <div className="flex items-start gap-3 min-w-0">{Icon && <Icon className="w-6 h-6 text-gold-ink shrink-0" />}
                     <div><Dialog.Title className="font-heading text-xl tracking-wide">{title}</Dialog.Title>
                         <Dialog.Description className={subtitle ? 'text-sm text-muted-foreground mt-1' : 'sr-only'}>{subtitle || 'Preencha os campos e salve para confirmar suas alterações.'}</Dialog.Description></div>
                 </div>

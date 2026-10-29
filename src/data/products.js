@@ -112,11 +112,11 @@ export const PAYMENT_STATUS_PT = {
 };
 
 export const PAYMENT_STATUS_COLORS = {
-    pending: "text-amber-600",
-    approved: "text-green-600",
-    partially_refunded: "text-blue-600",
-    rejected: "text-red-600",
-    refunded: "text-blue-600",
-    in_process: "text-amber-600",
+    pending: "text-warning-ink",
+    approved: "text-success-ink",
+    partially_refunded: "text-info-ink",
+    rejected: "text-error-ink",
+    refunded: "text-info-ink",
+    in_process: "text-warning-ink",
     cancelled: "text-muted-foreground",
 };

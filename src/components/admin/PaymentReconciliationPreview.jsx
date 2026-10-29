@@ -44,9 +44,9 @@ export default function PaymentReconciliationPreview({ order }) {
                 {loading ? <><Loader2 className="w-3.5 h-3.5 animate-spin inline mr-1" /> Consultando</> : 'Consultar prévia'}
             </button>
         </div>
-        {error && <p role="alert" className="mt-3 text-xs text-red-700">{error}</p>}
+        {error && <p role="alert" className="mt-3 text-xs text-error-ink">{error}</p>}
         {preview && <div className="mt-5 space-y-5">
-            <p role="status" className={`text-sm font-medium ${preview.safe_to_reconcile ? 'text-green-700' : 'text-amber-700'}`}>
+            <p role="status" className={`text-sm font-medium ${preview.safe_to_reconcile ? 'text-success-ink' : 'text-warning-ink'}`}>
                 {preview.safe_to_reconcile ? 'Critérios da prévia atendidos; nenhuma alteração executada.' : 'Conciliação bloqueada pela prévia; nenhuma alteração executada.'}
             </p>
             <div className="grid md:grid-cols-2 gap-5">

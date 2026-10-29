@@ -16,7 +16,7 @@ export default function OrderTimeline({ events = [], paymentStatus = null }) {
                         <div key={ev.id || i} className="flex items-start gap-4">
                             <div className="flex flex-col items-center">
                                 <div className="w-8 h-8 rounded-full border-2 border-[hsl(var(--gold))] bg-[hsl(var(--gold))] flex items-center justify-center shrink-0">
-                                    <Check className="w-4 h-4 text-white" strokeWidth={2} />
+                                    <Check className="w-4 h-4 text-accent-foreground" strokeWidth={2} />
                                 </div>
                                 {i < events.length - 1 && <div className="w-px h-8 bg-[hsl(var(--gold))]/40" />}
                             </div>

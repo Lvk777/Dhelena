@@ -79,7 +79,7 @@ export default function AdminLayout() {
             <div className="px-5 py-5 border-b border-border">
                 <Link to="/admin" className="block">
                     <span className="font-heading text-xl tracking-[0.08em]">D'Helenas</span>
-                    <span className="block text-[8px] uppercase tracking-[0.3em] text-[hsl(var(--gold))] mt-0.5">Painel administrativo</span>
+                    <span className="block text-[8px] uppercase tracking-[0.3em] text-gold-ink mt-0.5">Painel administrativo</span>
                 </Link>
             </div>
             <nav className="flex-1 py-3 overflow-y-auto">
@@ -103,7 +103,7 @@ export default function AdminLayout() {
                     <ExternalLink className="w-4 h-4" strokeWidth={1.5} /> Ver loja
                 </Link>
                 <div className="px-2 py-2 text-[11px] text-muted-foreground truncate">{user?.email}</div>
-                <button onClick={handleLogout} className="flex items-center gap-3 px-2 py-2 text-[13px] text-foreground/65 hover:text-[hsl(var(--rose))] transition-colors w-full">
+                <button onClick={handleLogout} className="flex items-center gap-3 px-2 py-2 text-[13px] text-foreground/65 hover:text-rose-ink transition-colors w-full">
                     <LogOut className="w-4 h-4" strokeWidth={1.5} /> Sair
                 </button>
             </div>
@@ -119,7 +119,7 @@ export default function AdminLayout() {
 
             {/* mobile header */}
             <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-background border-b border-border flex items-center justify-between px-4 z-30">
-                <Link to="/admin" className="font-heading text-lg tracking-[0.08em]">D'Helenas <span className="text-[9px] uppercase tracking-[0.2em] text-[hsl(var(--gold))]">Admin</span></Link>
+                <Link to="/admin" className="font-heading text-lg tracking-[0.08em]">D'Helenas <span className="text-[9px] uppercase tracking-[0.2em] text-gold-ink">Admin</span></Link>
                 <div className="flex items-center gap-3">
                     <button onClick={toggleTheme} className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Alternar tema">
                         {theme === "dark" ? <Sun className="w-5 h-5" strokeWidth={1.5} /> : <Moon className="w-5 h-5" strokeWidth={1.5} />}

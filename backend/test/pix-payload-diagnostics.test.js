@@ -48,14 +48,20 @@ test('Pix retains valid CPF and omits optional blank surname', async () => {
     });
 });
 
-test('card retains required payment fields and valid CPF while omitting empty issuer and surname', async () => {
+test('card retains required fields and omits issuer_id rejected by Orders API', async () => {
     await withMockProvider(async calls => {
-        await createCardPayment({ ...base, payer: { ...payer, last_name: '', identification: { type: 'CPF', number: '12345678909' } },
-            cardToken: 'mock-card-token', installments: 2, paymentMethodId: 'visa', paymentType: 'credit_card', issuerId: '' });
-        const body = calls[0].body;
-        assert.deepEqual(body.payer, { ...payer, identification: { type: 'CPF', number: '12345678909' } });
-        assert.deepEqual(body.transactions.payments[0].payment_method,
-            { id: 'visa', type: 'credit_card', token: 'mock-card-token', installments: 2 });
+        for (const paymentType of ['credit_card', 'debit_card']) {
+            await createCardPayment({ ...base, payer: { ...payer, last_name: '', identification: { type: 'CPF', number: '12345678909' } },
+                cardToken: 'mock-card-token', installments: paymentType === 'credit_card' ? 2 : 1,
+                paymentMethodId: 'visa', paymentType, issuerId: '123' });
+        }
+        assert.equal(calls.length, 2);
+        for (const [index, { body }] of calls.entries()) {
+            assert.deepEqual(body.payer, { ...payer, identification: { type: 'CPF', number: '12345678909' } });
+            assert.deepEqual(body.transactions.payments[0].payment_method,
+                { id: 'visa', type: index === 0 ? 'credit_card' : 'debit_card', token: 'mock-card-token', installments: index === 0 ? 2 : 1 });
+            assert.equal(body.external_reference, 'DH-MOCK');
+        }
     });
 });
 

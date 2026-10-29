@@ -156,7 +156,7 @@ for (const method of ['credito', 'debito', 'pix']) {
         assert.equal(f.financialPosts, 1); assert.equal(f.payloads[0].total_amount, '114.95');
         assert.equal(f.payloads[0].transactions.payments[0].amount, '114.95');
         assert.equal(f.payloads[0].transactions.payments[0].payment_method.type, method === 'pix' ? 'bank_transfer' : method === 'debito' ? 'debit_card' : 'credit_card');
-        if (method !== 'pix') assert.equal(f.payloads[0].transactions.payments[0].payment_method.issuer_id, '123');
+        if (method !== 'pix') assert.equal('issuer_id' in f.payloads[0].transactions.payments[0].payment_method, false);
         assert.equal(f.order.payment_status, status === 'failed' ? 'rejected' : status);
         const retry = await f.request(path, f.card); assert.equal(retry.status, 200); assert.equal(f.financialPosts, 1);
         assert.equal(f.queries.some(sql => /UPDATE products|stock_movements|coupon_usages/.test(sql)), false);

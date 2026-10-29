@@ -12,7 +12,7 @@ export default function AdminAccess() {
             await client.custom.changeAdminAccess(id,grant);setTarget('');await load();
         }catch(failure){setError(failure.message||'Não foi possível alterar o acesso.');}finally{setBusy(false);}
     };
-    return <div><h1 className="font-heading text-3xl mb-6">Colaboradores autorizados</h1>{error&&<p role="alert" className="text-destructive mb-4">{error}</p>}
+    return <div><h1 className="font-heading text-3xl mb-6">Colaboradores autorizados</h1>{error&&<p role="alert" className="text-error-ink mb-4">{error}</p>}
         {!data&&!error&&<p role="status">Verificando permissões...</p>}
         {data&&!data.can_manage&&<p className="text-sm">Este gerenciamento exige a autoridade comprovada da proprietária e a configuração segura de acessos. Nenhuma permissão será alterada por esta página enquanto essas condições não forem atendidas.</p>}
         {data?.can_manage&&<><form onSubmit={e=>{e.preventDefault();change(target,true);}} className="space-y-3 mb-6"><label className="block">Identificador da conta autorizada<input className="admin-field block mt-2 w-full max-w-lg" value={target} onChange={e=>setTarget(e.target.value)} required pattern="[a-fA-F0-9-]{36}" /></label><button className="btn-gold min-h-11" disabled={busy}>Autorizar colaborador</button></form>

@@ -220,7 +220,7 @@ export default function Integrations() {
                                 <div className="flex items-start justify-between mb-3">
                                     <div className="flex items-start gap-3">
                                         <div className="w-11 h-11 rounded-lg bg-[hsl(var(--gold))]/10 flex items-center justify-center shrink-0">
-                                            <def.icon className="w-5 h-5 text-[hsl(var(--gold))]" strokeWidth={1.5} />
+                                            <def.icon className="w-5 h-5 text-gold-ink" strokeWidth={1.5} />
                                         </div>
                                         <div>
                                             <h3 className="font-medium text-sm">{def.name}</h3>
@@ -228,7 +228,7 @@ export default function Integrations() {
                                         </div>
                                     </div>
                                     <span className={`inline-flex items-center gap-1 text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 rounded-full whitespace-nowrap ${
-                                        isConfigured ? "bg-green-50 text-green-700 border border-green-200" : "bg-muted text-muted-foreground"
+                                        isConfigured ? "bg-green-50 text-success-ink border border-green-200" : "bg-muted text-muted-foreground"
                                     }`}>
                                         {isConfigured ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
                                         {isConfigured ? "Configurado" : "Pendente"}
@@ -237,12 +237,12 @@ export default function Integrations() {
 
                                 <div className="flex flex-wrap gap-2 mt-2">
                                     {envConfigured && (
-                                        <span className="text-[9px] uppercase tracking-[0.1em] px-2 py-0.5 border border-[hsl(var(--gold))]/30 text-[hsl(var(--gold))]">
+                                        <span className="text-[9px] uppercase tracking-[0.1em] px-2 py-0.5 border border-[hsl(var(--gold))]/30 text-gold-ink">
                                             Env / {env.environment}
                                         </span>
                                     )}
                                     {dbActive && (
-                                        <span className="text-[9px] uppercase tracking-[0.1em] px-2 py-0.5 border border-green-500/30 text-green-600">
+                                        <span className="text-[9px] uppercase tracking-[0.1em] px-2 py-0.5 border border-green-500/30 text-success-ink">
                                             Ativo no painel
                                         </span>
                                     )}
@@ -265,7 +265,7 @@ export default function Integrations() {
                                     <button
                                         onClick={() => toggleActive(def)}
                                         disabled={!cfg && !envConfigured}
-                                        className={`p-2 border transition-colors disabled:opacity-30 ${dbActive ? "border-green-500/40 text-green-600" : "border-border text-muted-foreground hover:text-foreground"}`}
+                                        className={`p-2 border transition-colors disabled:opacity-30 ${dbActive ? "border-green-500/40 text-success-ink" : "border-border text-muted-foreground hover:text-foreground"}`}
                                         title={dbActive ? "Desativar" : "Ativar"}
                                     >
                                         <Power className="w-4 h-4" strokeWidth={1.5} />
@@ -278,7 +278,7 @@ export default function Integrations() {
             </div>
 
             {/* Integration Modal */}
-            {oauthError && <p role="alert" className="text-sm text-red-700 mt-4">{oauthError}</p>}
+            {oauthError && <p role="alert" className="text-sm text-error-ink mt-4">{oauthError}</p>}
             <AdminConfirmDialog open={!!oauthMode} onClose={() => setOauthMode(null)} onConfirm={authorizeOAuth} loading={oauthBusy} danger={false} title={`Autorizar Melhor Envio ${oauthMode === 'production' ? 'Produção' : 'Sandbox'}`} confirmLabel="Continuar para OAuth" message="A autorização será concluída no Melhor Envio. O ambiente ativo da loja permanecerá inalterado." />
             {editingDef && (
                 <AdminModal
@@ -310,8 +310,8 @@ export default function Integrations() {
                         )}
                         {testing && testing !== "loading" && (
                             <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
-                                testing === "success" ? "bg-green-50 text-green-700 border border-green-200"
-                                : "bg-red-50 text-red-700 border border-red-200"
+                                testing === "success" ? "bg-green-50 text-success-ink border border-green-200"
+                                : "bg-red-50 text-error-ink border border-red-200"
                             }`}>
                                 {testing === "success" ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                                 {testResult}

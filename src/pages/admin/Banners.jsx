@@ -88,13 +88,13 @@ export default function Banners() {
                                 <p className="text-sm font-medium truncate">{b.internal_name || b.title || "Sem nome"}</p>
                                 <p className="text-[11px] text-muted-foreground truncate">
                                     {POSITION_LABELS[b.position] || b.position || "—"}
-                                    {b.promotion_id && <span className="ml-2 inline-flex items-center gap-1 text-accent"><Tag className="w-3 h-3" /> promoção</span>}
+                                    {b.promotion_id && <span className="ml-2 inline-flex items-center gap-1 text-gold-ink"><Tag className="w-3 h-3" /> promoção</span>}
                                 </p>
                             </div>
-                            <span className={`text-[10px] uppercase tracking-[0.12em] px-2 py-1 rounded ${b.active ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground"}`}>{b.active ? "Ativo" : "Inativo"}</span>
+                            <span className={`text-[10px] uppercase tracking-[0.12em] px-2 py-1 rounded ${b.active ? "bg-accent/10 text-gold-ink" : "bg-muted text-muted-foreground"}`}>{b.active ? "Ativo" : "Inativo"}</span>
                             <div className="flex gap-1">
                                 <button onClick={() => setEditing(b)} className="p-2 hover:bg-muted rounded transition-colors"><Pencil className="w-4 h-4" strokeWidth={1.25} /></button>
-                                <button onClick={() => setDeleteTarget(b)} className="p-2 hover:bg-muted rounded transition-colors text-rose"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
+                                <button onClick={() => setDeleteTarget(b)} className="p-2 hover:bg-muted rounded transition-colors text-rose-ink"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
                             </div>
                         </div>
                     ))}
@@ -106,7 +106,7 @@ export default function Banners() {
                     fallback={(err, retry) => (
                         <div className="fixed inset-0 z-50 flex items-center justify-center bg-charcoal/40 backdrop-blur-sm">
                             <div className="bg-background border border-border rounded-xl shadow-2xl max-w-md p-8 text-center">
-                                <AlertCircle className="w-8 h-8 text-rose mx-auto mb-4" strokeWidth={1.5} />
+                                <AlertCircle className="w-8 h-8 text-rose-ink mx-auto mb-4" strokeWidth={1.5} />
                                 <p className="text-sm text-muted-foreground mb-4">Não foi possível carregar o formulário. Tente novamente.</p>
                                 <button onClick={retry} className="btn-outline">Tentar novamente</button>
                             </div>
@@ -258,13 +258,13 @@ function BannerWizard({ item, onClose, onSaved }) {
                 return (
                     <div className="max-w-xl mx-auto space-y-4">
                         {errors?._general && (
-                            <div className="flex items-center gap-2 text-sm text-rose bg-rose/5 p-3 rounded">
+                            <div className="flex items-center gap-2 text-sm text-rose-ink bg-rose/5 p-3 rounded">
                                 <AlertCircle className="w-4 h-4" /> {errors._general}
                             </div>
                         )}
                         {positionChanged && (
                             <div className="flex items-center justify-between gap-3 text-sm bg-amber-500/10 border border-amber-500/30 p-3 rounded">
-                                <span className="flex items-center gap-1.5 text-amber-600">
+                                <span className="flex items-center gap-1.5 text-warning-ink">
                                     <AlertCircle className="w-4 h-4" /> A posição foi alterada. Deseja reajustar a imagem para a nova proporção?
                                 </span>
                                 <div className="flex gap-2 shrink-0">
@@ -357,7 +357,7 @@ function BannerWizard({ item, onClose, onSaved }) {
                         </div>
                         <AdminInput label="Ordem" type="number" value={form.sort_order} onChange={(v) => set("sort_order", parseInt(v) || 0)} />
                         <AdminToggle label="Banner ativo" checked={form.active} onChange={(v) => set("active", v)} description="Quando ativo, o banner aparece na loja (respeitando datas e prioridade)" />
-                        {errors?.active && <p className="text-xs text-rose flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.active}</p>}
+                        {errors?.active && <p className="text-xs text-rose-ink flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.active}</p>}
                         <AdminInput label="ID da promoção (opcional)" value={form.promotion_id} onChange={(v) => set("promotion_id", v)} full placeholder="UUID da promoção" />
                     </div>
                 );
@@ -366,7 +366,7 @@ function BannerWizard({ item, onClose, onSaved }) {
                     <div className="max-w-3xl mx-auto space-y-6">
                         {/* Summary */}
                         <div className="bg-muted/30 rounded-lg border border-border p-6 space-y-2">
-                            <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-accent mb-3">Resumo do Banner</h3>
+                            <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-gold-ink mb-3">Resumo do Banner</h3>
                             <SummaryRow label="Nome" value={form.internal_name || "—"} />
                             <SummaryRow label="Posição" value={POSITION_LABELS[form.position] || form.position || "—"} />
                             <SummaryRow label="Prioridade" value={String(form.priority || 0)} />

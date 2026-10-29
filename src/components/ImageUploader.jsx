@@ -123,10 +123,10 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
                         <Upload className="w-5 h-5 text-muted-foreground" strokeWidth={1.25} />
                         <p className="text-[11px] text-foreground font-medium">Enviar fotos</p>
                         <p className="text-[10px] text-muted-foreground">ou arraste aqui</p>
-                        <p className="text-[9px] text-muted-foreground/60">JPG, PNG ou WEBP · até 10MB · {max} fotos max</p>
+                        <p className="text-[9px] text-muted-foreground">JPG, PNG ou WEBP · até 10MB · {max} fotos max</p>
                     </div>
                 )}
-                {uploadError && <p className="text-[11px] text-[hsl(var(--rose))] mt-2">{uploadError}</p>}
+                {uploadError && <p className="text-[11px] text-rose-ink mt-2">{uploadError}</p>}
             </div>
 
             {/* previews */}
@@ -140,7 +140,7 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
                                     <button
                                         type="button"
                                         onClick={(e) => { e.stopPropagation(); removeImage(idx); }}
-                                        className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center hover:bg-white"
+                                        className="w-6 h-6 rounded-full bg-white/90 text-charcoal flex items-center justify-center hover:bg-white"
                                     >
                                         <X className="w-3.5 h-3.5" strokeWidth={1.5} />
                                     </button>
@@ -151,7 +151,7 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
                                             type="button"
                                             onClick={(e) => { e.stopPropagation(); moveImage(idx, -1); }}
                                             disabled={idx === 0}
-                                            className="w-6 h-6 rounded bg-white/90 flex items-center justify-center hover:bg-white disabled:opacity-30"
+                                            className="w-6 h-6 rounded bg-white/90 text-charcoal flex items-center justify-center hover:bg-white disabled:opacity-30"
                                         >
                                             <GripVertical className="w-3 h-3 rotate-180" strokeWidth={1.5} />
                                         </button>
@@ -159,7 +159,7 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
                                             type="button"
                                             onClick={(e) => { e.stopPropagation(); moveImage(idx, 1); }}
                                             disabled={idx === images.length - 1}
-                                            className="w-6 h-6 rounded bg-white/90 flex items-center justify-center hover:bg-white disabled:opacity-30"
+                                            className="w-6 h-6 rounded bg-white/90 text-charcoal flex items-center justify-center hover:bg-white disabled:opacity-30"
                                         >
                                             <GripVertical className="w-3 h-3" strokeWidth={1.5} />
                                         </button>
@@ -167,11 +167,11 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
                                 </div>
                             </div>
                             {idx === 0 && (
-                                <div className="absolute top-1.5 left-1.5 bg-[hsl(var(--gold))] text-white text-[8px] uppercase tracking-[0.15em] px-1.5 py-0.5 flex items-center gap-0.5">
+                                <div className="absolute top-1.5 left-1.5 bg-[hsl(var(--gold))] text-accent-foreground text-[8px] uppercase tracking-[0.15em] px-1.5 py-0.5 flex items-center gap-0.5">
                                     <Star className="w-2.5 h-2.5 fill-white" strokeWidth={0} /> Principal
                                 </div>
                             )}
-                            <div className="absolute bottom-1 left-1.5 text-[8px] uppercase tracking-[0.1em] text-white/80">
+                            <div className="absolute bottom-1 left-1.5 text-[8px] uppercase tracking-[0.1em] text-on-dark bg-charcoal/80 px-1.5 py-0.5">
                                 {RECOMMENDATIONS[idx] || `Foto ${idx + 1}`}
                             </div>
                         </div>

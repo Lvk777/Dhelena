@@ -71,7 +71,7 @@ export default function PixPaymentScreen({ order, onApproved, onAttempt = () => 
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center py-16">
-                <Loader2 className="w-8 h-8 animate-spin text-[hsl(var(--gold))]" />
+                <Loader2 className="w-8 h-8 animate-spin text-gold-ink" />
                 <p className="mt-4 text-sm text-muted-foreground">Gerando pagamento Pix...</p>
             </div>
         );
@@ -80,8 +80,8 @@ export default function PixPaymentScreen({ order, onApproved, onAttempt = () => 
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center py-16">
-                <AlertCircle className="w-10 h-10 text-red-600" strokeWidth={1.5} />
-                <p className="mt-4 text-sm text-red-600 text-center max-w-xs">{error}</p>
+                <AlertCircle className="w-10 h-10 text-error-ink" strokeWidth={1.5} />
+                <p className="mt-4 text-sm text-error-ink text-center max-w-xs">{error}</p>
                 <button onClick={createPix} className="btn-outline mt-6 text-sm">Tentar novamente</button>
             </div>
         );
@@ -113,22 +113,22 @@ export default function PixPaymentScreen({ order, onApproved, onAttempt = () => 
                     <div className="w-16 h-16 rounded-full bg-green-600 mx-auto flex items-center justify-center">
                         <Check className="w-8 h-8 text-white" strokeWidth={1.5} />
                     </div>
-                    <p className="mt-4 text-sm text-green-600">Pagamento confirmado!</p>
+                    <p className="mt-4 text-sm text-success-ink">Pagamento confirmado!</p>
                 </div>
             ) : ['rejected', 'cancelled', 'refunded', 'partially_refunded'].includes(status) ? (
                 <div className="text-center py-8" role="status">
-                    <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" strokeWidth={1.5} />
+                    <AlertCircle className="w-10 h-10 text-warning-ink mx-auto" strokeWidth={1.5} />
                     <p className="mt-4 text-sm">Este código não deve ser usado para um novo pagamento. Consulte o pedido e o atendimento.</p>
                 </div>
             ) : pixData?.qr_unavailable && !pixData?.pix_qr_code ? (
                 <div className="text-center py-8" role="status">
-                    <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" strokeWidth={1.5} />
-                    <p className="mt-4 text-sm text-amber-700">O código Pix ainda não está disponível. Estamos verificando o pagamento deste pedido.</p>
+                    <AlertCircle className="w-10 h-10 text-warning-ink mx-auto" strokeWidth={1.5} />
+                    <p className="mt-4 text-sm text-warning-ink">O código Pix ainda não está disponível. Estamos verificando o pagamento deste pedido.</p>
                 </div>
             ) : expired ? (
                 <div className="text-center py-8">
-                    <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" strokeWidth={1.5} />
-                    <p className="mt-4 text-sm text-amber-600">O código Pix expirou.</p>
+                    <AlertCircle className="w-10 h-10 text-warning-ink mx-auto" strokeWidth={1.5} />
+                    <p className="mt-4 text-sm text-warning-ink">O código Pix expirou.</p>
                     <p className="mt-4 text-sm">Consulte o pedido ou entre em contato com o atendimento antes de uma nova tentativa.</p>
                 </div>
             ) : (

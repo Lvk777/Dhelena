@@ -5,7 +5,7 @@ export default function AdminSelect({ label, value, onChange, options = undefine
         <div className={full ? "sm:col-span-2" : ""}>
             {label && (
                 <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
-                    {label}{required && <span className="text-rose ml-1">*</span>}
+                    {label}{required && <span className="text-rose-ink ml-1">*</span>}
                 </label>
             )}
             <select
@@ -22,7 +22,7 @@ export default function AdminSelect({ label, value, onChange, options = undefine
                     : children}
             </select>
             {description && !error && <p className="text-[11px] text-muted-foreground mt-1.5">{description}</p>}
-            {error && <p className="text-[11px] text-rose mt-1.5">{error}</p>}
+            {error && <p className="text-[11px] text-rose-ink mt-1.5">{error}</p>}
         </div>
     );
 }

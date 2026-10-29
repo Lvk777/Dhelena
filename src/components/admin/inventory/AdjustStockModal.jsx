@@ -105,7 +105,7 @@ export default function AdjustStockModal({ product, color, size, currentStock, o
                             onClick={() => setAdjustType(t.value)}
                             className={`flex items-start gap-3 p-3 border rounded-lg text-left transition-colors ${adjustType === t.value ? "border-accent bg-accent/5" : "border-border hover:border-foreground/30"}`}
                         >
-                            <t.icon className={`w-4 h-4 mt-0.5 shrink-0 ${adjustType === t.value ? "text-accent" : "text-muted-foreground"}`} strokeWidth={1.5} />
+                            <t.icon className={`w-4 h-4 mt-0.5 shrink-0 ${adjustType === t.value ? "text-gold-ink" : "text-muted-foreground"}`} strokeWidth={1.5} />
                             <div>
                                 <p className="text-sm font-medium">{t.label}</p>
                                 <p className="text-[11px] text-muted-foreground">{t.desc}</p>
@@ -131,14 +131,14 @@ export default function AdjustStockModal({ product, color, size, currentStock, o
                         </div>
                     </div>
                     {adjustType === "saida" && parseInt(qty) > currentStock && (
-                        <div className="flex items-center gap-1.5 text-[11px] text-destructive">
+                        <div className="flex items-center gap-1.5 text-[11px] text-error-ink">
                             <AlertTriangle className="w-3.5 h-3.5" strokeWidth={1.5} />
                             Estoque será zerado
                         </div>
                     )}
                 </div>
 
-                {error && <p className="text-[11px] text-destructive text-center">{error}</p>}
+                {error && <p className="text-[11px] text-error-ink text-center">{error}</p>}
             </div>
         </AdminModal>
     );

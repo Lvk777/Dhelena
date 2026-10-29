@@ -92,7 +92,7 @@ export default function CropperModal({ imageFile, preset, title = "Ajustar Image
                 {/* Controls */}
                 <div className="px-5 py-4 space-y-3 border-t border-border">
                     {error && (
-                        <p className="text-xs text-rose flex items-center gap-1.5">
+                        <p className="text-xs text-rose-ink flex items-center gap-1.5">
                             <AlertCircle className="w-3.5 h-3.5" /> {error}
                         </p>
                     )}

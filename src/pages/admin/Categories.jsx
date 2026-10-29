@@ -43,7 +43,7 @@ export default function Categories() {
                 <button onClick={() => setEditing({})} className="btn-gold"><Plus className="w-4 h-4" strokeWidth={1.5} /> Nova categoria</button>
             </div>
 
-            {error && <div role="alert" className="mb-4 text-sm text-destructive">{error} <button type="button" className="underline" onClick={load}>Tentar novamente</button></div>}
+            {error && <div role="alert" className="mb-4 text-sm text-error-ink">{error} <button type="button" className="underline" onClick={load}>Tentar novamente</button></div>}
 
             {loading ? <div className="h-40 bg-background animate-pulse rounded-lg" /> : items.length === 0 ? (
                 <div className="bg-background p-12 text-center rounded-lg border border-border">
@@ -63,7 +63,7 @@ export default function Categories() {
                                 <p className="text-[11px] text-muted-foreground truncate">/{c.slug}</p>
                                 <div className="flex gap-1 mt-2">
                                     <button onClick={() => setEditing(c)} className="p-1.5 hover:bg-muted rounded transition-colors"><Pencil className="w-4 h-4" strokeWidth={1.25} /></button>
-                                    <button onClick={() => setDeleteTarget(c)} className="p-1.5 hover:bg-muted rounded transition-colors text-rose"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
+                                    <button onClick={() => setDeleteTarget(c)} className="p-1.5 hover:bg-muted rounded transition-colors text-rose-ink"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
                                 </div>
                             </div>
                         </div>
@@ -140,7 +140,7 @@ function CategoryForm({ item, onClose, onSaved }) {
             }
         >
             <div className="space-y-5">
-                {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
+                {saveError && <p role="alert" className="text-sm text-error-ink">{saveError}</p>}
                 <AdminFormSection>
                     <AdminInput label="Nome" value={form.name} onChange={onNameChange} required error={errors.name} placeholder="Ex: Vestidos Longos" />
                     <AdminInput label="Slug (URL)" value={form.slug} onChange={onSlugChange} description="Gerado automaticamente a partir do nome" placeholder="auto" mono />

@@ -4,7 +4,7 @@ export default function AdminToggle({ label, checked, onChange, description = ""
     return (
         <div className="flex items-start justify-between gap-4 py-1.5">
             <div className="min-w-0">
-                {label && <p className="text-sm font-medium flex items-center gap-2">{Icon && <Icon className="w-4 h-4 text-accent" strokeWidth={1.5} />}{label}</p>}
+                {label && <p className="text-sm font-medium flex items-center gap-2">{Icon && <Icon className="w-4 h-4 text-gold-ink" strokeWidth={1.5} />}{label}</p>}
                 {description && <p className="text-[11px] text-muted-foreground mt-0.5">{description}</p>}
             </div>
             <button

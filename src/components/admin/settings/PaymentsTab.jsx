@@ -70,7 +70,7 @@ export default function PaymentsTab({ data, onChange }) {
             <AdminFormSection title="Métodos de pagamento no checkout" description="Pix usa a configuração da Orders API; cartões usam a lista de métodos do Mercado Pago.">
                 <div className="sm:col-span-2">
                     {methodsLoading && <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Verificando...</div>}
-                    {methodsInfo?.error && <p className="text-xs text-red-600">{methodsInfo.error}</p>}
+                    {methodsInfo?.error && <p className="text-xs text-error-ink">{methodsInfo.error}</p>}
                     {methodsInfo && !methodsInfo.error && (
                         <div className="space-y-2">
                             <div className="flex items-center gap-2 text-xs">
@@ -83,9 +83,9 @@ export default function PaymentsTab({ data, onChange }) {
                                 <MethodBadge icon={Banknote} label="Débito" available={methodsInfo.available?.debit_card} enabled={methodsInfo.enabled?.debit_card} />
                             </div>
                             <p className="text-xs text-muted-foreground mt-2">Pix: capacidade configurada no backend para a Orders API. A lista /v1/payment_methods não confirma a disponibilidade desse fluxo; cada tentativa é validada pelo Mercado Pago.</p>
-                            {methodsInfo.method_listing_status === 'unavailable' && <p className="text-xs text-amber-600">A lista de cartões não respondeu. Os cartões ficam indisponíveis até a consulta voltar.</p>}
-                            {methodsInfo.pix_capability?.reason === 'integration_not_configured' && <p className="text-xs text-amber-600">Configure o modo e o Access Token da integração no servidor.</p>}
-                            {methodsInfo.pix_capability?.reason === 'webhook_not_configured' && <p className="text-xs text-amber-600">Configure o segredo do webhook para confirmar pagamentos Pix.</p>}
+                            {methodsInfo.method_listing_status === 'unavailable' && <p className="text-xs text-warning-ink">A lista de cartões não respondeu. Os cartões ficam indisponíveis até a consulta voltar.</p>}
+                            {methodsInfo.pix_capability?.reason === 'integration_not_configured' && <p className="text-xs text-warning-ink">Configure o modo e o Access Token da integração no servidor.</p>}
+                            {methodsInfo.pix_capability?.reason === 'webhook_not_configured' && <p className="text-xs text-warning-ink">Configure o segredo do webhook para confirmar pagamentos Pix.</p>}
                         </div>
                     )}
                 </div>
@@ -100,13 +100,13 @@ export default function PaymentsTab({ data, onChange }) {
                                 : "bg-red-500/5 border-red-500/20"
                         }`}>
                             {testResult.connected ? (
-                                <Check className="w-4 h-4 text-green-600 shrink-0 mt-0.5" strokeWidth={1.5} />
+                                <Check className="w-4 h-4 text-success-ink shrink-0 mt-0.5" strokeWidth={1.5} />
                             ) : (
-                                <X className="w-4 h-4 text-red-600 shrink-0 mt-0.5" strokeWidth={1.5} />
+                                <X className="w-4 h-4 text-error-ink shrink-0 mt-0.5" strokeWidth={1.5} />
                             )}
                             <div className="text-xs">
                                 <p className="font-medium">
-                                    Status: <span className={testResult.connected ? "text-green-600" : "text-red-600"}>
+                                    Status: <span className={testResult.connected ? "text-success-ink" : "text-error-ink"}>
                                         {testResult.connected ? "Conectado" : "Erro"}
                                     </span>
                                 </p>
@@ -114,7 +114,7 @@ export default function PaymentsTab({ data, onChange }) {
                                     <p className="text-muted-foreground mt-0.5">Ambiente: {testResult.environment}</p>
                                 )}
                                 {testResult.error && (
-                                    <p className="text-red-600 mt-0.5">{testResult.error}</p>
+                                    <p className="text-error-ink mt-0.5">{testResult.error}</p>
                                 )}
                             </div>
                         </div>
@@ -139,7 +139,7 @@ export default function PaymentsTab({ data, onChange }) {
 function MethodBadge({ icon: Icon, label, available, enabled }) {
     return (
         <div className={`p-3 border rounded-lg text-center ${enabled ? "border-green-500/30 bg-green-500/5" : available ? "border-amber-500/30 bg-amber-500/5" : "border-border bg-muted/5"}`}>
-            <Icon className={`w-5 h-5 mx-auto mb-1 ${enabled ? "text-green-600" : available ? "text-amber-600" : "text-muted-foreground"}`} strokeWidth={1.5} />
+            <Icon className={`w-5 h-5 mx-auto mb-1 ${enabled ? "text-success-ink" : available ? "text-warning-ink" : "text-muted-foreground"}`} strokeWidth={1.5} />
             <p className="text-xs font-medium">{label}</p>
             <p className="text-[10px] text-muted-foreground mt-0.5">
                 {enabled ? "Ativo" : available ? "Disponível (inativo)" : "Indisponível"}

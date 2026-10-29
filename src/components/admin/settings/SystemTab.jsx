@@ -22,7 +22,7 @@ export default function SystemTab({ data, onChange }) {
             </div>
             <div className="border border-border rounded-xl p-5 bg-background/50">
                 <div className="flex items-center gap-2 mb-4">
-                    <Server className="w-4 h-4 text-accent" strokeWidth={1.5} />
+                    <Server className="w-4 h-4 text-gold-ink" strokeWidth={1.5} />
                     <h3 className="text-[11px] uppercase tracking-[0.2em] text-foreground font-medium">Informações do sistema</h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -36,7 +36,7 @@ export default function SystemTab({ data, onChange }) {
             {/* ─── Painel de Segurança ─────────────────────────────── */}
             <div className="border border-border rounded-xl p-5 bg-background/50">
                 <div className="flex items-center gap-2 mb-4">
-                    <Lock className="w-4 h-4 text-accent" strokeWidth={1.5} />
+                    <Lock className="w-4 h-4 text-gold-ink" strokeWidth={1.5} />
                     <h3 className="text-[11px] uppercase tracking-[0.2em] text-foreground font-medium">Segurança</h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -62,7 +62,7 @@ export default function SystemTab({ data, onChange }) {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                     {["Product", "Order", "Category", "Collection", "Banner", "Coupon", "Address", "Favorite", "User", "Setting"].map((e) => (
                         <div key={e} className="flex items-center gap-2 p-2 bg-muted/30 rounded">
-                            <Database className="w-3 h-3 text-accent" strokeWidth={1.5} /> {e}
+                            <Database className="w-3 h-3 text-gold-ink" strokeWidth={1.5} /> {e}
                         </div>
                     ))}
                 </div>
@@ -82,8 +82,8 @@ function SecurityRow({ icon: Icon, label, status, note = "" }) {
             </div>
             <span className={`text-[10px] uppercase tracking-[0.1em] px-2 py-0.5 rounded-full ${
                 isActive
-                    ? 'bg-green-500/10 text-green-600'
-                    : 'bg-amber-500/10 text-amber-600'
+                    ? 'bg-green-500/10 text-success-ink'
+                    : 'bg-amber-500/10 text-warning-ink'
             }`}>
                 {isActive ? 'Ativo' : 'Pendente'}
             </span>

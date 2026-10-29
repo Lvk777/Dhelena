@@ -91,7 +91,7 @@ export default function OrderDetail() {
                             return (
                                 <div key={statusKey} className="flex items-center gap-4">
                                     <div className="flex flex-col items-center">
-                                        <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-colors ${done ? "bg-[hsl(var(--gold))] border-[hsl(var(--gold))] text-white" : "border-border text-muted-foreground"}`}>
+                                        <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-colors ${done ? "bg-[hsl(var(--gold))] border-[hsl(var(--gold))] text-accent-foreground" : "border-border text-muted-foreground"}`}>
                                             {done ? <Check className="w-4 h-4" strokeWidth={2} /> : <span className="text-xs">{i + 1}</span>}
                                         </div>
                                         {i < ORDER_TIMELINE.length - 1 && <div className={`w-px h-8 ${done && i < currentStep ? "bg-[hsl(var(--gold))]" : "bg-border"}`} />}
@@ -140,7 +140,7 @@ export default function OrderDetail() {
                 <InfoBlock title="Pagamento">
                     <div className="space-y-2 text-sm">
                         <p className="flex items-center gap-2">
-                            <PaymentIcon className="w-4 h-4 text-[hsl(var(--gold))]" strokeWidth={1.5} />
+                            <PaymentIcon className="w-4 h-4 text-gold-ink" strokeWidth={1.5} />
                             {PAYMENT_LABELS[order.payment_method] || order.payment_method || "—"}
                         </p>
                         <p>
@@ -156,7 +156,7 @@ export default function OrderDetail() {
                 <InfoBlock title="Entrega">
                     <div className="space-y-2 text-sm">
                         <p className="flex items-center gap-2">
-                            <Truck className="w-4 h-4 text-[hsl(var(--gold))]" strokeWidth={1.5} />
+                            <Truck className="w-4 h-4 text-gold-ink" strokeWidth={1.5} />
                             {SHIPPING_LABELS[order.shipping_method] || order.shipping_method || "—"}
                         </p>
                         {order.shipping_carrier && <p className="text-muted-foreground">{order.shipping_carrier} · {order.shipping_service_name}</p>}

@@ -65,7 +65,7 @@ export default function Orders() {
                                 <span className="text-muted-foreground">{(order.items || []).length} {((order.items || []).length) === 1 ? "item" : "itens"} · </span>
                                 <span className="font-medium">{formatBRL(order.total)}</span>
                             </div>
-                            <Link to={`/minha-conta/pedidos/${order.id}`} className="btn-ghost text-[hsl(var(--rose))]">
+                            <Link to={`/minha-conta/pedidos/${order.id}`} className="btn-ghost text-rose-ink">
                                 Ver detalhes <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
                             </Link>
                         </div>

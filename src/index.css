@@ -17,8 +17,8 @@
         --muted: 20 28% 94%;
         --muted-foreground: 25 5% 39%;
         --accent: 44 69% 54%;
-        --accent-foreground: 0 0% 100%;
-        --destructive: 0 62% 50%;
+        --accent-foreground: 25 8% 14%;
+        --destructive: 0 65% 38%;
         --destructive-foreground: 0 0% 98%;
         --border: 20 18% 89%;
         --input: 20 18% 89%;
@@ -33,10 +33,17 @@
         --blossom: 351 52% 80%;
         /* #E6B0B8 rosa claro */
         --rose: 352 36% 45%;
+        --rose-ink: 352 36% 45%;
         /* Rosa escuro: texto branco e texto rosa sobre fundo claro alcançam contraste AA. */
         --gold: 44 69% 54%;
+        --gold-ink: 36 72% 28%;
+        --error-ink: 0 70% 35%;
+        --warning-ink: 32 90% 28%;
+        --success-ink: 145 65% 27%;
+        --info-ink: 210 65% 32%;
         /* #DAAF37 dourado */
         --bone: 30 20% 98%;
+        --on-dark: 30 20% 98%;
         /* #FCFAF8 off-white quente */
         --charcoal: 25 8% 16%;
         /* #2D2926 */
@@ -74,13 +81,19 @@
         --muted-foreground: 30 10% 68%;
         --accent: 44 69% 54%;
         --accent-foreground: 25 8% 14%;
-        --destructive: 0 62% 50%;
+        --destructive: 0 65% 38%;
         --destructive-foreground: 0 0% 98%;
         --border: 25 8% 24%;
         --input: 25 8% 24%;
         --ring: 44 69% 54%;
 
         --bone: 25 8% 12%;
+        --rose-ink: 352 60% 75%;
+        --gold-ink: 44 69% 64%;
+        --error-ink: 0 80% 75%;
+        --warning-ink: 42 90% 70%;
+        --success-ink: 145 55% 68%;
+        --info-ink: 210 80% 75%;
 
         --sidebar-background: 25 8% 14%;
         --sidebar-foreground: 30 18% 97%;
@@ -133,8 +146,8 @@
     }
 
     :is(input, select, textarea)[aria-invalid="true"]:focus-visible {
-        border-color: hsl(var(--destructive)) !important;
-        box-shadow: 0 0 0 1px hsl(var(--destructive));
+        border-color: hsl(var(--error-ink)) !important;
+        box-shadow: 0 0 0 1px hsl(var(--error-ink));
     }
 }
 
@@ -148,11 +161,11 @@
     }
 
     .btn-outline {
-        @apply inline-flex items-center justify-center gap-2 border border-[hsl(var(--gold))] text-foreground text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--gold))] disabled:opacity-50;
+        @apply inline-flex items-center justify-center gap-2 border border-[hsl(var(--gold))] text-foreground text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--gold))] hover:text-accent-foreground disabled:opacity-50;
     }
 
     .btn-ghost {
-        @apply inline-flex items-center justify-center gap-2 bg-[hsl(var(--blossom))]/40 text-[hsl(var(--rose))] text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-colors duration-300 hover:bg-[hsl(var(--blossom))] disabled:opacity-50;
+        @apply inline-flex items-center justify-center gap-2 bg-muted text-rose-ink text-[11px] uppercase tracking-[0.22em] font-medium px-8 py-4 transition-colors duration-300 hover:bg-secondary disabled:opacity-50;
     }
 
     .btn-danger {
@@ -161,6 +174,10 @@
 
     .eyebrow {
         @apply text-[11px] uppercase tracking-[0.32em] text-[hsl(var(--rose-deep))] font-medium;
+    }
+
+    .dark .eyebrow {
+        color: hsl(var(--rose-ink));
     }
 
     .gold-rule {
@@ -182,7 +199,11 @@
     }
 
     .admin-field:disabled {
-        @apply opacity-60 cursor-not-allowed;
+        @apply bg-muted text-muted-foreground cursor-not-allowed;
+    }
+
+    .dark .admin-field {
+        color-scheme: dark;
     }
 
     select.admin-field {

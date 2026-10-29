@@ -113,14 +113,14 @@ export default function CardPaymentBrick({ order, publicKey, amount, maxInstallm
             <p className="text-2xl font-heading mt-2">{formatBRL(Number(amount))}</p>
             <p className="text-sm text-muted-foreground">{isDebit ? 'Pagamento à vista, nas modalidades aceitas para este cartão.' : maxInstallments > 1 ? 'Informe o cartão para consultar as opções de parcelas disponíveis.' : 'Pagamento à vista. Parcelamento sujeito à aprovação comercial e disponibilidade.'}</p>
         </div>
-        {(loadError || error || sdkNotice) && <div role="alert" className="flex gap-2 p-4 border border-destructive/30 text-destructive text-sm mb-4"><AlertCircle className="w-4 h-4 shrink-0" /><p>{loadError || error || sdkNotice}</p></div>}
+        {(loadError || error || sdkNotice) && <div role="alert" className="flex gap-2 p-4 border border-destructive/30 text-error-ink text-sm mb-4"><AlertCircle className="w-4 h-4 shrink-0" /><p>{loadError || error || sdkNotice}</p></div>}
         {loading && !result && <div role="status" className="flex flex-col items-center py-12"><Loader2 className="w-8 h-8 animate-spin" /><p className="mt-4">Carregando formulário de cartão...</p></div>}
         <div key={containerId} id={containerId} hidden={!!result || !!loadError || processing} />
         {offerNotice && <p role="status" className="text-sm mt-3">{offerNotice}</p>}
         {selectedOffer && <p role="status" className="text-sm mt-3">{selectedOffer.installments}x de {formatBRL(selectedOffer.installment_amount)} · Juros: {formatBRL(selectedOffer.buyer_interest_amount)} · Total da cliente: {formatBRL(selectedOffer.buyer_total)}. Eventual ajuste de centavos segue o provedor.</p>}
         {loadError && !submitted.current && <button type="button" className="btn-outline min-h-11" onClick={() => setRetry(value => value + 1)}>Tentar carregar novamente</button>}
         {processing && <p role="status" className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Confirmando pagamento...</p>}
-        {result?.payment_status === 'approved' && <p role="status" className="text-green-700 flex items-center gap-2"><Check />Pagamento aprovado!</p>}
+        {result?.payment_status === 'approved' && <p role="status" className="text-success-ink flex items-center gap-2"><Check />Pagamento aprovado!</p>}
         {result && result.payment_status !== 'approved' && <div className="space-y-4">
             <p role="status" className="text-sm">{result.payment_status === 'rejected' ? 'Pagamento não aprovado. O atendimento pode orientar os próximos passos.' : challengeUrl ? 'Confirme a autenticação solicitada pelo emissor do cartão.' : 'Pagamento aguardando confirmação. Consulte o status antes de outra tentativa.'}</p>
             {challengeUrl && <iframe src={challengeUrl} title="Autenticação segura do cartão no Mercado Pago" className="w-full h-[500px] border" referrerPolicy="no-referrer" />}

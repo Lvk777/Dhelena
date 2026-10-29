@@ -80,9 +80,9 @@ export default function LoginHistoryTab() {
 
     const statusBadge = (status) => {
         const map = {
-            success: "bg-accent/10 text-accent",
-            failed: "bg-rose/10 text-rose",
-            blocked: "bg-destructive/10 text-destructive",
+            success: "bg-accent/10 text-gold-ink",
+            failed: "bg-rose/10 text-rose-ink",
+            blocked: "bg-destructive/10 text-error-ink",
         };
         return map[status] || "bg-muted text-muted-foreground";
     };
@@ -188,11 +188,11 @@ export default function LoginHistoryTab() {
                                         <td className="px-5 py-3 text-xs whitespace-nowrap">{formatDate(r.created_at)}</td>
                                         <td className="px-5 py-3 text-xs truncate max-w-[180px]">{r.email}</td>
                                         <td className="px-5 py-3">
-                                            <span className={`text-[10px] uppercase px-2 py-0.5 rounded ${r.user_type === "admin" ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground"}`}>{r.user_type}</span>
+                                            <span className={`text-[10px] uppercase px-2 py-0.5 rounded ${r.user_type === "admin" ? "bg-accent/10 text-gold-ink" : "bg-muted text-muted-foreground"}`}>{r.user_type}</span>
                                         </td>
                                         <td className="px-5 py-3">
                                             <span className={`text-[10px] uppercase px-2 py-0.5 rounded ${statusBadge(r.status)}`}>{r.status}</span>
-                                            {r.is_suspicious && <ShieldAlert className="inline w-3 h-3 text-destructive ml-1" />}
+                                            {r.is_suspicious && <ShieldAlert className="inline w-3 h-3 text-error-ink ml-1" />}
                                         </td>
                                         <td className="px-5 py-3 text-xs">{r.ip_address || "—"}</td>
                                         <td className="px-5 py-3 text-xs">{[r.city, r.state, r.country].filter(Boolean).join(", ") || "—"}</td>

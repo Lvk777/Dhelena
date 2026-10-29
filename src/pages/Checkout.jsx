@@ -236,7 +236,7 @@ export default function Checkout() {
         return (
             <div className="container-boutique py-32 text-center max-w-lg">
                 <div className="w-16 h-16 rounded-full bg-[hsl(var(--gold))] mx-auto flex items-center justify-center">
-                    <Check className="w-8 h-8 text-white" strokeWidth={1.5} />
+                    <Check className="w-8 h-8 text-accent-foreground" strokeWidth={1.5} />
                 </div>
                 <h1 className="mt-6 font-heading text-4xl tracking-[0.03em]">Pedido confirmado</h1>
                 <div className="flex justify-center mt-5"><div className="gold-rule" /></div>
@@ -336,7 +336,7 @@ export default function Checkout() {
             <div className="grid grid-cols-4 gap-1 sm:gap-4 mt-10 mb-12" aria-label="Etapas do checkout">
                 {STEPS.map((s, i) => (
                     <div key={s} className="flex flex-col items-center min-w-0">
-                            <div className={`w-9 h-9 rounded-full border flex items-center justify-center text-xs transition-colors ${i < step ? "bg-[hsl(var(--gold))] border-[hsl(var(--gold))] text-white" : i === step ? "border-foreground text-foreground" : "border-border text-muted-foreground"}`}>
+                            <div className={`w-9 h-9 rounded-full border flex items-center justify-center text-xs transition-colors ${i < step ? "bg-[hsl(var(--gold))] border-[hsl(var(--gold))] text-accent-foreground" : i === step ? "border-foreground text-foreground" : "border-border text-muted-foreground"}`}>
                                 {i < step ? <Check className="w-4 h-4" strokeWidth={2} /> : i + 1}
                             </div>
                             <span className={`text-[9px] sm:text-[10px] mt-2 text-center break-words ${i === step ? "text-foreground font-medium" : "text-muted-foreground"}`}>{s}</span>
@@ -390,7 +390,7 @@ export default function Checkout() {
                                 pickupAddress={publicSettings?.shipping?.pickup_address}
                                 pickupInstructions={publicSettings?.shipping?.pickup_instructions}
                             />
-                            {errors.shipping && <p role="alert" className="text-[11px] text-[hsl(var(--rose))]">{errors.shipping}</p>}
+                            {errors.shipping && <p role="alert" className="text-[11px] text-rose-ink">{errors.shipping}</p>}
                         </div>
                     )}
 
@@ -398,7 +398,7 @@ export default function Checkout() {
                     {step === 3 && (
                         <div className="space-y-5">
                             <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Forma de pagamento</h2>
-                            {paymentLoadError && <div role="alert" className="text-sm text-destructive">{paymentLoadError} <button type="button" onClick={loadPaymentMethods} className="underline min-h-11">Tentar novamente</button></div>}
+                            {paymentLoadError && <div role="alert" className="text-sm text-error-ink">{paymentLoadError} <button type="button" onClick={loadPaymentMethods} className="underline min-h-11">Tentar novamente</button></div>}
                             {!paymentMethods && !paymentLoadError ? (
                                 <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                     <Loader2 className="w-4 h-4 animate-spin" /> Carregando métodos de pagamento...
@@ -411,15 +411,15 @@ export default function Checkout() {
                                         ? `${Number(paymentMethods.pix_discount.percentage).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% de desconto nos produtos sem cupom ou promoção de preço. O frete não recebe desconto Pix.`
                                         : "À vista. QR Code ou código copia e cola após a criação válida do pagamento; confirmação pelo Mercado Pago."} />
                                     {!paymentMethods.enabled?.pix && !paymentMethods.enabled?.credit_card && !paymentMethods.enabled?.debit_card && (
-                                        <div className="p-4 border border-amber-500/30 bg-amber-500/5 text-sm text-amber-700">
+                                        <div className="p-4 border border-amber-500/30 bg-amber-500/5 text-sm text-warning-ink">
                                             Nenhum método de pagamento disponível. Verifique a configuração do Mercado Pago no admin.
                                         </div>
                                     )}
                                 </div>
                             ) : null}
-                            {errors.payment && <p role="alert" className="text-[11px] text-[hsl(var(--rose))]">{errors.payment}</p>}
+                            {errors.payment && <p role="alert" className="text-[11px] text-rose-ink">{errors.payment}</p>}
                             {pricingLoading && <p role="status" className="text-sm text-muted-foreground">Conferindo descontos e total...</p>}
-                            {pricingError && <p role="alert" className="text-sm text-red-700">{pricingError} <button type="button" onClick={() => setPricingRetry(value => value + 1)} className="underline min-h-11">Tentar novamente</button></p>}
+                            {pricingError && <p role="alert" className="text-sm text-error-ink">{pricingError} <button type="button" onClick={() => setPricingRetry(value => value + 1)} className="underline min-h-11">Tentar novamente</button></p>}
                             <div className="p-4 bg-[hsl(var(--bone))] text-xs text-muted-foreground leading-relaxed">
                                 <p>Ao confirmar, seu pedido será criado. O pagamento pelo Mercado Pago será iniciado na próxima tela.</p>
                                 <p className="mt-1">Você verá o valor final confirmado antes de pagar.</p>
@@ -439,7 +439,7 @@ export default function Checkout() {
                         )}
                     </div>
                     {orderError && (
-                        <div role="alert" className="mt-4 p-4 bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+                        <div role="alert" className="mt-4 p-4 bg-destructive/10 border border-destructive/30 text-error-ink text-sm">
                             {orderError}
                         </div>
                     )}
@@ -463,7 +463,7 @@ export default function Checkout() {
                         </div>
                         <div className="pt-4 border-t border-border space-y-2 text-sm">
                             <div className="flex justify-between"><span className="text-muted-foreground">Subtotal dos produtos</span><span>{formatBRL(pricing?.subtotal ?? subtotal)}</span></div>
-                            {(pricing?.discount_breakdown?.coupon ?? couponDiscount) > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Cupom ({couponCode})</span><span className="text-[hsl(var(--rose))]">- {formatBRL(pricing?.discount_breakdown?.coupon ?? couponDiscount)}</span></div>}
+                            {(pricing?.discount_breakdown?.coupon ?? couponDiscount) > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Cupom ({couponCode})</span><span className="text-rose-ink">- {formatBRL(pricing?.discount_breakdown?.coupon ?? couponDiscount)}</span></div>}
                             {pricing?.discount_breakdown?.promotion > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Promoção</span><span>- {formatBRL(pricing.discount_breakdown.promotion)}</span></div>}
                             {pricing?.discount_breakdown?.pix > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Desconto Pix (5%)</span><span>- {formatBRL(pricing.discount_breakdown.pix)}</span></div>}
                             {paymentMethod === "pix" && paymentMethods?.pix_discount?.enabled && ['coupon', 'price_promotion'].includes(pricing?.pix_discount_reason) && <p className="text-xs text-muted-foreground">O cupom ou preço promocional foi mantido. O desconto Pix não é acumulável.</p>}
@@ -494,7 +494,7 @@ function Field({ label, value, onChange, full = false, error = "", type = "text"
         <div className={full ? "sm:col-span-2" : ""}>
             <label htmlFor={id} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
             <input id={id} type={type} autoComplete={autoComplete} inputMode={inputMode} value={value} onChange={(e) => onChange(e.target.value)} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} className={`w-full border bg-background px-4 py-3.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${error ? "border-[hsl(var(--rose))]" : "border-border"}`} />
-            {error && <p id={`${id}-error`} className="text-[11px] text-[hsl(var(--rose))] mt-1">{error}</p>}
+            {error && <p id={`${id}-error`} className="text-[11px] text-rose-ink mt-1">{error}</p>}
         </div>
     );
 }
@@ -502,7 +502,7 @@ function Field({ label, value, onChange, full = false, error = "", type = "text"
 function PayOption({ selected, disabled, onClick, icon: Icon, title, desc }) {
     return (
         <button type="button" aria-pressed={selected} disabled={disabled} onClick={onClick} className={`w-full flex items-center gap-4 p-5 border text-left min-h-14 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${selected ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))]/5" : "border-border hover:border-foreground/40"}`}>
-            <Icon className="w-5 h-5 text-[hsl(var(--gold))]" strokeWidth={1.25} />
+            <Icon className="w-5 h-5 text-gold-ink" strokeWidth={1.25} />
             <div className="flex-1">
                 <p className="text-sm font-medium">{title}</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">{disabled ? "Indisponível no momento" : desc}</p>

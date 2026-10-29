@@ -127,7 +127,7 @@ export default function Cart() {
                             <div className="flex-1 flex flex-col min-w-0">
                                 <div className="flex justify-between gap-4">
                                     <div>
-                                        <Link to={`/produto/${l.productId}`} className="text-base font-medium hover:text-[hsl(var(--rose))] transition-colors">{l.product.name}</Link>
+                                        <Link to={`/produto/${l.productId}`} className="text-base font-medium hover:text-rose-ink transition-colors">{l.product.name}</Link>
                                         <p className="text-[11px] text-muted-foreground mt-1 uppercase tracking-[0.14em]">Cód. {l.product.sku}</p>
                                         <p className="text-sm text-muted-foreground mt-2">{l.product.colors.find((c) => c.id === l.colorId)?.name || COLOR_SWATCHES[l.colorId]?.name} · Tam {l.size}</p>
                                     </div>
@@ -162,7 +162,7 @@ export default function Cart() {
                         </form>
                         {couponResult?.valid && (
                             <div className="flex items-center justify-between -mt-2">
-                                <p className="text-[11px] text-[hsl(var(--gold))]">
+                                <p className="text-[11px] text-gold-ink">
                                     Cupom {couponCode} aplicado {couponResult.discount_type === 'percentage'
                                         ? `(${couponResult.discount_value}% de desconto)`
                                         : `(${formatBRL(couponResult.discount)} de desconto)`}
@@ -179,7 +179,7 @@ export default function Cart() {
                             </div>
                             <button type="submit" disabled={shippingLoading} className="btn-outline px-5 disabled:opacity-50">{shippingLoading ? "..." : "OK"}</button>
                         </form>
-                        {shippingError && <p role="alert" className="text-xs text-destructive">{shippingError}</p>}
+                        {shippingError && <p role="alert" className="text-xs text-error-ink">{shippingError}</p>}
                         {shippingOptions.length > 0 && <div role="radiogroup" aria-label="Opções de frete" className="space-y-2">
                             {shippingOptions.map((option) => <button key={option.id} type="button" role="radio" aria-checked={String(frete?.quoteId) === String(option.id) && shipping !== null}
                                 onClick={() => setFrete({ method: "melhor_envio", quoteId: option.id, cost: Number(option.price), contextKey: quoteKey, delivery_estimate: option.delivery_estimate })} className={`w-full text-left border p-3 text-sm min-h-11 ${String(frete?.quoteId) === String(option.id) && shipping !== null ? "border-[hsl(var(--gold))] bg-background" : "border-border"}`}>
@@ -199,11 +199,11 @@ export default function Cart() {
                             </div>
                         </div>
 
-                        {unavailableItems.length > 0 && !catalogLoading && <div role="alert" className="text-xs text-destructive space-y-2">
+                        {unavailableItems.length > 0 && !catalogLoading && <div role="alert" className="text-xs text-error-ink space-y-2">
                             <p>{unavailableItems.length} {unavailableItems.length === 1 ? 'item saiu' : 'itens saíram'} do catálogo. Remova {unavailableItems.length === 1 ? 'esse item' : 'esses itens'} para continuar.</p>
                             <button type="button" className="underline min-h-11" onClick={() => unavailableItems.forEach(({ productId, colorId, size }) => removeFromCart({ productId, colorId, size }))}>Remover itens indisponíveis</button>
                         </div>}
-                        {invalidLines.length > 0 && <p role="alert" className="text-xs text-destructive">Há itens sem estoque suficiente. Ajuste a sacola para continuar.</p>}
+                        {invalidLines.length > 0 && <p role="alert" className="text-xs text-error-ink">Há itens sem estoque suficiente. Ajuste a sacola para continuar.</p>}
                         <button onClick={handleCheckout} disabled={catalogLoading || invalidLines.length > 0 || unavailableItems.length > 0} className="btn-gold w-full disabled:opacity-50">Finalizar compra <ArrowRight className="w-4 h-4" strokeWidth={1.5} /></button>
                     </div>
                 </div>
@@ -219,7 +219,7 @@ function Row({ label, value, accent = false }) {
     return (
         <div className="flex justify-between">
             <span className="text-muted-foreground">{label}</span>
-            <span className={accent ? "text-[hsl(var(--rose))]" : ""}>{value}</span>
+            <span className={accent ? "text-rose-ink" : ""}>{value}</span>
         </div>
     );
 }

@@ -71,7 +71,7 @@ export default function AdminOrderDetail() {
         } finally { setTrackingLoading(false); }
     };
 
-    if (loading) return <div className="h-64 bg-background animate-pulse" />;
+    if (loading) return <div className="h-64 bg-background text-foreground animate-pulse" />;
     if (!order) return <div className="text-center py-12"><p className="text-muted-foreground">Pedido não encontrado.</p><Link to="/admin/pedidos" className="btn-outline mt-4 inline-flex">Voltar</Link></div>;
 
     const snapshot = order.snapshot || {};
@@ -93,7 +93,7 @@ export default function AdminOrderDetail() {
                     <p className="text-sm text-muted-foreground mt-1">{new Date(order.created_date).toLocaleString("pt-BR")}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <select value={order.status} onChange={(e) => changeStatus(e.target.value)} disabled={saving || !isPaid || order.status === 'cancelado'} className="border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" >
+                    <select value={order.status} onChange={(e) => changeStatus(e.target.value)} disabled={saving || !isPaid || order.status === 'cancelado'} className="admin-field w-auto px-4 py-2.5" >
                         {!STATUS_OPTIONS.some(s => s.value === order.status) && <option value={order.status}>{ORDER_STATUS[order.status]?.label || order.status}</option>}
                         {STATUS_OPTIONS.filter(s => s.value === order.status || NEXT_STATUS[order.status]?.includes(s.value))
                             .map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -105,7 +105,7 @@ export default function AdminOrderDetail() {
                 {/* left: items + summary + timeline */}
                 <div className="min-w-0 [overflow-wrap:anywhere] lg:col-span-2 space-y-5">
                     {/* Products */}
-                    <div className="bg-background p-5">
+                    <div className="bg-background text-foreground p-5">
                         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Produtos</h2>
                         <div className="space-y-3">
                             {(order.items || []).map((item, i) => (
@@ -128,7 +128,7 @@ export default function AdminOrderDetail() {
                     </div>
 
                     {/* Payment info */}
-                    <div className="bg-background p-5">
+                    <div className="bg-background text-foreground p-5">
                         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4 flex items-center gap-2"><PaymentIcon className="w-4 h-4" strokeWidth={1.5} /> Pagamento</h2>
                         <div className="grid sm:grid-cols-2 gap-3 text-sm">
                             <InfoRow label="Método" value={PAYMENT_LABELS[order.payment_method] || order.payment_method || "—"} />
@@ -149,7 +149,7 @@ export default function AdminOrderDetail() {
                     <OperationalRefund key={order.id} order={order} onChanged={load} />
 
                     {/* Delivery / Shipping */}
-                    <div className="bg-background p-5">
+                    <div className="bg-background text-foreground p-5">
                         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4 flex items-center gap-2"><Truck className="w-4 h-4" strokeWidth={1.5} /> Entrega</h2>
                         <div className="grid sm:grid-cols-2 gap-3 text-sm">
                             <InfoRow label="Transportadora" value={order.shipping_carrier || snapshot.shipping_carrier || "—"} />
@@ -177,12 +177,12 @@ export default function AdminOrderDetail() {
                                 )}
                             </div>
                         )}
-                        {trackingInfo?.error && <p className="text-xs text-red-600 mt-2">{trackingInfo.error}</p>}
+                        {trackingInfo?.error && <p className="text-xs text-error-ink mt-2">{trackingInfo.error}</p>}
                     </div>
 
                     {/* Timeline */}
                     {events.length > 0 && (
-                        <div className="bg-background p-5">
+                        <div className="bg-background text-foreground p-5">
                         <OrderTimeline events={events} paymentStatus={order.payment_status} />
                         </div>
                     )}
@@ -190,7 +190,7 @@ export default function AdminOrderDetail() {
 
                 {/* right: customer + address */}
                 <div className="min-w-0 [overflow-wrap:anywhere] space-y-5">
-                    <div className="bg-background p-5">
+                    <div className="bg-background text-foreground p-5">
                         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-3">Cliente</h2>
                         <div className="space-y-1.5 text-sm">
                             <p className="font-medium">{customer.name || "—"}</p>
@@ -199,10 +199,10 @@ export default function AdminOrderDetail() {
                             <p className="text-muted-foreground">CPF: {customer.cpf || "—"}</p>
                         </div>
                     </div>
-                    <div className="bg-background p-5">
+                    <div className="bg-background text-foreground p-5">
                         <div className="flex items-center justify-between mb-3">
                             <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Endereço de entrega</h2>
-                            <button onClick={copyAddress} className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.16em] text-muted-foreground hover:text-[hsl(var(--gold))] transition-colors">
+                            <button onClick={copyAddress} className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.16em] text-muted-foreground hover:text-gold-ink transition-colors">
                                 <Copy className="w-3.5 h-3.5" strokeWidth={1.5} /> Copiar
                             </button>
                         </div>
@@ -213,7 +213,7 @@ export default function AdminOrderDetail() {
                             <p className="text-muted-foreground">CEP {shippingAddress.cep}</p>
                         </div>
                     </div>
-                    <div className="bg-background p-5">
+                    <div className="bg-background text-foreground p-5">
                         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-3">Resumo</h2>
                         <div className="space-y-1.5 text-sm">
                             <p><span className="text-muted-foreground">Pagamento:</span> {PAYMENT_LABELS[order.payment_method] || order.payment_method || "—"}</p>

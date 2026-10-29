@@ -185,7 +185,7 @@ export async function createPixPayment({ orderId, orderNumber, total, payer, ide
 }
 
 // ─── Create card payment via Orders API ───────────────────────
-export async function createCardPayment({ orderId, orderNumber, total, payer, cardToken, installments, paymentMethodId, paymentType, issuerId, idempotencyKey }) {
+export async function createCardPayment({ orderId, orderNumber, total, payer, cardToken, installments, paymentMethodId, paymentType, idempotencyKey }) {
     const safePayer = normalizePayer(payer);
     const body = {
         type: 'online',
@@ -200,7 +200,6 @@ export async function createCardPayment({ orderId, orderNumber, total, payer, ca
                     type: paymentType,
                     token: cardToken,
                     installments: parseInt(installments) || 1,
-                    issuer_id: issuerId ? String(issuerId) : undefined,
                 }),
             }],
         },

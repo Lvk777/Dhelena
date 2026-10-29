@@ -67,7 +67,7 @@ export default function CustomerAfterSales({ order, onChanged }) {
 
     return <section className="border-t border-border pt-6 mt-8" aria-label="Pós-venda do pedido">
         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-3">Pós-venda</h2>
-        {error && <p role="alert" className="text-xs text-red-700 mb-3">{error}</p>}
+        {error && <p role="alert" className="text-xs text-error-ink mb-3">{error}</p>}
         {data?.withdrawal_request ? <p role="status" className="text-sm border border-border p-3 mb-4">
             Solicitação de arrependimento recebida em {showDate(data.withdrawal_request.received_at)}.
             Protocolo: {data.withdrawal_request.request_id}. A equipe avaliará o pedido; este registro não confirma um estorno.

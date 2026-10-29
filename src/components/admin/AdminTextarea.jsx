@@ -6,7 +6,7 @@ export default function AdminTextarea({ label = "", value, onChange, rows = 3, p
         <div className={full ? "sm:col-span-2" : ""}>
             {label && (
                 <label htmlFor={id} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
-                    {label}{required && <span className="text-rose ml-1">*</span>}
+                    {label}{required && <span className="text-rose-ink ml-1">*</span>}
                 </label>
             )}
             <textarea
@@ -20,7 +20,7 @@ export default function AdminTextarea({ label = "", value, onChange, rows = 3, p
                 className={`admin-field ${error ? "border-rose" : ""}`}
             />
             {description && !error && <p id={`${id}-feedback`} className="text-[11px] text-muted-foreground mt-1.5">{description}</p>}
-            {error && <p id={`${id}-feedback`} role="alert" className="text-[11px] text-rose mt-1.5">{error}</p>}
+            {error && <p id={`${id}-feedback`} role="alert" className="text-[11px] text-rose-ink mt-1.5">{error}</p>}
         </div>
     );
 }

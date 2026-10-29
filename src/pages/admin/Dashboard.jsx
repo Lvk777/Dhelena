@@ -13,7 +13,7 @@ export default function Dashboard() {
             .catch(() => setError('Não foi possível consultar os indicadores do novo período.'));
     }, []);
 
-    if (error) return <p role="alert" className="text-destructive p-6">{error}</p>;
+    if (error) return <p role="alert" className="text-error-ink p-6">{error}</p>;
     if (!summary) return <div className="h-64 bg-background animate-pulse" />;
     if (!summary.configured) return <div className="bg-background p-8">
         <h1 className="font-heading text-2xl">Dashboard do novo lançamento</h1>
@@ -28,7 +28,7 @@ export default function Dashboard() {
     return <div>
         <h1 className="font-heading text-2xl tracking-[0.03em] mb-2">Dashboard</h1>
         <p className="text-xs text-muted-foreground mb-6">Nova operação desde {new Date(summary.start_at).toLocaleString('pt-BR')} · <Link to="/admin/pedidos" className="underline">Consultar histórico de pedidos</Link></p>
-        {!!summary.refund_inconsistencies && <p role="alert" className="text-destructive mb-5">Há reembolsos que excedem o valor de pedidos. Concilie antes de usar os indicadores.</p>}
+        {!!summary.refund_inconsistencies && <p role="alert" className="text-error-ink mb-5">Há reembolsos que excedem o valor de pedidos. Concilie antes de usar os indicadores.</p>}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <KPI icon={DollarSign} label="Faturamento líquido do período" value={formatBRL(summary.net_revenue)} />
             <KPI icon={ShoppingCart} label="Vendas pagas" value={summary.paid_orders} />
@@ -62,7 +62,7 @@ export default function Dashboard() {
 }
 
 function KPI({ icon: Icon, label, value }) {
-    return <div className="bg-background p-5"><Icon className="w-5 h-5 text-[hsl(var(--gold))] mb-3" strokeWidth={1.25} />
+    return <div className="bg-background p-5"><Icon className="w-5 h-5 text-gold-ink mb-3" strokeWidth={1.25} />
         <p className="font-numeric text-2xl font-medium">{value}</p>
         <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground mt-1">{label}</p></div>;
 }

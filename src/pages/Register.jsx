@@ -96,7 +96,7 @@ export default function Register() {
                 title="Verifique seu e-mail"
                 subtitle={`Confira as instruções de confirmação em ${form.email}`}
             >
-                {error && <div className="mb-4 p-3 bg-[hsl(var(--rose))]/10 text-[hsl(var(--rose))] text-sm text-center">{error}</div>}
+                {error && <div className="mb-4 p-3 bg-[hsl(var(--rose))]/10 text-rose-ink text-sm text-center">{error}</div>}
                 <p className="text-sm mb-5">Abra o link enviado pela D’Helenas ou informe o código abaixo.</p>
                 <label className="block text-sm mb-6">Código de confirmação<input className="admin-field block mt-2 w-full" autoComplete="one-time-code" inputMode="numeric" maxLength={10} value={otpCode} onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))} /></label>
                 <button onClick={handleVerify} disabled={loading || otpCode.length < 6} className="btn-gold w-full">
@@ -104,7 +104,7 @@ export default function Register() {
                 </button>
                 <p className="text-center text-sm text-muted-foreground mt-4">
                     Não recebeu?{" "}
-                    <button disabled={loading} onClick={handleResend} className="text-[hsl(var(--rose))] min-h-11 font-medium hover:underline">Reenviar instruções</button>
+                    <button disabled={loading} onClick={handleResend} className="text-rose-ink min-h-11 font-medium hover:underline">Reenviar instruções</button>
                 </p>
             </AuthLayout>
         );
@@ -117,7 +117,7 @@ export default function Register() {
             footer={
                 <>
                     Já tem conta?{" "}
-                    <Link to={"/login" + (returnTo !== "/" ? "?returnTo=" + encodeURIComponent(returnTo) : "")} className="text-[hsl(var(--rose))] font-medium hover:underline">
+                    <Link to={"/login" + (returnTo !== "/" ? "?returnTo=" + encodeURIComponent(returnTo) : "")} className="text-rose-ink font-medium hover:underline">
                         Entrar
                     </Link>
                 </>
@@ -132,7 +132,7 @@ export default function Register() {
                 </div>
             </div>
 
-            {error && <div className="mb-4 p-3 bg-[hsl(var(--rose))]/10 text-[hsl(var(--rose))] text-sm text-center">{error}</div>}
+            {error && <div className="mb-4 p-3 bg-[hsl(var(--rose))]/10 text-rose-ink text-sm text-center">{error}</div>}
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Field icon={User} label="Nome completo" name="name" autoComplete="name" value={form.name} onChange={(v) => set("name", v)} required error={errors.name} />
@@ -156,7 +156,7 @@ function Field({ icon: Icon, label, name, autoComplete = undefined, value, onCha
             {type === "password"
                 ? <PasswordInput id={id} name={name} leadingIcon={Icon} visibilityLabel={name === 'confirm-password' ? 'confirmação de senha' : 'senha'} autoComplete="new-password" value={value} onChange={(e) => onChange(e.target.value)} required={required} maxLength={max} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} className={className} />
                 : <div className="relative"><Icon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" /><input id={id} name={name} type={type} autoComplete={autoComplete} value={value} onChange={(e) => onChange(e.target.value)} required={required} max={max} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} className={`${className} pr-4`} /></div>}
-            {error && <p id={`${id}-error`} role="alert" className="text-[11px] text-destructive mt-1.5">{error}</p>}
+            {error && <p id={`${id}-error`} role="alert" className="text-[11px] text-error-ink mt-1.5">{error}</p>}
         </div>
     );
 }

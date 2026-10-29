@@ -199,12 +199,12 @@ export default function Settings() {
                 </div>
             </div>
 
-            {saveError && <p role="alert" className="text-sm text-red-700 py-3">{saveError}</p>}
+            {saveError && <p role="alert" className="text-sm text-error-ink py-3">{saveError}</p>}
             {/* Save bar */}
             {hasChanges && !loading && (
                 <div className="sticky bottom-0 left-0 right-0 bg-background border-t border-border p-4 flex items-center justify-between gap-4 mt-6 -mx-5 lg:-mx-8 px-5 lg:px-8 shadow-lg z-10">
                     <p className="text-sm text-muted-foreground flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-accent" strokeWidth={1.5} /> Existem alterações não salvas
+                        <AlertCircle className="w-4 h-4 text-gold-ink" strokeWidth={1.5} /> Existem alterações não salvas
                     </p>
                     <button onClick={save} disabled={saving} className="btn-gold">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" strokeWidth={1.5} />} Salvar alterações

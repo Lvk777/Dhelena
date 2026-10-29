@@ -71,9 +71,9 @@ export default function Profile() {
                     <button onClick={save} disabled={saving} className="btn-gold">
                         {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : "Salvar alterações"}
                     </button>
-                    {saved && <span className="flex items-center gap-1.5 text-sm text-[hsl(var(--rose))]"><Check className="w-4 h-4" strokeWidth={1.5} /> Dados atualizados</span>}
+                    {saved && <span className="flex items-center gap-1.5 text-sm text-rose-ink"><Check className="w-4 h-4" strokeWidth={1.5} /> Dados atualizados</span>}
                 </div>
-                {saveError && <p role="alert" className="text-sm text-destructive mt-3">{saveError}</p>}
+                {saveError && <p role="alert" className="text-sm text-error-ink mt-3">{saveError}</p>}
                 <EmailChange />
             </div>
         </div>

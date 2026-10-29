@@ -38,9 +38,9 @@ export default function AddressFields({ form, set, disabled = false, errors = /*
                     className={`w-full border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${errClass("cep")}`}
                 />
                 {cepStatus === "searching" && <p className="text-[11px] text-muted-foreground mt-1">Buscando endereço...</p>}
-                {cepStatus === "not_found" && <p className="text-[11px] text-[hsl(var(--rose))] mt-1">CEP não encontrado. Confira o número informado.</p>}
+                {cepStatus === "not_found" && <p className="text-[11px] text-rose-ink mt-1">CEP não encontrado. Confira o número informado.</p>}
                 {cepStatus === "error" && <p className="text-[11px] text-muted-foreground mt-1">Não foi possível consultar o CEP agora. Preencha o endereço manualmente.</p>}
-                {errors.cep && <p id={id + "-cep-error"} className="text-[11px] text-[hsl(var(--rose))] mt-1">{errors.cep}</p>}
+                {errors.cep && <p id={id + "-cep-error"} className="text-[11px] text-rose-ink mt-1">{errors.cep}</p>}
             </div>
             <div>
                 <label htmlFor={id + "-state"} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Estado *</label>
@@ -52,7 +52,7 @@ export default function AddressFields({ form, set, disabled = false, errors = /*
                 >
                     {UF.map((uf) => <option key={uf} value={uf}>{uf}</option>)}
                 </select>
-                {errors.state && <p id={id + "-state-error"} className="text-[11px] text-[hsl(var(--rose))] mt-1">{errors.state}</p>}
+                {errors.state && <p id={id + "-state-error"} className="text-[11px] text-rose-ink mt-1">{errors.state}</p>}
             </div>
 
             {/* Rua */}
@@ -64,7 +64,7 @@ export default function AddressFields({ form, set, disabled = false, errors = /*
                     onChange={(e) => set("street", e.target.value)}
                     className={`w-full border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${errClass("street")}`}
                 />
-                {errors.street && <p id={id + "-street-error"} className="text-[11px] text-[hsl(var(--rose))] mt-1">{errors.street}</p>}
+                {errors.street && <p id={id + "-street-error"} className="text-[11px] text-rose-ink mt-1">{errors.street}</p>}
             </div>
 
             {/* Número + Complemento */}
@@ -77,7 +77,7 @@ export default function AddressFields({ form, set, disabled = false, errors = /*
                     onChange={(e) => set("number", e.target.value)}
                     className={`w-full border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${errClass("number")}`}
                 />
-                {errors.number && <p id={id + "-number-error"} className="text-[11px] text-[hsl(var(--rose))] mt-1">{errors.number}</p>}
+                {errors.number && <p id={id + "-number-error"} className="text-[11px] text-rose-ink mt-1">{errors.number}</p>}
             </div>
             <div>
                 <label htmlFor={id + "-complement"} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Complemento</label>
@@ -98,7 +98,7 @@ export default function AddressFields({ form, set, disabled = false, errors = /*
                     onChange={(e) => set("district", e.target.value)}
                     className={`w-full border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${errClass("district")}`}
                 />
-                {errors.district && <p id={id + "-district-error"} className="text-[11px] text-[hsl(var(--rose))] mt-1">{errors.district}</p>}
+                {errors.district && <p id={id + "-district-error"} className="text-[11px] text-rose-ink mt-1">{errors.district}</p>}
             </div>
             <div>
                 <label htmlFor={id + "-city"} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Cidade *</label>
@@ -108,7 +108,7 @@ export default function AddressFields({ form, set, disabled = false, errors = /*
                     onChange={(e) => set("city", e.target.value)}
                     className={`w-full border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors ${errClass("city")}`}
                 />
-                {errors.city && <p id={id + "-city-error"} className="text-[11px] text-[hsl(var(--rose))] mt-1">{errors.city}</p>}
+                {errors.city && <p id={id + "-city-error"} className="text-[11px] text-rose-ink mt-1">{errors.city}</p>}
             </div>
         </div>
     );

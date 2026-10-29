@@ -102,7 +102,7 @@ export default function Header() {
                             <span className="block font-heading text-2xl sm:text-[28px] leading-none tracking-[0.08em] text-foreground">
                                 D'Helenas
                             </span>
-                            <span className="hidden sm:block text-[8px] uppercase tracking-[0.4em] text-[hsl(var(--gold))] mt-1">
+                            <span className="hidden sm:block text-[8px] uppercase tracking-[0.4em] text-gold-ink mt-1">
                                 Método Ponte
                             </span>
                         </Link>
@@ -151,7 +151,7 @@ export default function Header() {
                                 value={q}
                                 onChange={(e) => setQ(e.target.value)}
                                 placeholder="O que você procura?"
-                                className="flex-1 bg-transparent text-sm font-body tracking-wide placeholder:text-muted-foreground/60 focus:outline-none"
+                                className="flex-1 bg-transparent text-sm font-body tracking-wide placeholder:text-muted-foreground focus:outline-none"
                             />
                             <button type="button" onClick={() => setSearchOpen(false)} className="text-muted-foreground hover:text-foreground">
                                 <X className="w-4 h-4" strokeWidth={1.25} />

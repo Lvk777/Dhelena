@@ -29,7 +29,7 @@ export default function ForgotPassword() {
             title="Esqueci minha senha"
             subtitle="Enviaremos um link para redefini-la"
             footer={
-                <Link to="/login" className="text-[hsl(var(--rose))] font-medium hover:underline">
+                <Link to="/login" className="text-rose-ink font-medium hover:underline">
                     <ArrowLeft className="w-3 h-3 inline mr-1" />Voltar para entrar
                 </Link>
             }
@@ -40,7 +40,7 @@ export default function ForgotPassword() {
                 </p>
             ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+                    {error && <p role="alert" className="text-sm text-error-ink">{error}</p>}
                     <div>
                         <label htmlFor="recovery-email" className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">E-mail</label>
                         <div className="relative">

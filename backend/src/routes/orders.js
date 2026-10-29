@@ -589,7 +589,6 @@ router.post('/orders/:id/payment/card', auth, async (req, res) => {
             installments: requestedInstallments,
             paymentMethodId: payment_method_id,
             paymentType,
-            issuerId: issuer_id,
             idempotencyKey,
         });
         if (!result.mp_order_id || result.external_reference !== order.order_number) {

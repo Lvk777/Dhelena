@@ -25,7 +25,7 @@ export default function ResetPassword() {
                     <p className="text-sm">Use de 8 a 128 caracteres, com letras e números.</p>
                     <div><label htmlFor="reset-password" className="block text-sm">Nova senha</label><PasswordInput id="reset-password" name="new-password" visibilityLabel="nova senha" className="admin-field w-full mt-2" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} maxLength={128} /></div>
                     <div><label htmlFor="reset-password-confirm" className="block text-sm">Confirme a nova senha</label><PasswordInput id="reset-password-confirm" name="confirm-password" visibilityLabel="confirmação da nova senha" className="admin-field w-full mt-2" autoComplete="new-password" value={repeat} onChange={e => setRepeat(e.target.value)} required /></div>
-                    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+                    {error && <p role="alert" className="text-sm text-error-ink">{error}</p>}
                     <button className="btn-gold w-full min-h-11" disabled={busy}>{busy ? 'Atualizando...' : 'Atualizar senha'}</button>
                 </form>}
     </AuthLayout>;

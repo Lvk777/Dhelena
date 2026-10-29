@@ -5,7 +5,7 @@ export default function AdminFormSection({ title = "", description = "", childre
         <div className="border border-border rounded-xl p-5 bg-background/50">
             {title && (
                 <div className="flex items-center gap-2 mb-1">
-                    {Icon && <Icon className="w-4 h-4 text-accent" strokeWidth={1.5} />}
+                    {Icon && <Icon className="w-4 h-4 text-gold-ink" strokeWidth={1.5} />}
                     <h3 className="text-[11px] uppercase tracking-[0.2em] text-foreground font-medium">{title}</h3>
                 </div>
             )}

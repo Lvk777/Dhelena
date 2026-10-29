@@ -106,9 +106,9 @@ export default function Inventory() {
     };
 
     const getStatusBadge = (qty) => {
-        if (qty === 0) return { label: "Esgotado", cls: "bg-destructive/10 text-destructive" };
-        if (qty <= lowStockThreshold) return { label: "Estoque baixo", cls: "bg-accent/10 text-accent" };
-        return { label: "Em estoque", cls: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" };
+        if (qty === 0) return { label: "Esgotado", cls: "bg-destructive/10 text-error-ink" };
+        if (qty <= lowStockThreshold) return { label: "Estoque baixo", cls: "bg-accent/10 text-gold-ink" };
+        return { label: "Em estoque", cls: "bg-emerald-500/10 text-emerald-800 dark:text-emerald-400" };
     };
 
     const openHistory = (productId) => {
@@ -131,8 +131,8 @@ export default function Inventory() {
             {/* Stats cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
                 <StatCard icon={Boxes} label="Estoque físico" value={stats.onHand} />
-                <StatCard icon={Package} label="Reservadas" value={stats.reserved} color="text-accent" />
-                <StatCard icon={Package} label="Disponíveis" value={stats.available} color="text-emerald-600 dark:text-emerald-400" />
+                <StatCard icon={Package} label="Reservadas" value={stats.reserved} color="text-gold-ink" />
+                <StatCard icon={Package} label="Disponíveis" value={stats.available} color="text-emerald-800 dark:text-emerald-400" />
                 <StatCard icon={Boxes} label="Vendas líquidas (novo ciclo)" value={stats.sold} />
             </div>
             <p className="text-xs text-muted-foreground mb-5">Estoque físico = disponível + reservado. Vendas líquidas contam aprovações do novo modelo após devoluções registradas; o contador legado não foi reinterpretado. Produtos arquivados ficam fora destes totais.</p>
@@ -160,7 +160,7 @@ export default function Inventory() {
                         className={`flex items-center gap-2 px-4 py-2.5 text-sm border rounded-lg transition-colors ${showFilters || activeFilterCount > 0 ? "border-accent bg-accent/5 text-foreground" : "border-border text-foreground/70 hover:text-foreground"}`}
                     >
                         <SlidersHorizontal className="w-4 h-4" strokeWidth={1.5} /> Filtros
-                        {activeFilterCount > 0 && <span className="bg-accent text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-numeric">{activeFilterCount}</span>}
+                        {activeFilterCount > 0 && <span className="bg-accent text-accent-foreground text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-numeric">{activeFilterCount}</span>}
                     </button>
                     {showFilters && (
                         <>
@@ -174,7 +174,7 @@ export default function Inventory() {
                                     <CompactSelect label="Tamanho" value={filters.size} onChange={(v) => setFilters((f) => ({ ...f, size: v }))} options={[{ value: "all", label: "Todos" }, ...allSizes.map((s) => ({ value: s, label: s }))]} />
                                 </div>
                                 {activeFilterCount > 0 && (
-                                    <button onClick={() => { setFilters({ category: "all", collection: "all", status: "all", color: "all", size: "all" }); }} className="text-[11px] uppercase tracking-[0.16em] text-rose hover:underline mt-3 w-full text-left">
+                                    <button onClick={() => { setFilters({ category: "all", collection: "all", status: "all", color: "all", size: "all" }); }} className="text-[11px] uppercase tracking-[0.16em] text-rose-ink hover:underline mt-3 w-full text-left">
                                         Limpar filtros
                                     </button>
                                 )}
@@ -240,7 +240,7 @@ export default function Inventory() {
                                                 <td className="py-2.5 px-3">
                                                     <div className="flex items-center gap-2">
                                                         {p.images?.[0] && <img src={p.images[0]} alt="" className="w-8 h-10 object-cover bg-bone rounded shrink-0" />}
-                                                        <Link to={`/admin/produtos/${p.id}`} className="font-medium hover:text-accent transition-colors truncate max-w-[200px]">{p.name}</Link>
+                                                        <Link to={`/admin/produtos/${p.id}`} className="font-medium hover:text-gold-ink transition-colors truncate max-w-[200px]">{p.name}</Link>
                                                     </div>
                                                 </td>
                                                 <td className="py-2.5 px-3 text-muted-foreground font-numeric">{p.sku || "—"}</td>
@@ -258,7 +258,7 @@ export default function Inventory() {
                                                         {p.colors?.length > 0 && p.colors[0]?.stock && Object.keys(p.colors[0].stock).length > 0 && (
                                                             <button
                                                                 onClick={() => setAdjustTarget({ product: p, color: p.colors[0], size: Object.keys(p.colors[0].stock)[0], currentStock: p.colors[0].stock[Object.keys(p.colors[0].stock)[0]] })}
-                                                                className="p-1.5 hover:bg-muted rounded transition-colors text-accent"
+                                                                className="p-1.5 hover:bg-muted rounded transition-colors text-gold-ink"
                                                                 title="Ajustar estoque"
                                                             >
                                                                 <ArrowUpDown className="w-4 h-4" strokeWidth={1.25} />
@@ -288,7 +288,7 @@ export default function Inventory() {
                                                                 <div className="flex justify-end">
                                                                     <button
                                                                         onClick={() => setAdjustTarget({ product: p, color: c, size, currentStock: qty })}
-                                                                        className="p-1.5 hover:bg-background rounded transition-colors text-accent"
+                                                                        className="p-1.5 hover:bg-background rounded transition-colors text-gold-ink"
                                                                         title="Ajustar"
                                                                     >
                                                                         <ArrowUpDown className="w-4 h-4" strokeWidth={1.25} />
@@ -318,7 +318,7 @@ export default function Inventory() {
                                         <div className="flex items-center gap-2 min-w-0">
                                             {p.images?.[0] && <img src={p.images[0]} alt="" className="w-10 h-12 object-cover bg-bone rounded shrink-0" />}
                                             <div className="min-w-0">
-                                                <Link to={`/admin/produtos/${p.id}`} className="font-medium text-sm hover:text-accent truncate block">{p.name}</Link>
+                                                <Link to={`/admin/produtos/${p.id}`} className="font-medium text-sm hover:text-gold-ink truncate block">{p.name}</Link>
                                                 <p className="text-[11px] text-muted-foreground font-numeric">{p.sku || "—"}</p>
                                             </div>
                                         </div>
@@ -347,7 +347,7 @@ export default function Inventory() {
                                                             <div className="flex items-center gap-2">
                                                                 <span className="font-numeric">{qty}</span>
                                                                 <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded ${vBadge.cls}`}>{vBadge.label}</span>
-                                                                <button onClick={() => setAdjustTarget({ product: p, color: c, size, currentStock: qty })} className="p-1 text-accent">
+                                                                <button onClick={() => setAdjustTarget({ product: p, color: c, size, currentStock: qty })} className="p-1 text-gold-ink">
                                                                     <ArrowUpDown className="w-3.5 h-3.5" strokeWidth={1.25} />
                                                                 </button>
                                                             </div>
@@ -409,7 +409,7 @@ function FilterChip({ label, value, onRemove }) {
     return (
         <span className="inline-flex items-center gap-1.5 bg-accent/10 text-foreground text-xs px-2.5 py-1 rounded-full">
             <span className="text-muted-foreground">{label}:</span> {value}
-            <button onClick={onRemove} className="hover:text-rose transition-colors"><X className="w-3 h-3" strokeWidth={2} /></button>
+            <button onClick={onRemove} className="hover:text-rose-ink transition-colors"><X className="w-3 h-3" strokeWidth={2} /></button>
         </span>
     );
 }

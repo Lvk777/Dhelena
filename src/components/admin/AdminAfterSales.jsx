@@ -119,11 +119,11 @@ export default function AdminAfterSales({ order, onChanged }) {
     }), status === 'recebida' ? 'Confirmar recebimento físico e classificação de todos os itens?' : null);
 
     return (
-        <section className="bg-background p-5" aria-label="Pós-venda">
+        <section className="bg-background text-foreground p-5" aria-label="Pós-venda">
             <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Pós-venda</h2>
-            {error && <p role="alert" className="text-xs text-red-700 mb-3">{error}</p>}
+            {error && <p role="alert" className="text-xs text-error-ink mb-3">{error}</p>}
             {!data ? <p className="text-xs text-muted-foreground">Histórico de pós-venda indisponível.</p> : <div className="space-y-5 text-sm">
-                {!data.physical_schema_ready && <p role="status" className="text-xs text-amber-800">Devoluções físicas aguardam a migração 013 do banco. O histórico continua disponível para consulta.</p>}
+                {!data.physical_schema_ready && <p role="status" className="text-xs text-warning-ink">Devoluções físicas aguardam a migração 013 do banco. O histórico continua disponível para consulta.</p>}
                 <div>
                     <h3 className="font-medium mb-2">Cancelamento</h3>
                     {order.status === 'cancelado' ? <p>Pedido cancelado.</p>
@@ -149,27 +149,27 @@ export default function AdminAfterSales({ order, onChanged }) {
                         <p className="text-xs">Reembolso relacionado: {entry.related_refunds?.length ? entry.related_refunds.map(refund => `${formatBRL(Number(refund.amount))} (${refund.status})`).join(', ') : 'nenhum'}</p>
                         {entry.status === 'autorizada' && <div className="space-y-2">
                             <label className="block text-xs">Instruções de postagem para a cliente
-                                <textarea className="block w-full border border-border bg-background p-2 mt-1" maxLength={2000} value={postingInstructions[entry.id] || ''}
+                                <textarea className="block w-full admin-field p-2 mt-1" maxLength={2000} value={postingInstructions[entry.id] || ''}
                                     onChange={event => setPostingInstructions(previous => ({ ...previous, [entry.id]: event.target.value }))} />
                             </label>
                             <label className="block text-xs">Código de postagem reversa, se houver
-                                <input className="block w-full border border-border bg-background p-2 mt-1" maxLength={100} value={reversePostingCode[entry.id] || ''}
+                                <input className="block w-full admin-field p-2 mt-1" maxLength={100} value={reversePostingCode[entry.id] || ''}
                                     onChange={event => setReversePostingCode(previous => ({ ...previous, [entry.id]: event.target.value }))} />
                             </label>
                         </div>}
                         {entry.status === 'aguardando_postagem' && <div className="grid gap-2 sm:grid-cols-2">
-                            <label className="text-xs">Código de postagem reversa, se houver<input className="block w-full border border-border bg-background p-2 mt-1" maxLength={100} value={reversePostingCode[entry.id] || ''}
+                            <label className="text-xs">Código de postagem reversa, se houver<input className="block w-full admin-field p-2 mt-1" maxLength={100} value={reversePostingCode[entry.id] || ''}
                                 onChange={event => setReversePostingCode(previous => ({ ...previous, [entry.id]: event.target.value }))} /></label>
-                            <label className="text-xs">Rastreio reverso, se houver<input className="block w-full border border-border bg-background p-2 mt-1" maxLength={100} value={reverseTrackingCode[entry.id] || ''}
+                            <label className="text-xs">Rastreio reverso, se houver<input className="block w-full admin-field p-2 mt-1" maxLength={100} value={reverseTrackingCode[entry.id] || ''}
                                 onChange={event => setReverseTrackingCode(previous => ({ ...previous, [entry.id]: event.target.value }))} /></label>
                         </div>}
                         {RETURN_NEXT[entry.status]?.includes('recebida') && entry.items.map(item => <label key={item.return_item_id} className="block text-xs">
                             {order.items?.find(row => row.id === item.order_item_id)?.product_name || 'Item'}: condição física
-                            <select className="border border-border bg-background ml-2 p-1" value={restockable[item.return_item_id] === undefined ? '' : String(restockable[item.return_item_id])}
+                            <select className="admin-field w-auto ml-2 p-1" value={restockable[item.return_item_id] === undefined ? '' : String(restockable[item.return_item_id])}
                                 onChange={event => setRestockable(previous => ({ ...previous, [item.return_item_id]: event.target.value === 'true' }))}>
                                 <option value="">Selecione</option><option value="true">Revenda</option><option value="false">Não revenda</option>
                             </select>
-                            <input className="block w-full border border-border bg-background p-2 mt-1" maxLength={500} placeholder="Descreva a condição ao receber" value={conditionNotes[item.return_item_id] || ''}
+                            <input className="block w-full admin-field p-2 mt-1" maxLength={500} placeholder="Descreva a condição ao receber" value={conditionNotes[item.return_item_id] || ''}
                                 onChange={event => setConditionNotes(previous => ({ ...previous, [item.return_item_id]: event.target.value }))} />
                         </label>)}
                         <div className="flex flex-wrap gap-2">{(RETURN_NEXT[entry.status] || []).map(status => <button key={status} className="btn-outline text-xs min-h-11" disabled={busy || !data.physical_schema_ready || (status === 'aguardando_postagem' && (postingInstructions[entry.id]?.trim().length || 0) < 10) || (status === 'recebida' && entry.items.some(item => restockable[item.return_item_id] === undefined || (conditionNotes[item.return_item_id]?.trim().length || 0) < 3))}
@@ -180,13 +180,13 @@ export default function AdminAfterSales({ order, onChanged }) {
 
                 <div className="border-t border-border pt-4 space-y-2">
                     <h3 className="font-medium">Nova solicitação / reembolso</h3>
-                    <textarea className="w-full border border-border bg-background p-2 text-sm" placeholder="Motivo (obrigatório)" value={reason} maxLength={500}
+                    <textarea className="w-full admin-field p-2 text-sm" placeholder="Motivo (obrigatório)" value={reason} maxLength={500}
                         onChange={event => setReason(event.target.value)} />
                     <div className="flex flex-wrap gap-2">
-                        <select className="border border-border bg-background p-2" value={itemId} onChange={event => setItemId(event.target.value)}>
+                        <select className="admin-field p-2" value={itemId} onChange={event => setItemId(event.target.value)}>
                             <option value="">Selecionar item</option>{(order.items || []).map(item => <option key={item.id} value={item.id}>{item.product_name}</option>)}
                         </select>
-                        <input className="w-20 border border-border bg-background p-2" type="number" min="1" max={selected?.quantity || 1} value={quantity}
+                        <input className="w-20 admin-field p-2" type="number" min="1" max={selected?.quantity || 1} value={quantity}
                             onChange={event => setQuantity(Number(event.target.value))} aria-label="Quantidade" />
                         <button className="btn-outline text-xs" disabled={busy || !data.physical_schema_ready || !selected || order.order_number === 'DH-2026-000006'
                             || !SHIPPED.has(order.status)} onClick={submitReturn}>Solicitar devolução</button>

@@ -1,8 +1,17 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useReveal } from "@/hooks/useReveal";
-import { ABOUT_IMAGE, HERO_IMAGE, CATEGORY_IMAGES } from "@/data/products";
+import { ABOUT_IMAGE, HERO_IMAGE } from "@/data/products";
 import useSEO from "@/lib/useSEO";
+
+const STORY_PORTRAIT = "/images/about/helena-portrait.webp";
+const FOUNDERS_PHOTOS = [
+    { src: "/images/about/founders-01.webp", position: "center 22%" },
+    { src: "/images/about/founders-02.webp", position: "center 20%" },
+    { src: "/images/about/founders-03.webp", position: "center 24%" },
+    { src: "/images/about/founders-04.webp", position: "center 24%" },
+];
 
 export default function About() {
     useSEO({ title: "Nossa História", description: "Conheça a história da D'Helenas.", url: "/sobre" });
@@ -11,12 +20,12 @@ export default function About() {
             {/* hero */}
             <section className="relative h-[70vh] min-h-[460px] overflow-hidden">
                 <img src={HERO_IMAGE} alt="D'Helenas" className="absolute inset-0 w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-charcoal/40" />
-                <div className="relative h-full container-boutique flex items-center justify-center text-center text-bone">
+                <div className="absolute inset-0 bg-charcoal/70" />
+                <div className="relative h-full container-boutique flex items-center justify-center text-center text-on-dark">
                     <div className="max-w-2xl animate-fade-rise">
                         <p className="eyebrow text-[hsl(var(--gold))]">Nossa História</p>
                         <h1 className="mt-5 font-heading text-5xl sm:text-6xl lg:text-7xl tracking-[0.03em]">D'Helenas</h1>
-                        <p className="mt-4 font-heading text-2xl sm:text-3xl italic text-bone/90">Onde tudo começou: Helena.</p>
+                        <p className="mt-4 font-heading text-2xl sm:text-3xl italic text-on-dark/90">Onde tudo começou: Helena.</p>
                     </div>
                 </div>
             </section>
@@ -51,7 +60,7 @@ export default function About() {
                         <p className="font-heading text-xl sm:text-2xl text-foreground italic">É preciso acreditar.</p>
                         <p className="font-heading text-xl sm:text-2xl text-foreground italic">É preciso recomeçar.</p>
                         <p className="font-heading text-xl sm:text-2xl text-foreground italic">É preciso estender a mão.</p>
-                        <p className="font-heading text-xl sm:text-2xl text-[hsl(var(--rose))] italic">E, principalmente, é preciso cuidar das relações que construímos ao longo do caminho.</p>
+                        <p className="font-heading text-xl sm:text-2xl text-rose-ink italic">E, principalmente, é preciso cuidar das relações que construímos ao longo do caminho.</p>
                     </div>
                     <p className="mt-10 text-muted-foreground leading-relaxed">
                         Sua história foi marcada por trabalho, coragem, desafios e muitos recomeços. E foi justamente desses caminhos que nasceu um legado que atravessou gerações.
@@ -61,7 +70,8 @@ export default function About() {
 
             {/* NASCE A D'HELENAS */}
             <EditorialBlock
-                image={CATEGORY_IMAGES.vestidos}
+                image={STORY_PORTRAIT}
+                imagePosition="center top"
                 eyebrow="Um novo capítulo"
                 title="Assim nasceu a D'Helenas"
                 text="Hoje, nós, Juliane e Lucilene, suas netas, decidimos transformar esse legado em um novo capítulo. Mais do que uma marca. Um legado. A D'Helenas nasceu como uma homenagem à nossa avó, mas foi criada para olhar para o futuro. Queremos levar adiante aquilo que Helena nos ensinou: que podemos construir algo bonito quando unimos propósito, trabalho, relações e coragem para recomeçar."
@@ -69,7 +79,7 @@ export default function About() {
             />
 
             {/* MÉTODO PONTE */}
-            <section className="bg-[hsl(var(--rose-deep))] text-bone py-20 sm:py-28">
+            <section className="bg-[hsl(var(--rose-deep))] text-on-dark py-20 sm:py-28">
                 <div className="container-boutique max-w-3xl mx-auto text-center">
                     <div className="flex justify-center mb-8">
                         <svg width="72" height="48" viewBox="0 0 72 48" fill="none" className="text-[hsl(var(--gold))]">
@@ -79,7 +89,7 @@ export default function About() {
                     </div>
                     <p className="eyebrow text-[hsl(var(--gold))]">Método PONTE®</p>
                     <h2 className="mt-4 font-heading text-4xl sm:text-5xl tracking-[0.03em]">Por isso, nossa marca carrega o Método PONTE®</h2>
-                    <p className="mt-6 text-bone/75 leading-relaxed">
+                    <p className="mt-6 text-on-dark/90 leading-relaxed">
                         Para nós, uma ponte representa exatamente aquilo em que acreditamos: conectar pessoas, histórias, sonhos e possibilidades.
                     </p>
                     <div className="mt-12 grid grid-cols-1 sm:grid-cols-5 gap-6">
@@ -94,7 +104,7 @@ export default function About() {
 
             {/* A MODA COMO CONEXÃO */}
             <EditorialBlock
-                image={CATEGORY_IMAGES.blusas}
+                image={<FoundersCarousel />}
                 eyebrow="A moda como forma de conexão"
                 title="Vestir é se reconhecer"
                 text={'A D\'Helenas nasceu para vestir mulheres, mas nosso propósito vai além da roupa. Queremos que cada peça escolhida carregue uma sensação. A sensação de se olhar no espelho e pensar: "Eu gosto de quem eu sou." Queremos oferecer moda, estilo e acessórios que acompanhem mulheres em seus diferentes momentos — no trabalho, nos encontros, nas conquistas, nos recomeços e nas celebrações. Porque acreditamos que vestir-se também é uma forma de expressão, autoestima e identidade.'}
@@ -113,7 +123,7 @@ export default function About() {
                     <div className="mt-10 space-y-3">
                         <p className="font-heading text-lg sm:text-xl text-foreground italic">Transformar saudade em propósito.</p>
                         <p className="font-heading text-lg sm:text-xl text-foreground italic">Transformar história em futuro.</p>
-                        <p className="font-heading text-lg sm:text-xl text-[hsl(var(--rose))] italic">E transformar o nome Helena em uma marca que carregue consigo os valores que ela deixou: honestidade, trabalho, coragem, amor, respeito e conexão.</p>
+                        <p className="font-heading text-lg sm:text-xl text-rose-ink italic">E transformar o nome Helena em uma marca que carregue consigo os valores que ela deixou: honestidade, trabalho, coragem, amor, respeito e conexão.</p>
                     </div>
                     <p className="mt-10 text-muted-foreground leading-relaxed">
                         Juliane e Lucilene decidiram transformar a lembrança da avó em movimento.
@@ -125,7 +135,7 @@ export default function About() {
             <RevealSection className="py-20 sm:py-28">
                 <div className="max-w-2xl mx-auto text-center">
                     <h2 className="font-heading text-4xl sm:text-5xl tracking-[0.03em] text-foreground">D'Helenas</h2>
-                    <p className="mt-4 font-heading text-xl sm:text-2xl italic text-[hsl(var(--rose))]">De Helena para nós. De nós para outras mulheres.</p>
+                    <p className="mt-4 font-heading text-xl sm:text-2xl italic text-rose-ink">De Helena para nós. De nós para outras mulheres.</p>
                     <div className="flex justify-center mt-6"><div className="gold-rule" /></div>
                     <p className="mt-8 text-muted-foreground leading-relaxed">
                         Cada produto que chega até você carrega um pouco dessa história. E cada mulher que escolhe a D'Helenas passa a fazer parte dela. Porque, no fim, é isso que uma ponte faz: ela conecta histórias.
@@ -133,7 +143,7 @@ export default function About() {
                     <p className="mt-8 font-heading text-lg text-foreground tracking-wide">
                         D'Helenas — Moda que conecta. Histórias que permanecem.
                     </p>
-                    <p className="mt-2 text-[10px] uppercase tracking-[0.32em] text-[hsl(var(--gold))]">Método PONTE®</p>
+                    <p className="mt-2 text-[10px] uppercase tracking-[0.32em] text-gold-ink">Método PONTE®</p>
                 </div>
             </RevealSection>
 
@@ -153,18 +163,83 @@ function PonteLetter({ letter, word }) {
     return (
         <div className="text-center">
             <span className="block font-heading text-4xl sm:text-5xl text-[hsl(var(--gold))]">{letter}</span>
-            <span className="block mt-2 text-[10px] uppercase tracking-[0.18em] text-bone/70">{word}</span>
+            <span className="block mt-2 text-[10px] uppercase tracking-[0.18em] text-on-dark/90">{word}</span>
         </div>
     );
 }
 
-function EditorialBlock({ image, eyebrow, title, text, reverse }) {
+function FoundersCarousel() {
+    const [active, setActive] = useState(0);
+    const [hovered, setHovered] = useState(false);
+    const [focused, setFocused] = useState(false);
+    const [reducedMotion, setReducedMotion] = useState(() =>
+        typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+    useEffect(() => {
+        const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+        const update = () => setReducedMotion(preference.matches);
+        preference.addEventListener("change", update);
+        return () => preference.removeEventListener("change", update);
+    }, []);
+
+    useEffect(() => {
+        if (hovered || focused || reducedMotion) return undefined;
+        const timer = window.setInterval(() => setActive(index => (index + 1) % FOUNDERS_PHOTOS.length), 3000);
+        return () => window.clearInterval(timer);
+    }, [hovered, focused, reducedMotion]);
+
+    return (
+        <div
+            role="region"
+            aria-roledescription="carrossel"
+            aria-label="Fotografias de Juliane e Lucilene"
+            className="relative w-full h-full group"
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+            onFocusCapture={() => setFocused(true)}
+            onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}
+        >
+            {FOUNDERS_PHOTOS.map((photo, index) => (
+                <div key={photo.src} aria-hidden={index !== active}
+                    className={`absolute inset-0 overflow-hidden transition-opacity duration-700 motion-reduce:transition-none ${index === active ? "opacity-100" : "opacity-0"}`}>
+                    <img src={photo.src} alt="" aria-hidden="true" loading="lazy" decoding="async"
+                        style={{ objectPosition: photo.position }}
+                        className="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-65" />
+                    <div className="absolute inset-0 bg-black/15" />
+                    <img src={photo.src}
+                        alt={index === active ? `Juliane e Lucilene — fotografia ${index + 1} de ${FOUNDERS_PHOTOS.length}` : ""}
+                        loading={index === 0 ? "eager" : "lazy"} decoding="async"
+                        className="absolute inset-0 w-full h-full object-contain drop-shadow-lg" />
+                </div>
+            ))}
+            <button type="button" onClick={() => setActive(index => (index - 1 + FOUNDERS_PHOTOS.length) % FOUNDERS_PHOTOS.length)}
+                aria-label="Foto anterior" className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full bg-black/55 text-white hover:bg-black/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+                <ChevronLeft className="w-5 h-5" aria-hidden="true" />
+            </button>
+            <button type="button" onClick={() => setActive(index => (index + 1) % FOUNDERS_PHOTOS.length)}
+                aria-label="Próxima foto" className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full bg-black/55 text-white hover:bg-black/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+                <ChevronRight className="w-5 h-5" aria-hidden="true" />
+            </button>
+            <div className="absolute bottom-4 inset-x-0 flex justify-center gap-2" aria-label="Escolher fotografia">
+                {FOUNDERS_PHOTOS.map((photo, index) => (
+                    <button key={photo.src} type="button" onClick={() => setActive(index)} aria-label={`Mostrar fotografia ${index + 1}`}
+                        aria-current={index === active ? "true" : undefined}
+                        className={`min-w-11 min-h-11 flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-white rounded-full`}>
+                        <span className={`block w-2 h-2 rounded-full ring-1 ring-white ${index === active ? "bg-white" : "bg-black/50"}`} />
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function EditorialBlock({ image, imagePosition = undefined, eyebrow, title, text, reverse }) {
     const { ref, visible } = useReveal();
     return (
         <section ref={ref} className={`py-20 sm:py-28 ${visible ? "is-visible" : ""} reveal`}>
             <div className="container-boutique grid lg:grid-cols-2 gap-10 lg:gap-20 items-center">
                 <div className={`relative overflow-hidden aspect-[4/3] ${reverse ? "lg:order-2" : ""}`}>
-                    <img src={image} alt={title} className="w-full h-full object-cover" />
+                    {typeof image === "string" ? <img src={image} alt={title} loading="lazy" decoding="async" style={imagePosition ? { objectPosition: imagePosition } : undefined} className="w-full h-full object-cover" /> : image}
                 </div>
                 <div className={`${reverse ? "lg:order-1" : ""}`}>
                     <p className="eyebrow">{eyebrow}</p>

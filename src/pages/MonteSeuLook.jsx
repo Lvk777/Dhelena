@@ -132,7 +132,7 @@ export default function MonteSeuLook() {
             {/* Hero */}
             <div className="bg-background py-12 sm:py-16 text-center border-b border-border">
                 <div className="container-boutique">
-                    <Sparkles className="w-6 h-6 text-[hsl(var(--gold))] mx-auto mb-3" strokeWidth={1.25} />
+                    <Sparkles className="w-6 h-6 text-gold-ink mx-auto mb-3" strokeWidth={1.25} />
                     <h1 className="font-heading text-4xl sm:text-5xl tracking-[0.03em]">Monte seu Look</h1>
                     <p className="text-muted-foreground mt-3 text-sm">Crie combinações do seu jeito.</p>
                     {promotion && <PromotionStrip promo={promotion} />}
@@ -167,7 +167,7 @@ export default function MonteSeuLook() {
                                     onClick={() => setActiveSection(s.id)}
                                     className={`px-4 py-2 text-[11px] uppercase tracking-[0.15em] border transition-colors ${
                                         activeSection === s.id
-                                            ? "border-foreground bg-foreground text-white"
+                                            ? "border-foreground bg-foreground text-background"
                                             : "border-border text-foreground/70 hover:border-foreground"
                                     }`}
                                 >
@@ -185,7 +185,7 @@ export default function MonteSeuLook() {
                                         <div className="aspect-[3/4] overflow-hidden bg-bone relative">
                                             <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover" />
                                             {inLook && (
-                                                <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-[hsl(var(--gold))] text-white flex items-center justify-center">
+                                                <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-[hsl(var(--gold))] text-accent-foreground flex items-center justify-center">
                                                     <Check className="w-3.5 h-3.5" strokeWidth={2} />
                                                 </span>
                                             )}
@@ -213,7 +213,7 @@ export default function MonteSeuLook() {
                             <div className="border-2 border-dashed border-border py-20 text-center">
                                 <Shirt className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" strokeWidth={1} />
                                 <p className="text-sm text-muted-foreground">Seu look está vazio.</p>
-                                <button onClick={() => setMobileTab("products")} className="text-[11px] uppercase tracking-[0.15em] text-[hsl(var(--gold))] mt-3 lg:hidden">
+                                <button onClick={() => setMobileTab("products")} className="text-[11px] uppercase tracking-[0.15em] text-gold-ink mt-3 lg:hidden">
                                     Escolher peças
                                 </button>
                             </div>
@@ -232,7 +232,7 @@ export default function MonteSeuLook() {
                                                 <p className="text-sm mt-1 whitespace-nowrap">{formatBRL(Number(item.product.salePrice ?? item.product.price))}</p>
                                             </div>
                                             <button onClick={() => openConfig(item.product)} className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground">Trocar</button>
-                                            <button onClick={() => handleRemoveItem(item.productId)} className="text-muted-foreground hover:text-[hsl(var(--rose))]">
+                                            <button onClick={() => handleRemoveItem(item.productId)} className="text-muted-foreground hover:text-rose-ink">
                                                 <X className="w-4 h-4" strokeWidth={1.25} />
                                             </button>
                                         </div>
@@ -253,7 +253,7 @@ export default function MonteSeuLook() {
                                     <span className="whitespace-nowrap">{formatBRL(subtotal)}</span>
                                 </div>
                                 {lookDiscount > 0 && (
-                                    <div className="flex justify-between text-[hsl(var(--gold))]">
+                                    <div className="flex justify-between text-gold-ink">
                                         <span>Desconto do look</span>
                                         <span className="whitespace-nowrap">- {formatBRL(lookDiscount)}</span>
                                     </div>
@@ -344,7 +344,7 @@ export default function MonteSeuLook() {
                                                     key={s}
                                                     disabled={disabled}
                                                     onClick={() => setSelSize(s)}
-                                                    className={`min-w-[48px] h-11 border text-sm transition-colors ${selSize === s ? "border-foreground bg-foreground text-white" : disabled ? "border-border text-muted-foreground/40 cursor-not-allowed line-through" : "border-border hover:border-foreground"}`}
+                                                    className={`min-w-[48px] h-11 border text-sm transition-colors ${selSize === s ? "border-foreground bg-foreground text-background" : disabled ? "border-border text-muted-foreground cursor-not-allowed line-through" : "border-border hover:border-foreground"}`}
                                                 >
                                                     {s}
                                                 </button>

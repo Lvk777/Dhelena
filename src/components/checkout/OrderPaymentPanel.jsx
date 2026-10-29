@@ -50,8 +50,8 @@ export default function OrderPaymentPanel({ order, onChanged, onRefresh }) {
             <button type="button" className="btn-outline min-h-11" onClick={() => navigator.clipboard?.writeText(order.pix_qr_code)}>Copiar código Pix deste pedido</button>
             {order.pix_expiration_at && <p className="text-sm">Validade do código: {new Date(order.pix_expiration_at).toLocaleString('pt-BR')}</p>}
         </div>}
-        {status?.reconciliation_required && <p role="alert" className="text-destructive text-sm">{status.status_message || 'Este pagamento precisa de conciliação. Entre em contato com o atendimento antes de uma nova tentativa.'}</p>}
+        {status?.reconciliation_required && <p role="alert" className="text-error-ink text-sm">{status.status_message || 'Este pagamento precisa de conciliação. Entre em contato com o atendimento antes de uma nova tentativa.'}</p>}
         {challenge && !status?.reconciliation_required && <iframe src={challenge} title="Autenticação segura do cartão no Mercado Pago" className="w-full h-[500px] border" referrerPolicy="no-referrer" />}
-        {error && <p role="alert" className="text-destructive text-sm">{error}</p>}
+        {error && <p role="alert" className="text-error-ink text-sm">{error}</p>}
     </div>;
 }
