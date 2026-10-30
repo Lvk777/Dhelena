@@ -6,7 +6,6 @@ import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
 import { useAuth } from '@/lib/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import PasswordInput from '@/components/PasswordInput';
-import AdminTotp from '@/components/account/AdminTotp';
 export default function ChangePassword() {
     const dialogs = useBoutiqueDialogs();
     const { logout } = useAuth();
@@ -46,5 +45,5 @@ export default function ChangePassword() {
         {needsNonce && <><label className="block text-sm">Código de reautenticação<input className="admin-field mt-2 w-full" autoComplete="one-time-code" inputMode="numeric" value={nonce} onChange={e => setNonce(e.target.value)} required /></label><button type="button" className="btn-outline min-h-11" disabled={busy} onClick={sendNonce}>Solicitar código</button></>}
         {error && <p role="alert" className="text-sm text-error-ink">{error}</p>}{message && <p role="status" className="text-sm">{message}</p>}
         <button className="btn-gold min-h-11" disabled={busy || !info}>{busy ? 'Atualizando...' : 'Alterar senha'}</button><Link to="/esqueci-minha-senha" className="block text-sm underline">Recuperar acesso por e-mail</Link>
-    </form><AdminTotp /><div className="max-w-lg mt-6 p-6 border border-border"><h2 className="font-heading text-xl mb-3">Sessões da conta</h2><p className="text-sm mb-4">O encerramento remove o acesso deste navegador e revoga a renovação das sessões no Supabase. Tokens já emitidos podem permanecer válidos até sua expiração.</p><button type="button" className="btn-outline min-h-11" disabled={busy} onClick={endSessions}>Encerrar sessões e sair</button></div></div>;
+    </form><div className="max-w-lg mt-6 p-6 border border-border"><h2 className="font-heading text-xl mb-3">Sessões da conta</h2><p className="text-sm mb-4">O encerramento remove o acesso deste navegador e revoga a renovação das sessões no Supabase. Tokens já emitidos podem permanecer válidos até sua expiração.</p><button type="button" className="btn-outline min-h-11" disabled={busy} onClick={endSessions}>Encerrar sessões e sair</button></div></div>;
 }
