@@ -1,11 +1,24 @@
+import OperationalRefund from '@/components/admin/OperationalRefund';
+import ShippingOperations from '@/components/admin/ShippingOperations';
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Truck, Check, Loader2, Copy, FileText, Printer, MapPin, QrCode, CreditCard, Banknote } from "lucide-react";
+import { ArrowLeft, Truck, Loader2, Copy, MapPin, QrCode, CreditCard, Banknote } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL, ORDER_STATUS, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
 import OrderTimeline from "@/components/checkout/OrderTimeline";
+import AdminAfterSales from "@/components/admin/AdminAfterSales";
+import PaymentReconciliationPreview from "@/components/admin/PaymentReconciliationPreview";
+import CardFinancingSummary from '@/components/checkout/CardFinancingSummary';
+import { orderDeliveryEstimateLabel } from '@/lib/deliveryEstimate';
 
-const STATUS_OPTIONS = Object.entries(ORDER_STATUS).map(([key, v]) => ({ value: key, label: v.label }));
+const STATUS_OPTIONS = Object.entries(ORDER_STATUS)
+    .filter(([key]) => ['em_separacao', 'enviado', 'em_transporte', 'saiu_entrega', 'entregue'].includes(key))
+    .map(([key, v]) => ({ value: key, label: v.label }));
+const NEXT_STATUS = {
+    pagamento_aprovado: ['em_separacao'], em_separacao: ['enviado'],
+    enviado: ['em_transporte', 'entregue'], em_transporte: ['saiu_entrega', 'entregue'],
+    saiu_entrega: ['entregue'],
+};
 
 export default function AdminOrderDetail() {
     const { id } = useParams();
@@ -13,8 +26,6 @@ export default function AdminOrderDetail() {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [labelLoading, setLabelLoading] = useState(false);
-    const [labelError, setLabelError] = useState("");
     const [trackingInfo, setTrackingInfo] = useState(null);
     const [trackingLoading, setTrackingLoading] = useState(false);
 
@@ -50,17 +61,6 @@ export default function AdminOrderDetail() {
         navigator.clipboard?.writeText(text);
     };
 
-    const generateLabel = async () => {
-        setLabelLoading(true);
-        setLabelError("");
-        try {
-            await base44.functions.invoke("generateShippingLabel", { orderId: id });
-            load();
-        } catch (e) {
-            setLabelError(e.response?.data?.error || e.message || "Erro ao gerar etiqueta");
-        } finally { setLabelLoading(false); }
-    };
-
     const fetchTracking = async () => {
         setTrackingLoading(true);
         try {
@@ -71,14 +71,13 @@ export default function AdminOrderDetail() {
         } finally { setTrackingLoading(false); }
     };
 
-    if (loading) return <div className="h-64 bg-background animate-pulse" />;
+    if (loading) return <div className="h-64 bg-background text-foreground animate-pulse" />;
     if (!order) return <div className="text-center py-12"><p className="text-muted-foreground">Pedido não encontrado.</p><Link to="/admin/pedidos" className="btn-outline mt-4 inline-flex">Voltar</Link></div>;
 
     const snapshot = order.snapshot || {};
     const customer = snapshot.customer || {};
     const shippingAddress = order.shipping_address || snapshot.shipping_address || {};
     const isPaid = order.payment_status === "approved";
-    const hasLabel = !!order.melhor_envio_shipment_id;
 
     const PaymentIcon = order.payment_method === "pix" ? QrCode : order.payment_method === "debito" ? Banknote : CreditCard;
 
@@ -94,17 +93,19 @@ export default function AdminOrderDetail() {
                     <p className="text-sm text-muted-foreground mt-1">{new Date(order.created_date).toLocaleString("pt-BR")}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <select value={order.status} onChange={(e) => changeStatus(e.target.value)} disabled={saving} className="border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" >
-                        {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    <select value={order.status} onChange={(e) => changeStatus(e.target.value)} disabled={saving || !isPaid || order.status === 'cancelado'} className="admin-field w-auto px-4 py-2.5" >
+                        {!STATUS_OPTIONS.some(s => s.value === order.status) && <option value={order.status}>{ORDER_STATUS[order.status]?.label || order.status}</option>}
+                        {STATUS_OPTIONS.filter(s => s.value === order.status || NEXT_STATUS[order.status]?.includes(s.value))
+                            .map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                     </select>
                 </div>
             </div>
 
-            <div className="grid lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 {/* left: items + summary + timeline */}
-                <div className="lg:col-span-2 space-y-5">
+                <div className="min-w-0 [overflow-wrap:anywhere] lg:col-span-2 space-y-5">
                     {/* Products */}
-                    <div className="bg-background p-5">
+                    <div className="bg-background text-foreground p-5">
                         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Produtos</h2>
                         <div className="space-y-3">
                             {(order.items || []).map((item, i) => (
@@ -127,7 +128,7 @@ export default function AdminOrderDetail() {
                     </div>
 
                     {/* Payment info */}
-                    <div className="bg-background p-5">
+                    <div className="bg-background text-foreground p-5">
                         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4 flex items-center gap-2"><PaymentIcon className="w-4 h-4" strokeWidth={1.5} /> Pagamento</h2>
                         <div className="grid sm:grid-cols-2 gap-3 text-sm">
                             <InfoRow label="Método" value={PAYMENT_LABELS[order.payment_method] || order.payment_method || "—"} />
@@ -135,56 +136,34 @@ export default function AdminOrderDetail() {
                                 <span className={PAYMENT_STATUS_COLORS[order.payment_status] || ""}>{PAYMENT_STATUS_PT[order.payment_status] || order.payment_status}</span>
                             } />
                             <InfoRow label="Valor" value={formatBRL(Number(order.total))} />
+                            <CardFinancingSummary order={order} />
                             <InfoRow label="Parcelas" value={order.installments ? `${order.installments}x` : "—"} />
                             <InfoRow label="ID Mercado Pago" value={order.mercado_pago_order_id || order.mercado_pago_payment_id || "—"} />
                             <InfoRow label="Data pagamento" value={order.paid_at ? new Date(order.paid_at).toLocaleString("pt-BR") : "—"} />
                         </div>
                     </div>
 
+                    <PaymentReconciliationPreview key={order.id} order={order} />
+
+                    <AdminAfterSales order={order} onChanged={load} />
+                    <OperationalRefund key={order.id} order={order} onChanged={load} />
+
                     {/* Delivery / Shipping */}
-                    <div className="bg-background p-5">
+                    <div className="bg-background text-foreground p-5">
                         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4 flex items-center gap-2"><Truck className="w-4 h-4" strokeWidth={1.5} /> Entrega</h2>
                         <div className="grid sm:grid-cols-2 gap-3 text-sm">
                             <InfoRow label="Transportadora" value={order.shipping_carrier || snapshot.shipping_carrier || "—"} />
                             <InfoRow label="Serviço" value={order.shipping_service_name || snapshot.shipping_service_name || SHIPPING_LABELS[order.shipping_method] || "—"} />
-                            <InfoRow label="Prazo" value={order.shipping_delivery_time ? `${order.shipping_delivery_time} dia(s) úteis` : "—"} />
+                            <InfoRow label="Prazo" value={orderDeliveryEstimateLabel(order)} />
                             <InfoRow label="Código rastreio" value={order.tracking_code || "—"} />
                             <InfoRow label="Status envio" value={order.shipping_status || "—"} />
                             <InfoRow label="ID Melhor Envio" value={order.melhor_envio_shipment_id || "—"} />
                         </div>
 
-                        {/* Actions */}
-                        <div className="flex flex-wrap gap-2 mt-4">
-                            {!isPaid && (
-                                <p className="text-xs text-amber-600 flex items-center gap-1.5">
-                                    <FileText className="w-3.5 h-3.5" strokeWidth={1.5} /> Etiqueta disponível após pagamento aprovado
-                                </p>
-                            )}
-                            {isPaid && !hasLabel && (
-                                <button onClick={generateLabel} disabled={labelLoading} className="btn-outline text-xs flex items-center gap-2">
-                                    {labelLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" strokeWidth={1.5} />}
-                                    Gerar etiqueta
-                                </button>
-                            )}
-                            {hasLabel && (
-                                <>
-                                    <button onClick={fetchTracking} disabled={trackingLoading} className="btn-outline text-xs flex items-center gap-2">
-                                        {trackingLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" strokeWidth={1.5} />}
-                                        Rastrear
-                                    </button>
-                                    {order.melhor_envio_shipment_id && (
-                                        <a
-                                            href={`https://sandbox.melhorenvio.com.br/carrinho/${order.melhor_envio_shipment_id}`}
-                                            target="_blank" rel="noopener noreferrer"
-                                            className="btn-outline text-xs flex items-center gap-2"
-                                        >
-                                            <Printer className="w-3.5 h-3.5" strokeWidth={1.5} /> Imprimir etiqueta
-                                        </a>
-                                    )}
-                                </>
-                            )}
-                        </div>
-                        {labelError && <p className="text-xs text-red-600 mt-2">{labelError}</p>}
+                        <ShippingOperations order={order} onChanged={load} />
+                        {order.melhor_envio_shipment_id && <button onClick={fetchTracking} disabled={trackingLoading} className="btn-outline text-xs mt-3">
+                            {trackingLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />} Acompanhar entrega
+                        </button>}
                         {trackingInfo && !trackingInfo.error && (
                             <div className="mt-3 p-3 bg-[hsl(var(--bone))] text-xs space-y-1">
                                 <p><span className="text-muted-foreground">Status:</span> {trackingInfo.status || "—"}</p>
@@ -198,20 +177,20 @@ export default function AdminOrderDetail() {
                                 )}
                             </div>
                         )}
-                        {trackingInfo?.error && <p className="text-xs text-red-600 mt-2">{trackingInfo.error}</p>}
+                        {trackingInfo?.error && <p className="text-xs text-error-ink mt-2">{trackingInfo.error}</p>}
                     </div>
 
                     {/* Timeline */}
                     {events.length > 0 && (
-                        <div className="bg-background p-5">
-                            <OrderTimeline events={events} />
+                        <div className="bg-background text-foreground p-5">
+                        <OrderTimeline events={events} paymentStatus={order.payment_status} />
                         </div>
                     )}
                 </div>
 
                 {/* right: customer + address */}
-                <div className="space-y-5">
-                    <div className="bg-background p-5">
+                <div className="min-w-0 [overflow-wrap:anywhere] space-y-5">
+                    <div className="bg-background text-foreground p-5">
                         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-3">Cliente</h2>
                         <div className="space-y-1.5 text-sm">
                             <p className="font-medium">{customer.name || "—"}</p>
@@ -220,10 +199,10 @@ export default function AdminOrderDetail() {
                             <p className="text-muted-foreground">CPF: {customer.cpf || "—"}</p>
                         </div>
                     </div>
-                    <div className="bg-background p-5">
+                    <div className="bg-background text-foreground p-5">
                         <div className="flex items-center justify-between mb-3">
                             <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Endereço de entrega</h2>
-                            <button onClick={copyAddress} className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.16em] text-muted-foreground hover:text-[hsl(var(--gold))] transition-colors">
+                            <button onClick={copyAddress} className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.16em] text-muted-foreground hover:text-gold-ink transition-colors">
                                 <Copy className="w-3.5 h-3.5" strokeWidth={1.5} /> Copiar
                             </button>
                         </div>
@@ -234,7 +213,7 @@ export default function AdminOrderDetail() {
                             <p className="text-muted-foreground">CEP {shippingAddress.cep}</p>
                         </div>
                     </div>
-                    <div className="bg-background p-5">
+                    <div className="bg-background text-foreground p-5">
                         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-3">Resumo</h2>
                         <div className="space-y-1.5 text-sm">
                             <p><span className="text-muted-foreground">Pagamento:</span> {PAYMENT_LABELS[order.payment_method] || order.payment_method || "—"}</p>

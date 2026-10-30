@@ -5,7 +5,6 @@ import AdminModal from "@/components/admin/AdminModal";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminTextarea from "@/components/admin/AdminTextarea";
 import AdminImageUploader from "@/components/admin/AdminImageUploader";
-import AdminToggle from "@/components/admin/AdminToggle";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import { logAdminAction } from "@/lib/audit";
@@ -18,10 +17,12 @@ export default function Categories() {
     const [editing, setEditing] = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [deleting, setDeleting] = useState(false);
+    const [error, setError] = useState("");
 
     const load = () => {
         setLoading(true);
-        base44.entities.Category.list("sort_order", 100).then(setItems).catch(() => { }).finally(() => setLoading(false));
+        setError("");
+        base44.entities.Category.list("sort_order", 100).then(setItems).catch(() => setError("Não foi possível carregar as categorias.")).finally(() => setLoading(false));
     };
     useEffect(() => { load(); }, []);
 
@@ -32,7 +33,7 @@ export default function Categories() {
             await logAdminAction("category_delete", "Category", deleteTarget.id, deleteTarget.name, "Categoria excluída");
             setDeleteTarget(null); load();
         }
-        catch { } finally { setDeleting(false); }
+        catch { setError("Não foi possível excluir a categoria."); } finally { setDeleting(false); }
     };
 
     return (
@@ -41,6 +42,8 @@ export default function Categories() {
                 <h1 className="font-heading text-2xl tracking-[0.03em]">Categorias</h1>
                 <button onClick={() => setEditing({})} className="btn-gold"><Plus className="w-4 h-4" strokeWidth={1.5} /> Nova categoria</button>
             </div>
+
+            {error && <div role="alert" className="mb-4 text-sm text-error-ink">{error} <button type="button" className="underline" onClick={load}>Tentar novamente</button></div>}
 
             {loading ? <div className="h-40 bg-background animate-pulse rounded-lg" /> : items.length === 0 ? (
                 <div className="bg-background p-12 text-center rounded-lg border border-border">
@@ -60,7 +63,7 @@ export default function Categories() {
                                 <p className="text-[11px] text-muted-foreground truncate">/{c.slug}</p>
                                 <div className="flex gap-1 mt-2">
                                     <button onClick={() => setEditing(c)} className="p-1.5 hover:bg-muted rounded transition-colors"><Pencil className="w-4 h-4" strokeWidth={1.25} /></button>
-                                    <button onClick={() => setDeleteTarget(c)} className="p-1.5 hover:bg-muted rounded transition-colors text-rose"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
+                                    <button onClick={() => setDeleteTarget(c)} className="p-1.5 hover:bg-muted rounded transition-colors text-rose-ink"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
                                 </div>
                             </div>
                         </div>
@@ -91,7 +94,8 @@ function CategoryForm({ item, onClose, onSaved }) {
     });
     const [slugEdited, setSlugEdited] = useState(!!item.slug);
     const [saving, setSaving] = useState(false);
-    const [errors, setErrors] = useState({});
+    const [saveError, setSaveError] = useState("");
+    const [errors, setErrors] = useState(/** @type {Record<string, any>} */ ({}));
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
     const onNameChange = (v) => {
@@ -106,6 +110,7 @@ function CategoryForm({ item, onClose, onSaved }) {
         setErrors(e);
         if (Object.keys(e).length) return;
         setSaving(true);
+        setSaveError("");
         const slug = form.slug || slugify(form.name);
         try {
             if (item.id) {
@@ -116,7 +121,7 @@ function CategoryForm({ item, onClose, onSaved }) {
                 await logAdminAction("category_create", "Category", newCat.id, form.name, "Categoria criada");
             }
             onSaved();
-        } catch { console.error("Erro ao salvar categoria"); } finally { setSaving(false); }
+        } catch { setSaveError("Não foi possível salvar a categoria. Verifique os dados e tente novamente."); } finally { setSaving(false); }
     };
 
     return (
@@ -135,6 +140,7 @@ function CategoryForm({ item, onClose, onSaved }) {
             }
         >
             <div className="space-y-5">
+                {saveError && <p role="alert" className="text-sm text-error-ink">{saveError}</p>}
                 <AdminFormSection>
                     <AdminInput label="Nome" value={form.name} onChange={onNameChange} required error={errors.name} placeholder="Ex: Vestidos Longos" />
                     <AdminInput label="Slug (URL)" value={form.slug} onChange={onSlugChange} description="Gerado automaticamente a partir do nome" placeholder="auto" mono />

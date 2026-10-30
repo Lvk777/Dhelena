@@ -5,24 +5,27 @@ import { base44 } from "@/api/base44Client";
 import { formatBRL, totalStock } from "@/data/products";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import { logAdminAction } from "@/lib/audit";
+import { loadProductPages } from "@/lib/catalogPaging";
 
 const STATUS = {
     draft: { label: "Rascunho", color: "text-muted-foreground bg-[hsl(var(--bone))]" },
-    published: { label: "Publicado", color: "text-[hsl(var(--gold))] bg-[hsl(var(--gold))]/10" },
+    published: { label: "Publicado", color: "text-gold-ink bg-[hsl(var(--gold))]/10" },
     archived: { label: "Arquivado", color: "text-muted-foreground bg-muted" },
 };
 
 export default function AdminProducts() {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState("all");
+    const [filter, setFilter] = useState("published");
     const [q, setQ] = useState("");
+    const [loadError, setLoadError] = useState(false);
 
     const load = () => {
         setLoading(true);
-        base44.entities.Product.list("-created_date", 200)
+        setLoadError(false);
+        loadProductPages((limit, page) => base44.entities.Product.list("-created_date", limit, page), 200)
             .then(setProducts)
-            .catch(() => { })
+            .catch(() => setLoadError(true))
             .finally(() => setLoading(false));
     };
 
@@ -35,7 +38,15 @@ export default function AdminProducts() {
     });
 
     const duplicate = async (p) => {
-        const { id, created_date, updated_date, created_by_id, ...data } = p;
+        const copyFields = [
+            'category', 'subcategory', 'collection', 'description',
+            'short_description', 'details', 'price', 'sale_price', 'cost_price',
+            'installments', 'images', 'colors', 'sizes', 'badges', 'composition',
+            'modeling', 'length', 'lining', 'transparency', 'elasticity', 'care',
+            'measurements', 'weight', 'package_height', 'package_width',
+            'package_length', 'size_guide_id', 'custom_measurements',
+        ];
+        const data = Object.fromEntries(copyFields.filter(field => p[field] !== undefined).map(field => [field, p[field]]));
         const newProduct = await base44.entities.Product.create({ ...data, name: `${p.name} (cópia)`, sku: "", status: "draft" });
         await logAdminAction("product_create", "Product", newProduct.id, `${p.name} (cópia)`, `Produto duplicado de "${p.name}"`);
         load();
@@ -68,6 +79,7 @@ export default function AdminProducts() {
 
     return (
         <div>
+            {loadError && <div role="alert" className="mb-4 text-sm text-error-ink">Não foi possível carregar os produtos. <button onClick={load} className="underline">Tentar novamente</button></div>}
             <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
                 <h1 className="font-heading text-2xl tracking-[0.03em]">Produtos</h1>
                 <Link to="/admin/produtos/novo" className="btn-gold">
@@ -78,9 +90,9 @@ export default function AdminProducts() {
             <div className="flex items-center gap-3 mb-5 flex-wrap">
                 <div className="relative flex-1 min-w-[200px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nome ou SKU..." className="w-full border border-border bg-background pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" />
+                    <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nome ou SKU..." className="admin-field pl-10 pr-4 py-2.5" />
                 </div>
-                <select value={filter} onChange={(e) => setFilter(e.target.value)} className="border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" >
+                <select value={filter} onChange={(e) => setFilter(e.target.value)} className="admin-field w-auto px-4 py-2.5" >
                     <option value="all">Todos</option>
                     <option value="published">Publicados</option>
                     <option value="draft">Rascunhos</option>
@@ -89,13 +101,15 @@ export default function AdminProducts() {
             </div>
 
             {loading ? (
-                <div className="h-64 bg-background animate-pulse" />
+                <div className="h-64 bg-background text-foreground animate-pulse" />
             ) : filtered.length === 0 ? (
-                <div className="bg-background p-12 text-center">
-                    <p className="text-sm text-muted-foreground">Nenhum produto encontrado.</p>
+                <div className="bg-background text-foreground p-12 text-center">
+                    <p className="font-heading text-2xl">{filter === "published" && !q ? "A nova coleção começa aqui" : "Nenhum produto encontrado."}</p>
+                    {filter === "published" && !q && <p className="text-sm text-muted-foreground mt-3">Os produtos arquivados continuam disponíveis no filtro “Arquivados”. Cadastre e publique uma nova peça para iniciar a vitrine.</p>}
+                    {filter === "published" && !q && <Link to="/admin/produtos/novo" className="btn-gold inline-block mt-6">Cadastrar produto</Link>}
                 </div>
             ) : (
-                <div className="bg-background overflow-x-auto">
+                <div className="bg-background text-foreground overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-border text-left text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
@@ -116,7 +130,7 @@ export default function AdminProducts() {
                                         <img src={p.images?.[0]} alt="" className="w-10 h-12 object-cover bg-bone" />
                                     </td>
                                     <td className="py-2 px-3">
-                                        <Link to={`/admin/produtos/${p.id}`} className="font-medium hover:text-[hsl(var(--rose))]">{p.name}</Link>
+                                        <Link to={`/admin/produtos/${p.id}`} className="font-medium hover:text-rose-ink">{p.name}</Link>
                                         <p className="text-[11px] text-muted-foreground md:hidden font-numeric">{p.sku}</p>
                                     </td>
                                     <td className="py-2 px-3 hidden md:table-cell text-muted-foreground font-numeric">{p.sku || "—"}</td>
@@ -128,13 +142,13 @@ export default function AdminProducts() {
                                     </td>
                                     <td className="py-2 px-3">
                                         <div className="flex items-center justify-end gap-1">
-                                            <Link to={`/produto/${p.id}`} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Visualizar"><Eye className="w-4 h-4" strokeWidth={1.25} /></Link>
+                                            {p.status === 'published' && <Link to={`/produto/${p.id}`} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Visualizar"><Eye className="w-4 h-4" strokeWidth={1.25} /></Link>}
                                             <Link to={`/admin/produtos/${p.id}`} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Editar"><Pencil className="w-4 h-4" strokeWidth={1.25} /></Link>
                                             <button onClick={() => duplicate(p)} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Duplicar"><Copy className="w-4 h-4" strokeWidth={1.25} /></button>
                                             {p.status !== "archived" ? (
                                                 <button onClick={() => archive(p)} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Arquivar"><Archive className="w-4 h-4" strokeWidth={1.25} /></button>
                                             ) : null}
-                                            <button onClick={() => { setDeleteTarget(p); setDeleteError(""); }} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded text-[hsl(var(--rose))]" title="Excluir"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
+                                            <button onClick={() => { setDeleteTarget(p); setDeleteError(""); }} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded text-rose-ink" title="Excluir"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
                                         </div>
                                     </td>
                                 </tr>

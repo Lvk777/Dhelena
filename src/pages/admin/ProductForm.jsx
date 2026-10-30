@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { Plus, X, Loader2, Eye, Check, Package, ImageIcon, DollarSign, Palette, FolderTree, Settings, Truck } from "lucide-react";
+import { Plus, X, Eye, Check, Package, ImageIcon, DollarSign, Palette, FolderTree, Settings } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useCatalog } from "@/context/CatalogContext";
 import { COLOR_SWATCHES, SIZES_LIST } from "@/data/products";
@@ -8,6 +8,7 @@ import ImageUploader from "@/components/ImageUploader";
 import AdminWizard from "@/components/admin/AdminWizard";
 import ProductPreview from "@/components/admin/ProductPreview";
 import { logAdminAction } from "@/lib/audit";
+import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
 
 const TAGS = [
     { key: "novo", label: "Novidade" },
@@ -29,10 +30,13 @@ const WIZARD_STEPS = [
 ];
 
 export default function ProductForm() {
+    const dialogs = useBoutiqueDialogs();
     const { id } = useParams();
     const navigate = useNavigate();
     const { categories, collections, reload } = useCatalog();
     const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState("");
+    const [loadedUpdatedDate, setLoadedUpdatedDate] = useState(null);
     const [form, setForm] = useState({
         name: "", sku: "", category: "", subcategory: "", collection: "",
         description: "", short_description: "", details: "",
@@ -49,12 +53,20 @@ export default function ProductForm() {
     useEffect(() => {
         if (!id) return;
         base44.entities.Product.get(id).then((p) => {
+            setLoadedUpdatedDate(p.updated_date);
             setForm({
                 name: p.name || "", sku: p.sku || "", category: p.category || "", subcategory: p.subcategory || "",
                 collection: p.collection || "", description: p.description || "", short_description: p.short_description || "",
                 details: p.details || "", price: p.price || "", sale_price: p.sale_price || "", cost_price: p.cost_price || "",
-                installments: p.installments || 6, images: p.images || [], colors: p.colors || [],
-                sizes: (p.sizes && p.sizes.length) ? p.sizes : [...SIZES_LIST],
+                installments: p.installments || 6, images: p.images || [], colors: (p.colors || []).map((color) => {
+                    const keys = Object.keys(color.stock || {});
+                    const existingSize = p.sizes?.length ? p.sizes[0] : 'Único';
+                    const legacySingleSize = (!p.sizes?.length || p.sizes.length === 1) && existingSize === 'Único'
+                        && keys.some((key) => SIZES_LIST.includes(key))
+                        && keys.every((key) => key === existingSize || SIZES_LIST.includes(key));
+                    return legacySingleSize ? { ...color, stock: { [existingSize]: keys.reduce((sum, key) => sum + Number(color.stock[key] || 0), 0) } } : color;
+                }),
+                sizes: (p.sizes && p.sizes.length) ? p.sizes : ['Único'],
                 badges: p.badges || { novo: false, destaque: false, maisVendido: false, ultimas: false, promocao: false, exclusivo: false },
                 composition: p.composition || "", modeling: p.modeling || "", length: p.length || "",
                 lining: p.lining || "", transparency: p.transparency || "", elasticity: p.elasticity || "",
@@ -93,8 +105,8 @@ export default function ProductForm() {
         set("colors", next);
     };
 
-    const addSize = () => {
-        const ns = prompt("Nome do tamanho (ex: GG, 38, Único):");
+    const addSize = async () => {
+        const ns = await dialogs.prompt({ title: 'Adicionar tamanho', message: 'Informe o tamanho da peça.', label: 'Nome do tamanho (ex.: GG, 38, Único)', maxLength: 30, confirmLabel: 'Adicionar' });
         if (!ns) return;
         if (form.sizes.includes(ns)) return;
         const newColors = form.colors.map((c) => ({ ...c, stock: { ...c.stock, [ns]: 0 } }));
@@ -120,7 +132,7 @@ export default function ProductForm() {
         price: parseFloat(form.price) || 0,
         sale_price: form.sale_price ? parseFloat(form.sale_price) : null,
         cost_price: parseFloat(form.cost_price) || 0,
-        installments: parseInt(form.installments) || 6,
+        installments: parseInt(String(form.installments), 10) || 6,
         images: form.images,
         colors: form.colors,
         sizes: form.sizes,
@@ -144,15 +156,27 @@ export default function ProductForm() {
         const errors = {};
         if (stepIndex === 0 && !form.name.trim()) errors.name = "Informe o nome do produto";
         if (stepIndex === 3 && !form.price) errors.price = "Informe o preço do produto";
+        if (stepIndex === WIZARD_STEPS.length - 1) {
+            if (!Number.isFinite(Number(form.price)) || Number(form.price) <= 0) errors.price = "Informe um preço maior que zero";
+            if (form.sale_price !== '' && form.sale_price != null
+                && (Number(form.sale_price) <= 0 || Number(form.sale_price) >= Number(form.price))) errors.salePrice = "Preço promocional deve ser maior que zero e menor que o preço normal";
+            if (!form.sizes.length || !form.colors.length) errors.variants = "Informe cor e tamanho para publicar";
+            else if (form.colors.some((color) => form.sizes.some((size) => !Object.hasOwn(color.stock || {}, size))
+                || Object.keys(color.stock || {}).some((size) => !form.sizes.includes(size)))) {
+                errors.variants = "Tamanhos e estoque das cores não correspondem";
+            }
+            setSaveError(Object.values(errors)[0] || "");
+        }
         return Object.keys(errors).length > 0 ? errors : null;
     };
 
     const save = async (status) => {
         if (!form.name.trim()) return;
+        setSaveError("");
         setSaving(true);
         try {
             if (id) {
-                await base44.entities.Product.update(id, buildPayload(status));
+                await base44.entities.Product.update(id, { ...buildPayload(status), expected_updated_date: loadedUpdatedDate });
                 await logAdminAction("product_update", "Product", id, form.name, `Produto atualizado (status: ${status})`);
             } else {
                 const newProduct = await base44.entities.Product.create(buildPayload(status));
@@ -162,6 +186,7 @@ export default function ProductForm() {
             navigate("/admin/produtos");
         } catch (e) {
             console.error("Erro ao salvar:", e);
+            setSaveError(e.response?.data?.error || e.message || "Não foi possível salvar o produto.");
         } finally {
             setSaving(false);
         }
@@ -192,13 +217,13 @@ export default function ProductForm() {
                         <div>
                             <div className="flex items-center justify-between mb-3">
                                 <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Tamanhos</span>
-                                <button onClick={addSize} className="text-xs text-[hsl(var(--rose))] flex items-center gap-1"><Plus className="w-3 h-3" /> Adicionar tamanho</button>
+                                <button onClick={addSize} className="text-xs text-rose-ink flex items-center gap-1"><Plus className="w-3 h-3" /> Adicionar tamanho</button>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 {form.sizes.map((s) => (
                                     <div key={s} className="flex items-center gap-1 bg-[hsl(var(--bone))] px-3 py-1.5 text-sm">
                                         {s}
-                                        <button onClick={() => removeSize(s)} className="text-muted-foreground hover:text-[hsl(var(--rose))]"><X className="w-3 h-3" /></button>
+                                        <button onClick={() => removeSize(s)} className="text-muted-foreground hover:text-rose-ink"><X className="w-3 h-3" /></button>
                                     </div>
                                 ))}
                             </div>
@@ -207,8 +232,9 @@ export default function ProductForm() {
                         {/* Colors */}
                         <div>
                             <div className="flex items-center justify-between mb-3">
-                                <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Cores e estoque</span>
-                                <button onClick={addCustomColor} className="text-xs text-[hsl(var(--rose))] flex items-center gap-1"><Plus className="w-3 h-3" /> Cor personalizada</button>
+                                <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Cores e estoque disponível</span>
+                                <p className="text-xs text-muted-foreground">Informe unidades livres para novas compras. Reservas em pagamento aparecem separadamente no painel Estoque.</p>
+                                <button onClick={addCustomColor} className="text-xs text-rose-ink flex items-center gap-1"><Plus className="w-3 h-3" /> Cor personalizada</button>
                             </div>
                             <div className="flex flex-wrap gap-2 mb-4">
                                 {Object.entries(COLOR_SWATCHES).map(([key, sw]) => {
@@ -228,14 +254,14 @@ export default function ProductForm() {
                                     <div key={idx} className="bg-[hsl(var(--bone))] p-4">
                                         <div className="flex items-center gap-3 mb-3">
                                             <input type="color" value={color.hex} onChange={(e) => updateColor(idx, "hex", e.target.value)} className="w-10 h-10 rounded border border-border cursor-pointer" />
-                                            <input value={color.name} onChange={(e) => updateColor(idx, "name", e.target.value)} placeholder="Nome da cor" className="flex-1 border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" />
-                                            <button onClick={() => removeColor(idx)} className="p-2 text-muted-foreground hover:text-[hsl(var(--rose))]"><X className="w-4 h-4" /></button>
+                                            <input value={color.name} onChange={(e) => updateColor(idx, "name", e.target.value)} placeholder="Nome da cor" className="admin-field flex-1 px-3 py-2" />
+                                            <button onClick={() => removeColor(idx)} className="p-2 text-muted-foreground hover:text-rose-ink"><X className="w-4 h-4" /></button>
                                         </div>
                                         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                                             {form.sizes.map((s) => (
                                                 <div key={s}>
                                                     <label className="block text-[10px] uppercase tracking-[0.12em] text-muted-foreground mb-1">{s}</label>
-                                                    <input type="number" min="0" value={color.stock?.[s] ?? 0} onChange={(e) => updateStock(idx, s, e.target.value)} className="w-full border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" />
+                                                    <input type="number" min="0" value={color.stock?.[s] ?? 0} onChange={(e) => updateStock(idx, s, e.target.value)} className="admin-field px-2 py-1.5" />
                                                 </div>
                                             ))}
                                         </div>
@@ -254,7 +280,7 @@ export default function ProductForm() {
                         <WizardInput label="Preço de custo (admin)" value={form.cost_price} onChange={(v) => set("cost_price", v)} type="number" placeholder="120.00" full />
                         <div>
                             <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Parcelas máximas</label>
-                            <input type="number" min="1" max="12" value={form.installments} onChange={(e) => set("installments", e.target.value)} className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" />
+                            <input type="number" min="1" max="12" value={form.installments} onChange={(e) => set("installments", e.target.value)} className="admin-field" />
                         </div>
                     </div>
                 );
@@ -263,14 +289,14 @@ export default function ProductForm() {
                     <div className="max-w-xl mx-auto space-y-4">
                         <div>
                             <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Categoria</label>
-                            <select value={form.category} onChange={(e) => set("category", e.target.value)} className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" >
+                            <select value={form.category} onChange={(e) => set("category", e.target.value)} className="admin-field" >
                                 <option value="">Selecione...</option>
                                 {categories.map((c) => <option key={c.id} value={c.slug}>{c.name}</option>)}
                             </select>
                         </div>
                         <div>
                             <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Coleção</label>
-                            <select value={form.collection} onChange={(e) => set("collection", e.target.value)} className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" >
+                            <select value={form.collection} onChange={(e) => set("collection", e.target.value)} className="admin-field" >
                                 <option value="">Selecione...</option>
                                 {collections.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
                             </select>
@@ -279,7 +305,7 @@ export default function ProductForm() {
                             <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Tags</label>
                             <div className="flex flex-wrap gap-2">
                                 {TAGS.map((t) => (
-                                    <button key={t.key} type="button" onClick={() => toggleTag(t.key)} className={`text-xs px-3 py-2 border transition-colors ${form.badges[t.key] ? "bg-[hsl(var(--gold))] text-white border-[hsl(var(--gold))]" : "border-border hover:border-foreground/40"}`}>
+                                    <button key={t.key} type="button" onClick={() => toggleTag(t.key)} className={`text-xs px-3 py-2 border transition-colors ${form.badges[t.key] ? "bg-[hsl(var(--gold))] text-accent-foreground border-[hsl(var(--gold))]" : "border-border hover:border-foreground/40"}`}>
                                         {t.label}
                                     </button>
                                 ))}
@@ -311,8 +337,9 @@ export default function ProductForm() {
             case "review":
                 return (
                     <div className="max-w-3xl mx-auto space-y-6">
+                        {saveError && <p role="alert" className="p-3 border border-destructive text-error-ink text-sm">{saveError}</p>}
                         <div className="bg-muted/30 rounded-lg border border-border p-6 space-y-2">
-                            <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-accent mb-3">Resumo do Produto</h3>
+                            <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-gold-ink mb-3">Resumo do Produto</h3>
                             <SummaryRow label="Nome" value={form.name || "—"} />
                             <SummaryRow label="SKU" value={form.sku || "—"} />
                             <SummaryRow label="Preço" value={form.price ? `R$ ${form.price}` : "—"} />
@@ -372,20 +399,20 @@ function SummaryRow({ label, value }) {
     );
 }
 
-function WizardInput({ label, value, onChange, type = "text", full, placeholder }) {
+function WizardInput({ label, value, onChange, type = "text", full = false, placeholder = "" }) {
     return (
         <div className={full ? "" : ""}>
             <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
-            <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors" />
+            <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="admin-field" />
         </div>
     );
 }
 
-function WizardTextarea({ label, value, onChange, full, rows = 3 }) {
+function WizardTextarea({ label, value, onChange, full = false, rows = 3 }) {
     return (
         <div className={full ? "" : ""}>
             <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
-            <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-[hsl(var(--gold))] transition-colors resize-none" />
+            <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} className="admin-field" />
         </div>
     );
 }

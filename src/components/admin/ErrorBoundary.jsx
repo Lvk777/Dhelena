@@ -26,7 +26,7 @@ export default class ErrorBoundary extends React.Component {
             }
             return (
                 <div className="flex flex-col items-center justify-center gap-4 p-8 text-center">
-                    <AlertCircle className="w-8 h-8 text-rose" strokeWidth={1.5} />
+                    <AlertCircle className="w-8 h-8 text-rose-ink" strokeWidth={1.5} />
                     <p className="text-sm text-muted-foreground max-w-xs">
                         {this.props.message || "Não foi possível carregar este conteúdo. Tente novamente."}
                     </p>

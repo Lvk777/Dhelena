@@ -5,10 +5,10 @@ import { useEffect } from 'react';
  * Call from any page to set page-specific metadata.
  *
  * @param {object} opts
- * @param {string} opts.title — page title (without site suffix)
- * @param {string} opts.description — meta description
- * @param {string} [opts.image] — OG image URL
- * @param {string} [opts.url] — canonical URL path (e.g. "/produto/vestido-helena")
+ * @param {string} [opts.title] - page title (without site suffix)
+ * @param {string} [opts.description] - meta description
+ * @param {string} [opts.image] - OG image URL
+ * @param {string} [opts.url] - canonical URL path (e.g. "/produto/vestido-helena")
  */
 export default function useSEO({ title, description, image, url } = {}) {
     useEffect(() => {

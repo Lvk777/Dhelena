@@ -2,11 +2,22 @@
   "name": "dhelenas-backend",
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22 <23"
+  },
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "migrate": "node src/runMigrations.js",
-    "seed": "node seed/seed.js"
+    "seed": "node seed/seed.js",
+    "test": "node --test",
+    "test:auth-postgres": "node integration/authReadiness.mjs",
+    "test:email-postgres": "node integration/emailReadiness.mjs",
+    "test:operations-postgres": "node integration/operationalReadiness.mjs",
+    "test:coupon-postgres": "node integration/couponConcurrency.mjs",
+    "test:security-postgres": "node supabase/security/rehearse_local.mjs",
+    "test:launch-postgres": "node integration/launchZeroReadiness.mjs",
+    "test:stock-postgres": "node integration/runReservationRehearsals.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
@@ -17,11 +28,15 @@
     "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
-    "multer": "^1.4.5-lts.1",
+    "multer": "^2.5.0",
     "pg": "^8.13.0",
     "resend": "^4.0.0"
   },
   "devDependencies": {
+    "mercadopago": "3.6.1",
     "nodemon": "^3.1.7"
+  },
+  "overrides": {
+    "qs": "6.16.0"
   }
 }

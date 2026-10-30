@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Plus, Pencil, Trash2, Image, Loader2, Eye, Monitor, Smartphone, AlertCircle, Tag, MapPin, Link2, Calendar, Check, Wand2 } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Plus, Pencil, Trash2, Image, Eye, AlertCircle, Tag, MapPin, Link2, Calendar, Check, Wand2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import AdminWizard from "@/components/admin/AdminWizard";
 import AdminInput from "@/components/admin/AdminInput";
@@ -7,12 +7,13 @@ import AdminTextarea from "@/components/admin/AdminTextarea";
 import AdminImageUploader from "@/components/admin/AdminImageUploader";
 import AdminToggle from "@/components/admin/AdminToggle";
 import AdminSelect from "@/components/admin/AdminSelect";
-import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import ErrorBoundary from "@/components/admin/ErrorBoundary";
 import StorefrontPreview from "@/components/admin/StorefrontPreview";
 import { logAdminAction } from "@/lib/audit";
 import { BANNER_POSITION_PRESETS, IMAGE_PRESETS, generateMobileVersion, blobToFile } from "@/lib/imageProcessor";
+import { usePublicSettings } from '@/context/PublicSettingsContext';
+import { safeNavigation } from '../../../backend/src/lib/navigation.js';
 
 export const BANNER_POSITIONS = [
     { value: "home_hero", label: "Home — Hero principal" },
@@ -87,13 +88,13 @@ export default function Banners() {
                                 <p className="text-sm font-medium truncate">{b.internal_name || b.title || "Sem nome"}</p>
                                 <p className="text-[11px] text-muted-foreground truncate">
                                     {POSITION_LABELS[b.position] || b.position || "—"}
-                                    {b.promotion_id && <span className="ml-2 inline-flex items-center gap-1 text-accent"><Tag className="w-3 h-3" /> promoção</span>}
+                                    {b.promotion_id && <span className="ml-2 inline-flex items-center gap-1 text-gold-ink"><Tag className="w-3 h-3" /> promoção</span>}
                                 </p>
                             </div>
-                            <span className={`text-[10px] uppercase tracking-[0.12em] px-2 py-1 rounded ${b.active ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground"}`}>{b.active ? "Ativo" : "Inativo"}</span>
+                            <span className={`text-[10px] uppercase tracking-[0.12em] px-2 py-1 rounded ${b.active ? "bg-accent/10 text-gold-ink" : "bg-muted text-muted-foreground"}`}>{b.active ? "Ativo" : "Inativo"}</span>
                             <div className="flex gap-1">
                                 <button onClick={() => setEditing(b)} className="p-2 hover:bg-muted rounded transition-colors"><Pencil className="w-4 h-4" strokeWidth={1.25} /></button>
-                                <button onClick={() => setDeleteTarget(b)} className="p-2 hover:bg-muted rounded transition-colors text-rose"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
+                                <button onClick={() => setDeleteTarget(b)} className="p-2 hover:bg-muted rounded transition-colors text-rose-ink"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
                             </div>
                         </div>
                     ))}
@@ -105,7 +106,7 @@ export default function Banners() {
                     fallback={(err, retry) => (
                         <div className="fixed inset-0 z-50 flex items-center justify-center bg-charcoal/40 backdrop-blur-sm">
                             <div className="bg-background border border-border rounded-xl shadow-2xl max-w-md p-8 text-center">
-                                <AlertCircle className="w-8 h-8 text-rose mx-auto mb-4" strokeWidth={1.5} />
+                                <AlertCircle className="w-8 h-8 text-rose-ink mx-auto mb-4" strokeWidth={1.5} />
                                 <p className="text-sm text-muted-foreground mb-4">Não foi possível carregar o formulário. Tente novamente.</p>
                                 <button onClick={retry} className="btn-outline">Tentar novamente</button>
                             </div>
@@ -130,6 +131,10 @@ export default function Banners() {
 }
 
 function BannerWizard({ item, onClose, onSaved }) {
+    const { settings } = usePublicSettings();
+    const linkErrors = data => Object.fromEntries(['button_link', 'secondary_cta_link']
+        .filter(key => data[key] && !safeNavigation(data[key], { origin: window.location.origin, allowedOrigins: settings.general?.external_link_origins || [] }))
+        .map(key => [key, 'Destino inválido ou não autorizado.']));
     const [form, setForm] = useState({
         internal_name: item.internal_name || "",
         title: item.title || "",
@@ -139,8 +144,8 @@ function BannerWizard({ item, onClose, onSaved }) {
         image: item.image || "",
         image_mobile: item.image_mobile || "",
         position: item.position || "",
-        button_text: item.button_text || item.primary_cta_label || "",
-        button_link: item.button_link || item.primary_cta_link || "",
+        button_text: item.button_text ?? item.primary_cta_label ?? "",
+        button_link: item.button_link ?? item.primary_cta_link ?? "",
         secondary_cta_label: item.secondary_cta_label || "",
         secondary_cta_link: item.secondary_cta_link || "",
         active: item.active !== false,
@@ -199,6 +204,7 @@ function BannerWizard({ item, onClose, onSaved }) {
         if (stepIndex === 0 && !form.internal_name?.trim()) errors.internal_name = "Nome interno é obrigatório";
         if (stepIndex === 1 && !form.image) errors.image = "Adicione uma imagem para publicar este banner.";
         if (stepIndex === 2 && !form.position) errors.position = "Posição é obrigatória";
+        if (stepIndex === 3) Object.assign(errors, linkErrors(form));
         return Object.keys(errors).length > 0 ? errors : null;
     };
 
@@ -207,6 +213,7 @@ function BannerWizard({ item, onClose, onSaved }) {
         if (!form.internal_name?.trim()) allErrors.internal_name = "Nome interno é obrigatório";
         if (!form.position) allErrors.position = "Posição é obrigatória";
         if (!form.image) allErrors.image = "Adicione uma imagem para publicar este banner.";
+        Object.assign(allErrors, linkErrors(form));
         if (Object.keys(allErrors).length > 0) { setStepErrors(allErrors); return; }
 
         setSaving(true);
@@ -227,7 +234,7 @@ function BannerWizard({ item, onClose, onSaved }) {
             onSaved();
         } catch (err) {
             console.error("Erro ao salvar banner:", err);
-            setStepErrors({ _general: "Erro ao salvar. Verifique os dados." });
+            setStepErrors({ _general: err.message || "Erro ao salvar. Verifique os dados." });
         } finally { setSaving(false); }
     };
 
@@ -251,13 +258,13 @@ function BannerWizard({ item, onClose, onSaved }) {
                 return (
                     <div className="max-w-xl mx-auto space-y-4">
                         {errors?._general && (
-                            <div className="flex items-center gap-2 text-sm text-rose bg-rose/5 p-3 rounded">
+                            <div className="flex items-center gap-2 text-sm text-rose-ink bg-rose/5 p-3 rounded">
                                 <AlertCircle className="w-4 h-4" /> {errors._general}
                             </div>
                         )}
                         {positionChanged && (
                             <div className="flex items-center justify-between gap-3 text-sm bg-amber-500/10 border border-amber-500/30 p-3 rounded">
-                                <span className="flex items-center gap-1.5 text-amber-600">
+                                <span className="flex items-center gap-1.5 text-warning-ink">
                                     <AlertCircle className="w-4 h-4" /> A posição foi alterada. Deseja reajustar a imagem para a nova proporção?
                                 </span>
                                 <div className="flex gap-2 shrink-0">
@@ -336,9 +343,9 @@ function BannerWizard({ item, onClose, onSaved }) {
                 return (
                     <div className="max-w-xl mx-auto space-y-4">
                         <AdminInput label="Texto do botão" value={form.button_text} onChange={(v) => set("button_text", v)} full placeholder="Ex: Ver coleção" />
-                        <AdminInput label="Link do botão" value={form.button_link} onChange={(v) => set("button_link", v)} full placeholder="/loja" />
+                        <AdminInput label="Link do botão" value={form.button_link} onChange={(v) => set("button_link", v)} full placeholder="/loja" error={errors?.button_link} />
                         <AdminInput label="CTA secundário — texto" value={form.secondary_cta_label} onChange={(v) => set("secondary_cta_label", v)} placeholder="Ex: Sobre nós" />
-                        <AdminInput label="CTA secundário — link" value={form.secondary_cta_link} onChange={(v) => set("secondary_cta_link", v)} placeholder="/sobre" />
+                        <AdminInput label="CTA secundário — link" value={form.secondary_cta_link} onChange={(v) => set("secondary_cta_link", v)} placeholder="/sobre" error={errors?.secondary_cta_link} />
                     </div>
                 );
             case "schedule":
@@ -350,7 +357,7 @@ function BannerWizard({ item, onClose, onSaved }) {
                         </div>
                         <AdminInput label="Ordem" type="number" value={form.sort_order} onChange={(v) => set("sort_order", parseInt(v) || 0)} />
                         <AdminToggle label="Banner ativo" checked={form.active} onChange={(v) => set("active", v)} description="Quando ativo, o banner aparece na loja (respeitando datas e prioridade)" />
-                        {errors?.active && <p className="text-xs text-rose flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.active}</p>}
+                        {errors?.active && <p className="text-xs text-rose-ink flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.active}</p>}
                         <AdminInput label="ID da promoção (opcional)" value={form.promotion_id} onChange={(v) => set("promotion_id", v)} full placeholder="UUID da promoção" />
                     </div>
                 );
@@ -359,7 +366,7 @@ function BannerWizard({ item, onClose, onSaved }) {
                     <div className="max-w-3xl mx-auto space-y-6">
                         {/* Summary */}
                         <div className="bg-muted/30 rounded-lg border border-border p-6 space-y-2">
-                            <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-accent mb-3">Resumo do Banner</h3>
+                            <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-gold-ink mb-3">Resumo do Banner</h3>
                             <SummaryRow label="Nome" value={form.internal_name || "—"} />
                             <SummaryRow label="Posição" value={POSITION_LABELS[form.position] || form.position || "—"} />
                             <SummaryRow label="Prioridade" value={String(form.priority || 0)} />

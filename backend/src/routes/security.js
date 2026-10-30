@@ -4,6 +4,7 @@ import { auth, requireAdmin } from '../middleware.js';
 import { encrypt, decrypt } from '../lib/crypto.js';
 import { logSecurityEvent } from '../middleware/securityLog.js';
 import crypto from 'crypto';
+import { logSafeError } from '../lib/safeErrorLog.js';
 
 const router = Router();
 
@@ -17,7 +18,7 @@ async function logAdminAction(req, action, entityType, entityId, entityName, det
             [req.user?.id || null, action, entityType, entityId, JSON.stringify({ entity_name: entityName, details }), ip]
         );
     } catch (err) {
-        console.error('[AuditLog] Failed:', err.message);
+        logSafeError('admin_audit_persistence_failed', err);
     }
 }
 
@@ -295,7 +296,7 @@ export async function recordLoginEvent(req, { userId, email, userType, status })
 
         return sessionId;
     } catch (err) {
-        console.error('[LoginHistory] Failed to record event:', err.message);
+        logSafeError('login_history_persistence_failed', err);
         return null;
     }
 }

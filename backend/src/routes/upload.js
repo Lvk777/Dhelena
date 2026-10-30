@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { logSafeError } from '../lib/safeErrorLog.js';
 import multer from 'multer';
 import crypto from 'crypto';
 import path from 'path';
@@ -34,7 +35,7 @@ const MAGIC_BYTES = {
     'image/webp': [{ offset: 0, bytes: [0x52, 0x49, 0x46, 0x46] }], // RIFF....WEBP
 };
 
-function detectRealMime(buffer) {
+export function detectRealMime(buffer) {
     for (const [mime, sigs] of Object.entries(MAGIC_BYTES)) {
         for (const sig of sigs) {
             const slice = buffer.subarray(sig.offset, sig.offset + sig.bytes.length);
@@ -60,7 +61,7 @@ const supabaseStorage = (supabaseUrl && supabaseServiceKey)
     : null;
 
 // Memory storage (don't save to disk — upload straight to Supabase)
-const upload = multer({
+export const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: MAX_SIZE },
     fileFilter: (req, file, cb) => {
@@ -121,7 +122,7 @@ async function isFileReferenced(fileUrl) {
         }
         return false;
     } catch (err) {
-        console.error('[Upload] Reference check error:', err.message);
+        logSafeError('upload_reference_check_failed', err);
         // On error, don't delete — safer to keep the file
         return true;
     }
@@ -176,7 +177,7 @@ router.post('/upload', auth, requireAdmin, uploadLimiter, upload.single('file'),
                 });
 
             if (uploadError) {
-                console.error('[Upload] Supabase error:', uploadError.message);
+                logSafeError('storage_upload_failed', uploadError);
                 return res.status(500).json({ error: 'Não foi possível enviar a imagem.' });
             }
 
@@ -187,9 +188,13 @@ router.post('/upload', auth, requireAdmin, uploadLimiter, upload.single('file'),
 
             return res.json({ file_url: publicUrl, path: safeFileName });
         } catch (err) {
-            console.error('[Upload] Unexpected error:', err.message);
+            logSafeError('upload_failed', err);
             return res.status(500).json({ error: 'Não foi possível enviar a imagem.' });
         }
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+        return res.status(503).json({ error: 'Armazenamento de imagens indisponível.' });
     }
 
     // Fallback: local storage (dev only)
@@ -226,14 +231,18 @@ router.delete('/upload', auth, requireAdmin, async (req, res) => {
                 .remove([storagePath]);
 
             if (error) {
-                console.error('[Upload] Delete error:', error.message);
+                logSafeError('storage_delete_failed', error);
                 return res.status(500).json({ error: 'Não foi possível remover o arquivo.' });
             }
             return res.json({ success: true });
         } catch (err) {
-            console.error('[Upload] Delete unexpected error:', err.message);
+            logSafeError('upload_delete_failed', err);
             return res.status(500).json({ error: 'Não foi possível remover o arquivo.' });
         }
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+        return res.status(503).json({ error: 'Armazenamento de imagens indisponível.' });
     }
 
     // Fallback: local delete

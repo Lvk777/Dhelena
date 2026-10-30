@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Pencil, Trash2, Star, X, MapPin } from "lucide-react";
+import { Plus, Pencil, Trash2, Star, MapPin } from "lucide-react";
+import AdminModal from '@/components/admin/AdminModal';
 import { base44 } from "@/api/base44Client";
 import AddressFields from "@/components/AddressFields";
 import { validateCEP } from "@/lib/forms";
@@ -11,41 +12,44 @@ export default function Addresses() {
     const [editing, setEditing] = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [deleting, setDeleting] = useState(false);
+    const [primaryBusy, setPrimaryBusy] = useState(false);
 
     const load = () => {
         setLoading(true);
+        setLoadError('');
         base44.entities.Address.list("-created_date", 50)
             .then(setAddresses)
-            .catch(() => { })
+            .catch(() => { setLoadError("Não foi possível consultar seus endereços. Tente novamente."); })
             .finally(() => setLoading(false));
     };
 
     useEffect(() => { load(); }, []);
 
+    const [loadError, setLoadError] = useState("");
     const setPrimary = async (id) => {
-        // Unset all, then set the chosen one
-        for (const a of addresses) {
-            if (a.is_primary) await base44.entities.Address.update(a.id, { is_primary: false });
-        }
-        await base44.entities.Address.update(id, { is_primary: true });
-        load();
+        if (primaryBusy) return;
+        setPrimaryBusy(true);
+        try { await base44.entities.Address.update(id, { is_primary: true }); load(); }
+        catch (e) { setLoadError(e.message || "Não foi possível definir o endereço principal."); }
+        finally { setPrimaryBusy(false); }
     };
 
     const confirmDelete = async () => {
         setDeleting(true);
         try { await base44.entities.Address.delete(deleteTarget.id); setDeleteTarget(null); load(); }
-        catch { } finally { setDeleting(false); }
+        catch (e) { setLoadError(e.message || "Não foi possível excluir o endereço."); } finally { setDeleting(false); }
     };
 
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
                 <h1 className="font-heading text-3xl tracking-[0.03em]">Meus endereços</h1>
-                <button onClick={() => setEditing({})} className="btn-ghost text-[hsl(var(--rose))]">
+                <button onClick={() => setEditing({})} className="btn-ghost text-rose-ink">
                     <Plus className="w-4 h-4" strokeWidth={1.5} /> Novo endereço
                 </button>
             </div>
 
+            {loadError && <p role="alert" className="text-error-ink mb-3">{loadError}</p>}
             {loading ? (
                 <div className="h-32 bg-bone animate-pulse" />
             ) : addresses.length === 0 ? (
@@ -59,7 +63,7 @@ export default function Addresses() {
                         <div key={a.id} className="bg-[hsl(var(--bone))] p-6">
                             <div className="flex items-start justify-between gap-4">
                                 <div>
-                                    {a.is_primary && <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] text-[hsl(var(--gold))] mb-2"><Star className="w-3 h-3 fill-[hsl(var(--gold))]" strokeWidth={0} /> Principal</span>}
+                                    {a.is_primary && <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] text-gold-ink mb-2"><Star className="w-3 h-3 fill-[hsl(var(--gold))]" strokeWidth={0} /> Principal</span>}
                                     <p className="text-sm font-medium">{a.street}, {a.number}{a.complement ? ` - ${a.complement}` : ""}</p>
                                     <p className="text-sm text-muted-foreground mt-1">{a.district} · {a.city}/{a.state}</p>
                                     <p className="text-[11px] text-muted-foreground mt-1">CEP {a.cep}</p>
@@ -70,7 +74,7 @@ export default function Addresses() {
                                 </div>
                             </div>
                             {!a.is_primary && (
-                                <button onClick={() => setPrimary(a.id)} className="btn-ghost text-xs mt-4">Definir como principal</button>
+                                <button disabled={primaryBusy} onClick={() => setPrimary(a.id)} className="btn-ghost min-h-11 text-xs mt-4">Definir como principal</button>
                             )}
                         </div>
                     ))}
@@ -106,10 +110,12 @@ function AddressForm({ address, onClose, onSaved }) {
     });
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState({});
+    const [saveError, setSaveError] = useState("");
 
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
     const save = async () => {
+        if (saving) return;
         const e = {};
         if (!validateCEP(form.cep)) e.cep = "Informe um CEP válido";
         if (!form.street.trim()) e.street = "Informe a rua";
@@ -127,23 +133,17 @@ function AddressForm({ address, onClose, onSaved }) {
             }
             onSaved();
         } catch (e) {
-            console.error("Erro ao salvar endereço:", e);
+            setSaveError(e.message || "Não foi possível salvar o endereço.");
         } finally {
             setSaving(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-            <div className="absolute inset-0 bg-charcoal/30 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-background w-full max-w-lg p-8 max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-6">
-                    <h2 className="font-heading text-2xl">{address.id ? "Editar endereço" : "Novo endereço"}</h2>
-                    <button onClick={onClose}><X className="w-5 h-5" strokeWidth={1.25} /></button>
-                </div>
-                <AddressFields form={form} set={set} errors={errors} />
+        <AdminModal open onClose={onClose} busy={saving} title={address.id ? 'Editar endereço' : 'Novo endereço'}>
+                {saveError && <p role="alert" className="text-error-ink mb-3">{saveError}</p>}
+                <AddressFields form={form} set={set} errors={errors} disabled={saving} />
                 <button onClick={save} disabled={saving} className="btn-gold w-full mt-6">{saving ? "Salvando..." : "Salvar endereço"}</button>
-            </div>
-        </div>
+        </AdminModal>
     );
 }

@@ -2,6 +2,7 @@ import React from "react";
 import { useReveal } from "@/hooks/useReveal";
 import { usePublicSettings } from "@/context/PublicSettingsContext";
 import useSEO from "@/lib/useSEO";
+import { publishedPolicyText } from '@/lib/policyContent';
 
 const POLICIES = {
     "trocas-e-devolucoes": {
@@ -71,14 +72,14 @@ export default function PolicyPage({ slug }) {
         url: `/${slug}`,
     });
 
-    const content = settings.policies?.[config.policyKey] || "";
+    const content = publishedPolicyText(settings.policies?.[config.policyKey]);
 
     return (
         <div>
             {/* Header */}
             <section className="bg-[hsl(var(--bone))] py-16 sm:py-20 border-b border-border">
                 <div className="container-boutique text-center">
-                    <p className="eyebrow text-[hsl(var(--gold))]">D'Helenas</p>
+                    <p className="eyebrow text-gold-ink">D'Helenas</p>
                     <h1 className="mt-4 font-heading text-4xl sm:text-5xl lg:text-6xl tracking-[0.03em] text-foreground">
                         {config.title}
                     </h1>

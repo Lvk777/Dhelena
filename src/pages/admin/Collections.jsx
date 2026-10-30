@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Pencil, Trash2, Layers, Star, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Layers, Star } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import CollectionForm from "@/components/admin/collections/CollectionForm";
@@ -11,10 +11,12 @@ export default function Collections() {
     const [editing, setEditing] = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [deleting, setDeleting] = useState(false);
+    const [error, setError] = useState("");
 
     const load = () => {
         setLoading(true);
-        base44.entities.Collection.list("sort_order", 100).then(setItems).catch(() => { }).finally(() => setLoading(false));
+        setError("");
+        base44.entities.Collection.list("sort_order", 100).then(setItems).catch(() => setError("Não foi possível carregar as coleções.")).finally(() => setLoading(false));
     };
     useEffect(() => { load(); }, []);
 
@@ -26,7 +28,7 @@ export default function Collections() {
             setDeleteTarget(null);
             load();
         } catch {
-            // keep dialog open on error
+            setError("Não foi possível excluir a coleção.");
         } finally {
             setDeleting(false);
         }
@@ -38,6 +40,8 @@ export default function Collections() {
                 <h1 className="font-heading text-2xl tracking-[0.03em]">Coleções</h1>
                 <button onClick={() => setEditing({})} className="btn-gold"><Plus className="w-4 h-4" strokeWidth={1.5} /> Nova coleção</button>
             </div>
+
+            {error && <div role="alert" className="mb-4 text-sm text-error-ink">{error} <button type="button" className="underline" onClick={load}>Tentar novamente</button></div>}
 
             {loading ? (
                 <div className="h-40 bg-background animate-pulse rounded-lg" />
@@ -60,18 +64,18 @@ export default function Collections() {
                             <div className="p-4">
                                 <div className="flex items-center gap-2 mb-1">
                                     <p className="text-sm font-medium truncate flex-1">{c.name}</p>
-                                    {c.featured && <Star className="w-3.5 h-3.5 text-accent fill-accent shrink-0" strokeWidth={0} />}
+                                    {c.featured && <Star className="w-3.5 h-3.5 text-gold-ink fill-accent shrink-0" strokeWidth={0} />}
                                 </div>
                                 {c.description && <p className="text-[11px] text-muted-foreground line-clamp-2 mb-2">{c.description}</p>}
                                 <div className="flex items-center gap-2 mb-3">
-                                    <span className={`text-[9px] uppercase tracking-[0.12em] px-1.5 py-0.5 rounded ${c.status === "active" ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground"}`}>
+                                    <span className={`text-[9px] uppercase tracking-[0.12em] px-1.5 py-0.5 rounded ${c.status === "active" ? "bg-accent/10 text-gold-ink" : "bg-muted text-muted-foreground"}`}>
                                         {c.status === "active" ? "Ativa" : "Inativa"}
                                     </span>
                                     {c.start_date && <span className="text-[10px] text-muted-foreground font-numeric">Início: {new Date(c.start_date).toLocaleDateString("pt-BR")}</span>}
                                 </div>
                                 <div className="flex gap-1">
                                     <button onClick={() => setEditing(c)} className="p-1.5 hover:bg-muted rounded transition-colors"><Pencil className="w-4 h-4" strokeWidth={1.25} /></button>
-                                    <button onClick={() => setDeleteTarget(c)} className="p-1.5 hover:bg-muted rounded transition-colors text-rose"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
+                                    <button onClick={() => setDeleteTarget(c)} className="p-1.5 hover:bg-muted rounded transition-colors text-rose-ink"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
                                 </div>
                             </div>
                         </div>

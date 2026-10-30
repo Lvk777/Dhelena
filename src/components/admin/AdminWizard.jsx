@@ -27,15 +27,15 @@ import { ChevronLeft, ChevronRight, Check, X, AlertTriangle } from "lucide-react
  */
 export default function AdminWizard({
     title,
-    subtitle,
+    subtitle = "",
     icon: Icon,
     steps = [],
     validateStep,
     onSave,
     onClose,
     saveLabel = "Salvar",
-    draftLabel,
-    onSaveDraft,
+    draftLabel = null,
+    onSaveDraft = undefined,
     saving = false,
     children,
 }) {
@@ -104,7 +104,7 @@ export default function AdminWizard({
                         <div className="flex items-start gap-3 min-w-0">
                             {Icon && (
                                 <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
-                                    <Icon className="w-5 h-5 text-accent" strokeWidth={1.5} />
+                                    <Icon className="w-5 h-5 text-gold-ink" strokeWidth={1.5} />
                                 </div>
                             )}
                             <div className="min-w-0">
@@ -130,8 +130,8 @@ export default function AdminWizard({
                                     )}
                                     <div className="flex items-center gap-2 shrink-0">
                                         <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-medium border-2 transition-all ${
-                                            isActive ? "border-accent bg-accent text-background"
-                                            : isDone ? "border-accent bg-accent/10 text-accent"
+                                            isActive ? "border-accent bg-accent text-accent-foreground"
+                                            : isDone ? "border-accent bg-accent/10 text-gold-ink"
                                             : "border-border text-muted-foreground"
                                         }`}>
                                             {isDone ? <Check className="w-3.5 h-3.5" strokeWidth={2} /> : StepIcon ? <StepIcon className="w-3.5 h-3.5" /> : i + 1}
@@ -161,6 +161,12 @@ export default function AdminWizard({
 
                 {/* Body — scrollable */}
                 <div ref={scrollRef} className="flex-1 overflow-y-auto admin-scroll px-6 py-5">
+                    {stepErrors && Object.keys(stepErrors).length > 0 && (
+                        <div role="alert" className="mb-5 flex items-start gap-2 border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-error-ink">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span>{Object.values(stepErrors)[0]}</span>
+                        </div>
+                    )}
                     {typeof children === "function"
                         ? children(steps[currentStep], { currentStep, stepErrors, setStepErrors })
                         : children}
@@ -172,7 +178,7 @@ export default function AdminWizard({
                         <button
                             onClick={handleBack}
                             disabled={currentStep === 0}
-                            className="btn-ghost flex items-center gap-1.5 disabled:opacity-30 disabled:pointer-events-none"
+                            className="btn-ghost flex items-center gap-1.5 disabled:text-muted-foreground disabled:opacity-100 disabled:pointer-events-none"
                         >
                             <ChevronLeft className="w-4 h-4" strokeWidth={1.5} /> Voltar
                         </button>
