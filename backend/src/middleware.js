@@ -2,13 +2,14 @@ import jwt from 'jsonwebtoken';
 import { authenticateSupabaseProfile } from './lib/supabaseProfile.js';
 import { pool } from './config/db.js';
 import { logSafeError } from './lib/safeErrorLog.js';
+import { loginCodeEnabled, sessionAllowed, trustedSession } from './services/loginCode.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
 // ─── Supabase admin client (lazy init, only when configured) ───────
 let _supabaseAdmin = undefined;
 
-async function getSupabaseAdmin() {
+export async function getSupabaseAdmin() {
     if (_supabaseAdmin !== undefined) return _supabaseAdmin;
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
         _supabaseAdmin = null;
@@ -31,6 +32,18 @@ async function getSupabaseAdmin() {
 
 export const isSupabaseMode = () => _supabaseAdmin !== null && _supabaseAdmin !== undefined;
 
+export const adminAssuranceRequired = (env = process.env) => env.ADMIN_AAL2_REQUIRED === 'true';
+
+export function adminAssuranceAllowed(req, env = process.env) {
+    return !adminAssuranceRequired(env) || req.authProvider === 'supabase'
+        && req.supabaseSession?.aal === 'aal2';
+}
+
+export function adminRequestRequiresStepUp(req, env = process.env) {
+    return req.user?.role === 'admin' && !adminAssuranceAllowed(req, env)
+        && !(req.method === 'GET' && req.path === '/api/auth/me');
+}
+
 // ─── Auth middleware: validates Supabase JWT or Express JWT ────────
 export async function auth(req, res, next) {
     if (req.authProvider === 'supabase' && req.user) return next();
@@ -43,10 +56,20 @@ export async function auth(req, res, next) {
     if (supabaseAdmin) {
         // ── Supabase mode: validate Supabase access token ──
         try {
-            const profile = await authenticateSupabaseProfile(supabaseAdmin, pool, token, identity => { req.supabaseUserId = identity.id; });
+            const profile = await authenticateSupabaseProfile(supabaseAdmin, pool, token, identity => {
+                req.supabaseUserId = identity.id;
+                req.supabaseEmail = identity.email_confirmed_at ? identity.email : null;
+                req.supabaseSession = trustedSession(token, identity);
+            }, async () => !loginCodeEnabled() || await sessionAllowed(pool, req.supabaseSession));
             if (profile) {
                 req.user = profile;
                 req.authProvider = 'supabase';
+                // The assurance gate is off until every administrator has enrolled
+                // a verified native TOTP factor. Once on, no role-based API branch
+                // may be reached with an AAL1 token, including OTP and OAuth logins.
+                if (adminRequestRequiresStepUp(req)) {
+                    return res.status(403).json({ error: 'Confirme o aplicativo autenticador para acessar o painel.', code: 'admin_mfa_required' });
+                }
             }
         } catch (error) {
             // A provisioning failure is retryable; never impersonate an anonymous
@@ -76,6 +99,7 @@ export async function auth(req, res, next) {
 export function requireAdmin(req, res, next) {
     if (!req.user) return res.status(401).json({ error: 'Autenticação necessária' });
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito a administradores' });
+    if (!adminAssuranceAllowed(req)) return res.status(403).json({ error: 'Confirme o aplicativo autenticador para acessar o painel.', code: 'admin_mfa_required' });
     next();
 }
 

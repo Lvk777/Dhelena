@@ -53,7 +53,65 @@ export function createSupabaseAuthFlow({ supabase, api, origin, location, histor
             if (!authEmail(email) || !password) throw fail('Informe e-mail e senha.');
             try { check(await a.signInWithPassword({ email: email.trim().toLowerCase(), password })); }
             catch { throw fail('Não foi possível entrar. Confira e-mail e senha e a confirmação do cadastro.'); }
-            await session(); const profile = await api('/auth/me'); setUser(profile); return profile;
+            await session();
+            let challenge;
+            try { challenge = await api('/auth/code/start', { method: 'POST', body: '{}' }); }
+            catch (error) {
+                // An AAL1 administrator is redirected to native TOTP enrollment
+                // or challenge by /auth/me; the inactive email-code prototype
+                // must not turn a valid password sign-in into a failed login.
+                if (error.status !== 403 || error.response?.data?.code !== 'admin_mfa_required') throw error;
+                challenge = { required: false };
+            }
+            if (challenge.required) { setUser(null); return { pending_code: true, resend_after: challenge.resend_after }; }
+            const profile = await api('/auth/me'); setUser(profile); return profile;
+        }); },
+        verifyLoginCode(code) { return once('verify-code', async () => {
+            if (!/^\d{6}$/.test(code || '')) throw fail('Informe os seis dígitos do código.');
+            await session();
+            await api('/auth/code/verify', { method: 'POST', body: JSON.stringify({ code }) });
+            const profile = await api('/auth/me'); setUser(profile); return profile;
+        }); },
+        resendLoginCode() { return once('resend-code', async () => {
+            await session(); return api('/auth/code/start', { method: 'POST', body: '{}' });
+        }); },
+        requestEmailOtp(email) { return once('email-otp-request', async () => {
+            if (!authEmail(email)) throw fail('Informe um e-mail válido.');
+            const normalized = email.trim().toLowerCase();
+            const current = check(await a.getSession());
+            if (current?.session?.access_token) throw fail('Você já está conectada. Saia da conta antes de entrar em outra.');
+            // GoTrue does not create a user when shouldCreateUser is false. Its raw
+            // response can enumerate accounts, so the UI always gives a neutral result.
+            let response;
+            try { response = await a.signInWithOtp({ email: normalized, options: { shouldCreateUser: false } }); }
+            catch { /* Do not expose provider errors or account existence. */ }
+            if (response?.data?.session) {
+                await a.signOut({ scope: 'local' }).catch(() => {});
+                setToken(null); setUser(null);
+                throw fail('Não foi possível iniciar a entrada por código. Tente novamente.');
+            }
+            setUser(null);
+            return { pending_otp: true, resend_after: 60 };
+        }); },
+        verifyEmailOtp(email, code) { return once('email-otp-verify', async () => {
+            if (!authEmail(email) || !/^\d{6}$/.test(code || '')) throw fail('Informe o e-mail e os seis dígitos do código.');
+            const normalized = email.trim().toLowerCase();
+            const result = await a.verifyOtp({ email: normalized, token: code, type: 'email' });
+            if (result.error || !result.data?.session?.access_token) throw fail('Código inválido ou expirado. Solicite um novo código.');
+            try {
+                const identity = await verifiedUser();
+                if (identity.email?.toLowerCase() !== normalized || result.data.session.user?.id !== identity.id) {
+                    throw fail('A conta confirmada não corresponde ao e-mail informado.');
+                }
+            } catch (error) {
+                await a.signOut({ scope: 'local' }).catch(() => {});
+                setToken(null); setUser(null);
+                throw error;
+            }
+            await session();
+            const profile = await api('/auth/me');
+            setUser(profile);
+            return profile;
         }); },
         register({ email, password, full_name }) { return once('register', async () => {
             if (!authEmail(email) || !full_name?.trim() || passwordMessage(password)) throw fail('Confira nome, e-mail e senha.');
@@ -132,6 +190,35 @@ export function createSupabaseAuthFlow({ supabase, api, origin, location, histor
             const profile = await api('/auth/me');
             return { email: u.email, pending_email: u.new_email || null, password_provider: (u.app_metadata?.providers || []).includes('email'), email_change_supported: profile.email_change_supported === true };
         },
+        async mfaStatus() {
+            await verifiedUser();
+            const [factors, assurance] = await Promise.all([
+                a.mfa.listFactors(), a.mfa.getAuthenticatorAssuranceLevel(),
+            ]);
+            if (factors.error || assurance.error) throw fail('Não foi possível verificar o autenticador.');
+            const verified = (factors.data?.totp || []).filter(factor => factor.status === 'verified');
+            return { enrolled: verified.length > 0, factorId: verified[0]?.id || null,
+                aal: assurance.data?.currentLevel === 'aal2' ? 'aal2' : 'aal1' };
+        },
+        mfaEnroll() { return once('mfa-enroll', async () => {
+            await verifiedUser();
+            const result = await a.mfa.enroll({ factorType: 'totp', friendlyName: 'D’Helenas Boutique' });
+            if (result.error || !result.data?.id || !result.data?.totp?.secret) {
+                throw fail('Não foi possível iniciar a inscrição do autenticador.');
+            }
+            // The secret is shown only in this page state. Never send it to Express,
+            // analytics, logs or persistent browser storage.
+            return { factorId: result.data.id, secret: result.data.totp.secret };
+        }); },
+        mfaVerify(factorId, code) { return once('mfa-verify', async () => {
+            if (!factorId || !/^\d{6}$/.test(code || '')) throw fail('Informe o código de seis dígitos do aplicativo.');
+            const result = await a.mfa.challengeAndVerify({ factorId, code });
+            if (result.error) throw fail('Código inválido ou expirado. Tente novamente.');
+            await session();
+            const status = await this.mfaStatus();
+            if (status.aal !== 'aal2') throw fail('A sessão ainda não confirmou o segundo fator.');
+            return status;
+        }); },
         changeEmail(email) { return once('email-change', async () => {
             if (!authEmail(email)) throw fail('Informe um e-mail válido.');
             await api('/auth/email-change/preview', { method: 'POST', body: JSON.stringify({ email: email.trim().toLowerCase() }) });
@@ -149,7 +236,7 @@ export function createSupabaseAuthFlow({ supabase, api, origin, location, histor
         requestReauthentication() { return once('reauthenticate', async () => { check(await a.reauthenticate()); return {}; }); },
         logout() { return once('logout', async () => {
             // Always erase local state, including when the provider is temporarily unavailable.
-            try { check(await a.signOut({ scope: 'global' })); }
+            try { await api('/auth/code/logout', { method: 'POST', body: '{}' }).catch(() => {}); check(await a.signOut({ scope: 'global' })); }
             finally { recovery = null; setToken(null); setUser(null); }
         }); },
         onSessionChange(callback) {

@@ -32,3 +32,8 @@ test('recovery template keeps its own token purpose and every Auth template is b
     }
     assert.match(await template('reauthentication'), /{{ \.Token }}/);
 });
+test('proposed passwordless template contains an OTP but does not expose a magic-link credential', async () => {
+    const html = await template('magic-link-otp-proposed');
+    assert.match(html, /{{ \.Token }}/);
+    assert.doesNotMatch(html, /{{ \.ConfirmationURL }}|{{ \.TokenHash }}/);
+});

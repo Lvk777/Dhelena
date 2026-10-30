@@ -96,7 +96,7 @@ export async function ensureSupabaseProfile(db, user) {
     }
 }
 
-export async function authenticateSupabaseProfile(admin, db, token, onVerifiedUser = () => {}) {
+export async function authenticateSupabaseProfile(admin, db, token, onVerifiedUser = () => {}, authorize = () => true) {
     const { data, error } = await admin.auth.getUser(token);
     if (error || !data?.user) {
         if (error && (!error.status || error.status >= 500)) {
@@ -105,5 +105,6 @@ export async function authenticateSupabaseProfile(admin, db, token, onVerifiedUs
         return null;
     }
     onVerifiedUser(data.user);
+    if (!await authorize(data.user)) return null;
     return ensureSupabaseProfile(db, data.user);
 }

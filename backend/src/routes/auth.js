@@ -2,8 +2,9 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db.js';
-import { auth } from '../middleware.js';
-import { loginLimiter, registerLimiter, forgotPasswordLimiter } from '../middleware/rateLimiters.js';
+import { auth, adminAssuranceRequired } from '../middleware.js';
+import { createLoginCodeService, loginCodeEnabled } from '../services/loginCode.js';
+import { loginLimiter, loginCodeLimiter, registerLimiter, forgotPasswordLimiter } from '../middleware/rateLimiters.js';
 import { logSecurityEvent } from '../middleware/securityLog.js';
 import { recordLoginEvent } from './security.js';
 import { normalizeBirthDate, normalizeProfileInput } from '../lib/validation.js';
@@ -11,7 +12,30 @@ import { authCapabilities } from '../lib/authCapabilities.js';
 
 const router = Router();
 const isProduction = process.env.NODE_ENV === 'production';
-router.get('/capabilities', async (_req, res) => { res.json(await authCapabilities()); });
+const codeService = createLoginCodeService({ db: pool });
+router.get('/capabilities', async (_req, res) => { res.json({ ...await authCapabilities(), email_code: loginCodeEnabled() }); });
+
+// These routes accept an already verified Supabase identity, but deliberately
+// do not require an authorized profile: that is what the second factor unlocks.
+router.post('/code/start', loginCodeLimiter, auth, async (req, res, next) => {
+    try {
+        if (!loginCodeEnabled()) return res.json({ required: false });
+        if (!req.supabaseSession || !req.supabaseEmail) return res.status(401).json({ error: 'Sessão inválida.' });
+        res.json(await codeService.start(req.supabaseSession, req.supabaseEmail));
+    } catch (error) { next(error); }
+});
+router.post('/code/verify', loginCodeLimiter, auth, async (req, res, next) => {
+    try {
+        if (!loginCodeEnabled() || !req.supabaseSession) return res.status(401).json({ error: 'Sessão inválida.' });
+        res.json(await codeService.verify(req.supabaseSession, req.body?.code));
+    } catch (error) { next(error); }
+});
+router.post('/code/logout', auth, async (req, res, next) => {
+    try {
+        if (loginCodeEnabled()) await codeService.revoke(req.supabaseSession);
+        res.json({ success: true });
+    } catch (error) { next(error); }
+});
 
 function signToken(user) {
     return jwt.sign(
@@ -88,7 +112,8 @@ router.post('/login', loginLimiter, async (req, res, next) => {
 // GET /api/auth/me
 router.get('/me', auth, async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'Não autenticado' });
-    res.json({ ...req.user, email_change_supported: req.authProvider === 'supabase'
+    res.json({ ...req.user, admin_mfa_required: req.user.role === 'admin' && adminAssuranceRequired(),
+        auth_aal: req.supabaseSession?.aal || 'aal1', email_change_supported: req.authProvider === 'supabase'
         && (req.supabaseUserId === req.user.id || req.user.identity_linked === true) });
 });
 

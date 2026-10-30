@@ -23,5 +23,9 @@ export default function AdminRoute({ children }) {
         return <Navigate to="/minha-conta" replace />;
     }
 
+    if (user.admin_mfa_required && user.auth_aal !== 'aal2') {
+        return <Navigate to="/minha-conta/senha" replace />;
+    }
+
     return children;
 }

@@ -35,6 +35,15 @@ export const loginLimiter = rateLimit({
     },
 });
 
+export const loginCodeLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator,
+    handler: (_req, res) => res.status(429).json({ error: 'Muitas tentativas. Aguarde alguns minutos.' }),
+});
+
 // ─── Auth: register ──────────────────────────────────────────────
 export const registerLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
