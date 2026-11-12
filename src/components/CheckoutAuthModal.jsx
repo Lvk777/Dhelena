@@ -14,7 +14,7 @@ export default function CheckoutAuthModal({ open, onClose }) {
                     <X className="w-5 h-5" strokeWidth={1.25} />
                 </button>
                 <div className="w-14 h-14 rounded-full bg-[hsl(var(--bone))] mx-auto flex items-center justify-center mb-5">
-                    <ShoppingBag className="w-7 h-7 text-[hsl(var(--gold))]" strokeWidth={1.25} />
+                    <ShoppingBag className="w-7 h-7 text-gold-ink" strokeWidth={1.25} />
                 </div>
                 <h2 className="font-heading text-2xl tracking-[0.03em]">Quase lá!</h2>
                 <p className="mt-3 text-sm text-muted-foreground leading-relaxed">

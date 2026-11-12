@@ -1,6 +1,11 @@
 // ─── Analytics tracking client ─────────────────────────────────────
 // Lightweight frontend tracker that sends events to /api/analytics/events
-// LGPD-compliant: no personal data stored beyond anonymous session ID
+// Optional tracker; activation requires an explicit privacy-reviewed build opt-in.
+import { resolveApiBase, apiUrl } from '../api/apiBase.js';
+
+const API_BASE = resolveApiBase(import.meta.env.VITE_API_URL, import.meta.env.PROD);
+// No new collection is activated by publishing this preparation sprint.
+const ENABLED = import.meta.env.VITE_ANALYTICS_ENABLED === 'true';
 
 const SESSION_KEY = 'dh_session_id';
 const ALLOWED_EVENTS = [
@@ -23,7 +28,7 @@ function parseUTM() {
         utm_source: params.get('utm_source') || '',
         utm_medium: params.get('utm_medium') || '',
         utm_campaign: params.get('utm_campaign') || '',
-        referrer: document.referrer || '',
+        referrer: (() => { try { return new URL(document.referrer).origin; } catch { return ''; } })(),
     };
 }
 
@@ -35,7 +40,7 @@ function flush() {
     const events = [...queue];
     queue = [];
 
-    fetch('/api/analytics/events', {
+    fetch(apiUrl(API_BASE, '/analytics/events'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ events }),
@@ -43,13 +48,14 @@ function flush() {
 }
 
 export function track(eventName, data = {}) {
+    if (!ENABLED) return;
     if (!ALLOWED_EVENTS.includes(eventName)) return;
 
     const utm = parseUTM();
     queue.push({
         event_name: eventName,
         session_id: getSessionId(),
-        page: window.location.pathname + window.location.search,
+        page: window.location.pathname,
         ...utm,
         ...data,
     });

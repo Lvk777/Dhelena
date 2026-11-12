@@ -90,7 +90,7 @@ export default function SecurityTab() {
             <AdminFormSection title="Autenticação em Dois Fatores (2FA)" icon={Shield}
                 description="Proteja sua conta com verificação adicional via app autenticador (Google Authenticator, Microsoft Authenticator, Authy, 1Password).">
                 {error && (
-                    <div className="col-span-2 flex items-center gap-2 text-sm text-rose bg-rose/5 p-3 rounded">
+                    <div className="col-span-2 flex items-center gap-2 text-sm text-rose-ink bg-rose/5 p-3 rounded">
                         <AlertTriangle className="w-4 h-4" /> {error}
                     </div>
                 )}
@@ -116,10 +116,10 @@ export default function SecurityTab() {
                     <div className="col-span-2">
                         <div className="flex items-center gap-3 p-4 bg-accent/5 border border-accent/20 rounded-lg">
                             <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center">
-                                <Check className="w-5 h-5 text-accent" strokeWidth={2} />
+                                <Check className="w-5 h-5 text-gold-ink" strokeWidth={2} />
                             </div>
                             <div className="flex-1">
-                                <p className="text-sm font-medium text-accent">2FA ativo</p>
+                                <p className="text-sm font-medium text-gold-ink">2FA ativo</p>
                                 <p className="text-xs text-muted-foreground">Sua conta está protegida com autenticação de dois fatores.</p>
                             </div>
                             <button onClick={disable2FA} disabled={busy} className="btn-ghost text-xs">
@@ -160,9 +160,9 @@ export default function SecurityTab() {
                 {setupMode === "recovery" && (
                     <div className="col-span-2 space-y-4">
                         <div className="flex items-start gap-2 p-4 bg-accent/5 border border-accent/20 rounded-lg">
-                            <AlertTriangle className="w-5 h-5 text-accent shrink-0 mt-0.5" />
+                            <AlertTriangle className="w-5 h-5 text-gold-ink shrink-0 mt-0.5" />
                             <div>
-                                <p className="text-sm font-medium text-accent">Salve seus códigos de recuperação</p>
+                                <p className="text-sm font-medium text-gold-ink">Salve seus códigos de recuperação</p>
                                 <p className="text-xs text-muted-foreground mt-1">
                                     Guarde estes códigos em local seguro. Use-os se perder acesso ao seu app autenticador.
                                     Cada código pode ser usado apenas uma vez.

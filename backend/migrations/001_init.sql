@@ -271,6 +271,7 @@ CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
 CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
 CREATE INDEX IF NOT EXISTS idx_products_collection ON products(collection);
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_user_idempotency_unique ON orders(user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id);

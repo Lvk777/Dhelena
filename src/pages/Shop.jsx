@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { SlidersHorizontal, X, ChevronDown } from "lucide-react";
 import ProductCard from "@/components/ProductCard";
 import { useCatalog } from "@/context/CatalogContext";
@@ -20,7 +20,7 @@ const PRICE_RANGES = [
 ];
 
 export default function Shop() {
-    const { products, categories, loading } = useCatalog();
+    const { products, categories, loading, error, reload } = useCatalog();
     const [params, setParams] = useSearchParams();
     const [visibleCount, setVisibleCount] = useState(12);
     const [sort, setSort] = useState("recentes");
@@ -80,6 +80,19 @@ export default function Shop() {
     const clearAll = () => { setSelectedCats([]); setSelectedSizes([]); setSelectedColors([]); setSelectedPrices([]); setOnlyAvailable(false); setParams({}, { replace: true }); };
 
     if (loading) return <div className="h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-[hsl(var(--bone))] border-t-[hsl(var(--gold))] rounded-full animate-spin" /></div>;
+    if (error) return <div className="container-boutique py-24 text-center"><p role="alert">Não foi possível carregar a coleção.</p><button onClick={reload} className="btn-outline mt-6">Tentar novamente</button></div>;
+
+    if (products.length === 0) return (
+        <main className="container-boutique min-h-[65vh] flex items-center justify-center py-24 text-center">
+            <div className="max-w-2xl">
+                <p className="eyebrow">Nossa coleção</p>
+                <h1 className="font-heading text-5xl sm:text-6xl mt-4">Novas peças em preparação</h1>
+                <div className="gold-rule mx-auto mt-6" />
+                <p className="text-muted-foreground mt-7 leading-relaxed">A coleção está vazia no momento. Os produtos aparecerão aqui quando forem cadastrados e publicados.</p>
+                <Link to="/contato" className="btn-gold inline-block mt-8">Entre em contato</Link>
+            </div>
+        </main>
+    );
 
     return (
         <div>
@@ -148,7 +161,7 @@ function Filters({ categories, selectedCats, setSelectedCats, selectedSizes, set
         <div className="space-y-8">
             <div className="flex justify-between items-center"><h4 className="text-[11px] uppercase tracking-[0.22em]">Filtrar por</h4><button onClick={onClear} className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground">Limpar</button></div>
             <FilterGroup title="Categoria">{categories.map((c) => <Check key={c.id} label={c.name} checked={selectedCats.includes(c.slug)} onChange={() => setSelectedCats(c.slug)} />)}</FilterGroup>
-            <FilterGroup title="Tamanho"><div className="flex flex-wrap gap-2">{SIZES_LIST.map((s) => <button key={s} onClick={() => setSelectedSizes(s)} className={`w-10 h-10 border text-xs transition-colors ${selectedSizes.includes(s) ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))] text-white" : "border-border hover:border-foreground"}`}>{s}</button>)}</div></FilterGroup>
+            <FilterGroup title="Tamanho"><div className="flex flex-wrap gap-2">{SIZES_LIST.map((s) => <button key={s} onClick={() => setSelectedSizes(s)} className={`w-10 h-10 border text-xs transition-colors ${selectedSizes.includes(s) ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))] text-accent-foreground" : "border-border hover:border-foreground"}`}>{s}</button>)}</div></FilterGroup>
             <FilterGroup title="Cor"><div className="space-y-2">{Object.entries(COLOR_SWATCHES).map(([id, c]) => <button key={id} onClick={() => setSelectedColors(id)} className="flex items-center gap-3 w-full text-left group"><span className={`w-5 h-5 rounded-full border ${selectedColors.includes(id) ? "ring-1 ring-offset-2 ring-[hsl(var(--gold))]" : "border-border"}`} style={{ background: c.hex }} /><span className={`text-sm ${selectedColors.includes(id) ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"}`}>{c.name}</span></button>)}</div></FilterGroup>
             <FilterGroup title="Faixa de preço">{PRICE_RANGES.map((r) => <Check key={r.id} label={r.label} checked={selectedPrices.includes(r.id)} onChange={() => setSelectedPrices(r.id)} />)}</FilterGroup>
             <FilterGroup title="Disponibilidade"><Check label="Somente disponíveis" checked={onlyAvailable} onChange={() => setOnlyAvailable(!onlyAvailable)} /></FilterGroup>
@@ -157,4 +170,4 @@ function Filters({ categories, selectedCats, setSelectedCats, selectedSizes, set
 }
 
 function FilterGroup({ title, children }) { return <div><h5 className="text-[11px] uppercase tracking-[0.22em] text-foreground mb-3">{title}</h5><div className="space-y-2">{children}</div></div>; }
-function Check({ label, checked, onChange }) { return <button onClick={onChange} className="flex items-center gap-3 w-full text-left group"><span className={`w-4 h-4 border flex items-center justify-center transition-colors ${checked ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))]" : "border-border group-hover:border-foreground"}`}>{checked && <span className="w-2 h-2 bg-white" />}</span><span className={`text-sm ${checked ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"}`}>{label}</span></button>; }
+function Check({ label, checked, onChange }) { return <button onClick={onChange} className="flex items-center gap-3 w-full text-left group"><span className={`w-4 h-4 border flex items-center justify-center transition-colors ${checked ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))]" : "border-border group-hover:border-foreground"}`}>{checked && <span className="w-2 h-2 bg-accent-foreground" />}</span><span className={`text-sm ${checked ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"}`}>{label}</span></button>; }

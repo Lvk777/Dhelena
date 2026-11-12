@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Trash2, ChevronUp, ChevronDown, X } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { base44 } from '@/api/base44Client';
+import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
 
 const GUIDE_TYPES = ["Feminino padrão", "Vestidos", "Blusas", "Calças", "Conjuntos"];
 const DEFAULT_ROWS = [
@@ -12,6 +13,7 @@ const DEFAULT_ROWS = [
 ];
 
 export default function SizeGuides() {
+    const dialogs = useBoutiqueDialogs();
     const [guides, setGuides] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(null); // guide being edited
@@ -19,9 +21,7 @@ export default function SizeGuides() {
     const load = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem("dhelena_access_token");
-            const res = await fetch("/api/size-guides", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-            const data = await res.json();
+            const data = await base44.entities.SizeGuide.list();
             setGuides(data || []);
         } catch { /* */ }
         finally { setLoading(false); }
@@ -30,21 +30,18 @@ export default function SizeGuides() {
     useEffect(() => { load(); }, []);
 
     const handleSave = async (guide) => {
-        const token = localStorage.getItem("dhelena_access_token");
-        const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
         if (guide.id) {
-            await fetch(`/api/size-guides/${guide.id}`, { method: "PATCH", headers, body: JSON.stringify(guide) });
+            await base44.entities.SizeGuide.update(guide.id, guide);
         } else {
-            await fetch("/api/size-guides", { method: "POST", headers, body: JSON.stringify(guide) });
+            await base44.entities.SizeGuide.create(guide);
         }
         setEditing(null);
         load();
     };
 
     const handleDelete = async (id) => {
-        if (!confirm("Excluir este guia?")) return;
-        const token = localStorage.getItem("dhelena_access_token");
-        await fetch(`/api/size-guides/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+        if (!await dialogs.confirm({ title: 'Excluir guia de medidas', message: 'Excluir este guia? Esta ação não poderá ser desfeita.' })) return;
+        await base44.entities.SizeGuide.delete(id);
         load();
     };
 
@@ -73,7 +70,7 @@ export default function SizeGuides() {
                             </div>
                             <div className="flex gap-2">
                                 <button onClick={() => setEditing(g)} className="text-[11px] uppercase tracking-[0.12em] text-foreground/70 hover:text-foreground border border-border px-3 py-1.5">Editar</button>
-                                <button onClick={() => handleDelete(g.id)} className="text-muted-foreground hover:text-[hsl(var(--rose))] p-1.5"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
+                                <button onClick={() => handleDelete(g.id)} className="text-muted-foreground hover:text-rose-ink p-1.5"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
                             </div>
                         </div>
                     ))}
@@ -114,11 +111,11 @@ function GuideEditor({ guide, onSave, onCancel }) {
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground block mb-1.5">Nome</label>
-                        <input value={name} onChange={e => setName(e.target.value)} className="w-full border border-border px-3 py-2 text-sm" placeholder="Ex: Feminino Padrão" />
+                        <input value={name} onChange={e => setName(e.target.value)} className="admin-field px-3 py-2" placeholder="Ex: Feminino Padrão" />
                     </div>
                     <div>
                         <label className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground block mb-1.5">Tipo</label>
-                        <select value={type} onChange={e => setType(e.target.value)} className="w-full border border-border px-3 py-2 text-sm bg-background">
+                        <select value={type} onChange={e => setType(e.target.value)} className="admin-field px-3 py-2">
                             {GUIDE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                     </div>
@@ -142,17 +139,17 @@ function GuideEditor({ guide, onSave, onCancel }) {
                             <tbody>
                                 {rows.map((r, i) => (
                                     <tr key={i} className="border-b border-border/50">
-                                        <td className="py-1.5 px-2"><input value={r.size} onChange={e => updateRow(i, "size", e.target.value)} className="w-16 border border-border px-2 py-1 text-sm" /></td>
-                                        <td className="py-1.5 px-2"><input value={r.bust || ""} onChange={e => updateRow(i, "bust", e.target.value)} className="w-20 border border-border px-2 py-1 text-sm" /></td>
-                                        <td className="py-1.5 px-2"><input value={r.waist || ""} onChange={e => updateRow(i, "waist", e.target.value)} className="w-20 border border-border px-2 py-1 text-sm" /></td>
-                                        <td className="py-1.5 px-2"><input value={r.hip || ""} onChange={e => updateRow(i, "hip", e.target.value)} className="w-20 border border-border px-2 py-1 text-sm" /></td>
-                                        <td className="py-1.5 px-2"><input value={r.low_waist || ""} onChange={e => updateRow(i, "low_waist", e.target.value)} className="w-20 border border-border px-2 py-1 text-sm" /></td>
-                                        <td className="py-1.5 px-2"><input value={r.length || ""} onChange={e => updateRow(i, "length", e.target.value)} className="w-20 border border-border px-2 py-1 text-sm" /></td>
+                                        <td className="py-1.5 px-2"><input aria-label={`Tamanho da linha ${i + 1}`} value={r.size} onChange={e => updateRow(i, "size", e.target.value)} className="admin-field w-16 px-2 py-1" /></td>
+                                        <td className="py-1.5 px-2"><input aria-label={`Busto da linha ${i + 1}`} value={r.bust || ""} onChange={e => updateRow(i, "bust", e.target.value)} className="admin-field w-20 px-2 py-1" /></td>
+                                        <td className="py-1.5 px-2"><input aria-label={`Cintura da linha ${i + 1}`} value={r.waist || ""} onChange={e => updateRow(i, "waist", e.target.value)} className="admin-field w-20 px-2 py-1" /></td>
+                                        <td className="py-1.5 px-2"><input aria-label={`Quadril da linha ${i + 1}`} value={r.hip || ""} onChange={e => updateRow(i, "hip", e.target.value)} className="admin-field w-20 px-2 py-1" /></td>
+                                        <td className="py-1.5 px-2"><input aria-label={`Cintura baixa da linha ${i + 1}`} value={r.low_waist || ""} onChange={e => updateRow(i, "low_waist", e.target.value)} className="admin-field w-20 px-2 py-1" /></td>
+                                        <td className="py-1.5 px-2"><input aria-label={`Comprimento da linha ${i + 1}`} value={r.length || ""} onChange={e => updateRow(i, "length", e.target.value)} className="admin-field w-20 px-2 py-1" /></td>
                                         <td className="py-1.5 px-2">
                                             <div className="flex gap-0.5">
                                                 <button onClick={() => moveRow(i, -1)} disabled={i === 0} className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30"><ChevronUp className="w-3.5 h-3.5" /></button>
                                                 <button onClick={() => moveRow(i, 1)} disabled={i === rows.length - 1} className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30"><ChevronDown className="w-3.5 h-3.5" /></button>
-                                                <button onClick={() => removeRow(i)} className="p-0.5 text-muted-foreground hover:text-[hsl(var(--rose))]"><X className="w-3.5 h-3.5" /></button>
+                                                <button onClick={() => removeRow(i)} className="p-0.5 text-muted-foreground hover:text-rose-ink"><X className="w-3.5 h-3.5" /></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -160,7 +157,7 @@ function GuideEditor({ guide, onSave, onCancel }) {
                             </tbody>
                         </table>
                     </div>
-                    <button onClick={addRow} className="mt-2 text-[11px] uppercase tracking-[0.12em] text-[hsl(var(--gold))] flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Adicionar tamanho</button>
+                    <button onClick={addRow} className="mt-2 text-[11px] uppercase tracking-[0.12em] text-gold-ink flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Adicionar tamanho</button>
                 </div>
 
                 <div className="flex gap-3 pt-4">

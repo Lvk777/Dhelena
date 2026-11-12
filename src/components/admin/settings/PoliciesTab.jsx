@@ -18,7 +18,7 @@ function PolicySection({ icon: Icon, title, value, onChange }) {
     return (
         <div className="border border-border rounded-xl p-5 bg-background/50">
             <div className="flex items-center gap-2 mb-4">
-                <Icon className="w-4 h-4 text-accent" strokeWidth={1.5} />
+                <Icon className="w-4 h-4 text-gold-ink" strokeWidth={1.5} />
                 <h3 className="text-[11px] uppercase tracking-[0.2em] text-foreground font-medium">{title}</h3>
             </div>
             <AdminTextarea value={value || ""} onChange={onChange} rows={6} full placeholder={`Escreva aqui a ${title.toLowerCase()}...`} />

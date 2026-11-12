@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Search, SlidersHorizontal, X, Copy, ChevronDown, ChevronLeft, ChevronRight, Eye, User, Package, Calendar, CreditCard, Truck, Check, AlertCircle, ShoppingCart } from "lucide-react";
+import { Search, SlidersHorizontal, X, Copy, ChevronDown, ChevronLeft, ChevronRight, Eye, User, Check, ShoppingCart } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL, ORDER_STATUS, PAYMENT_LABELS, SHIPPING_LABELS } from "@/data/products";
 
@@ -139,8 +139,8 @@ export default function AdminOrders() {
 
         // Sort
         switch (sort) {
-            case "recent": result.sort((a, b) => new Date(b.created_date) - new Date(a.created_date)); break;
-            case "old": result.sort((a, b) => new Date(a.created_date) - new Date(b.created_date)); break;
+            case "recent": result.sort((a, b) => new Date(b.created_date).getTime() - new Date(a.created_date).getTime()); break;
+            case "old": result.sort((a, b) => new Date(a.created_date).getTime() - new Date(b.created_date).getTime()); break;
             case "highValue": result.sort((a, b) => b.total - a.total); break;
             case "lowValue": result.sort((a, b) => a.total - b.total); break;
             case "customerAz": result.sort((a, b) => (a.customer_name || "").localeCompare(b.customer_name || "")); break;
@@ -200,7 +200,7 @@ export default function AdminOrders() {
                 <div className="relative" ref={filterRef}>
                     <button onClick={() => setShowFilters(!showFilters)} className={`flex items-center gap-2 px-4 py-2.5 text-sm border rounded-lg transition-colors ${showFilters || activeFilterCount > 0 ? "border-accent bg-accent/5 text-foreground" : "border-border text-foreground/70 hover:text-foreground"}`}>
                         <SlidersHorizontal className="w-4 h-4" strokeWidth={1.5} /> Filtros
-                        {activeFilterCount > 0 && <span className="bg-accent text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center">{activeFilterCount}</span>}
+                        {activeFilterCount > 0 && <span className="bg-accent text-accent-foreground text-[10px] w-5 h-5 rounded-full flex items-center justify-center">{activeFilterCount}</span>}
                     </button>
                     {showFilters && (
                         <div className="absolute z-30 top-full left-0 mt-2 w-[480px] max-w-[90vw] bg-background border border-border rounded-xl shadow-2xl p-5 animate-fade-in">
@@ -248,7 +248,7 @@ export default function AdminOrders() {
                     {filters.period !== "all" && <Chip label="Período" value={PERIOD_FILTERS.find(f => f.key === filters.period)?.label} onRemove={() => removeFilter("period")} />}
                     {filters.minValue && <Chip label="Valor mín." value={formatBRL(parseFloat(filters.minValue))} onRemove={() => removeFilter("minValue")} />}
                     {filters.maxValue && <Chip label="Valor máx." value={formatBRL(parseFloat(filters.maxValue))} onRemove={() => removeFilter("maxValue")} />}
-                    <button onClick={clearFilters} className="text-[11px] uppercase tracking-[0.16em] text-rose hover:underline ml-1">Limpar tudo</button>
+                    <button onClick={clearFilters} className="text-[11px] uppercase tracking-[0.16em] text-rose-ink hover:underline ml-1">Limpar tudo</button>
                 </div>
             )}
 
@@ -283,11 +283,11 @@ export default function AdminOrders() {
                                 {paginated.map((o) => (
                                     <tr key={o.id} className="hover:bg-muted/40 transition-colors">
                                         <td className="py-3 px-4">
-                                            <Link to={`/admin/pedidos/${o.id}`} className="font-medium hover:text-accent transition-colors">{o.order_number}</Link>
+                                            <Link to={`/admin/pedidos/${o.id}`} className="font-medium hover:text-gold-ink transition-colors">{o.order_number}</Link>
                                         </td>
                                         <td className="py-3 px-4 relative">
                                             <div className="relative inline-block" onMouseEnter={() => setHoveredCustomer(o.id)} onMouseLeave={() => setHoveredCustomer(null)}>
-                                                <span className="cursor-help hover:text-accent transition-colors">{o.customer_name}</span>
+                                                <span className="cursor-help hover:text-gold-ink transition-colors">{o.customer_name}</span>
                                                 {hoveredCustomer === o.id && (
                                                     <div className="absolute z-30 top-full left-0 mt-1 w-56 bg-background border border-border rounded-lg shadow-xl p-3 text-xs space-y-1">
                                                         <p className="font-medium text-sm">{o.customer_name}</p>
@@ -310,7 +310,7 @@ export default function AdminOrders() {
                                             <div className="flex items-center justify-end gap-1">
                                                 <Link to={`/admin/pedidos/${o.id}`} className="p-1.5 hover:bg-muted rounded transition-colors" title="Ver pedido"><Eye className="w-4 h-4" strokeWidth={1.25} /></Link>
                                                 <button onClick={(e) => copyOrderNumber(e, o.order_number)} className="p-1.5 hover:bg-muted rounded transition-colors" title="Copiar número">
-                                                    {copiedId === o.order_number ? <Check className="w-4 h-4 text-accent" strokeWidth={1.5} /> : <Copy className="w-4 h-4" strokeWidth={1.25} />}
+                                                    {copiedId === o.order_number ? <Check className="w-4 h-4 text-gold-ink" strokeWidth={1.5} /> : <Copy className="w-4 h-4" strokeWidth={1.25} />}
                                                 </button>
                                                 <Link to="/admin/clientes" className="p-1.5 hover:bg-muted rounded transition-colors" title="Abrir cliente"><User className="w-4 h-4" strokeWidth={1.25} /></Link>
                                             </div>
@@ -326,7 +326,7 @@ export default function AdminOrders() {
                         {paginated.map((o) => (
                             <div key={o.id} className="bg-background rounded-lg border border-border p-4">
                                 <div className="flex items-start justify-between gap-2 mb-2">
-                                    <Link to={`/admin/pedidos/${o.id}`} className="font-medium text-sm hover:text-accent">{o.order_number}</Link>
+                                    <Link to={`/admin/pedidos/${o.id}`} className="font-medium text-sm hover:text-gold-ink">{o.order_number}</Link>
                                     <span className="text-[10px] uppercase tracking-[0.12em] px-2 py-1 rounded bg-muted">{ORDER_STATUS[o.status]?.label || o.status}</span>
                                 </div>
                                 <p className="text-sm font-medium">{o.customer_name}</p>
@@ -340,7 +340,7 @@ export default function AdminOrders() {
                                 <div className="flex items-center gap-2 mt-3">
                                     <Link to={`/admin/pedidos/${o.id}`} className="flex-1 text-center text-[11px] uppercase tracking-[0.16em] py-2 border border-border rounded">Ver pedido</Link>
                                     <button onClick={(e) => copyOrderNumber(e, o.order_number)} className="p-2 border border-border rounded">
-                                        {copiedId === o.order_number ? <Check className="w-4 h-4 text-accent" strokeWidth={1.5} /> : <Copy className="w-4 h-4" strokeWidth={1.25} />}
+                                        {copiedId === o.order_number ? <Check className="w-4 h-4 text-gold-ink" strokeWidth={1.5} /> : <Copy className="w-4 h-4" strokeWidth={1.25} />}
                                     </button>
                                 </div>
                             </div>
@@ -391,7 +391,7 @@ function Chip({ label, value, onRemove }) {
     return (
         <span className="inline-flex items-center gap-2 bg-accent/10 text-foreground text-xs px-3 py-1.5 rounded-full">
             <span className="text-muted-foreground">{label}:</span> {value}
-            <button onClick={onRemove} className="hover:text-rose transition-colors"><X className="w-3 h-3" strokeWidth={2} /></button>
+            <button onClick={onRemove} className="hover:text-rose-ink transition-colors"><X className="w-3 h-3" strokeWidth={2} /></button>
         </span>
     );
 }

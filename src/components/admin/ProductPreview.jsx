@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Heart, Minus, Plus, Ruler, Truck, ChevronDown, Check, Star, ShoppingBag } from "lucide-react";
+import { Heart, Minus, Plus, Ruler, Truck, ChevronDown, ShoppingBag } from "lucide-react";
 import StorefrontFrame, { DeviceToggle } from "@/components/admin/StorefrontFrame";
 
 /**
@@ -17,7 +17,7 @@ function formatBRL(v) {
     return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export default function ProductPreview({ form, device: deviceProp }) {
+export default function ProductPreview({ form, device: deviceProp = undefined }) {
     const [internalDevice, setInternalDevice] = useState("desktop");
     const device = deviceProp || internalDevice;
     const isMobile = device === "mobile";
@@ -68,12 +68,12 @@ export default function ProductPreview({ form, device: deviceProp }) {
                             {gallery[activeImg] ? (
                                 <img src={gallery[activeImg]} alt={form.name || "Produto"} className="w-full h-full object-cover" />
                             ) : (
-                                <div className="w-full h-full flex items-center justify-center text-muted-foreground/30 text-xs">Sem imagem</div>
+                                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">Sem imagem</div>
                             )}
                             {/* Badges */}
                             <div className="absolute top-2 left-2 flex flex-col gap-1">
                                 {activeBadges.map(b => (
-                                    <span key={b} className="text-[7px] uppercase tracking-[0.14em] bg-[hsl(var(--gold))] text-white px-2 py-0.5">{b}</span>
+                                    <span key={b} className="text-[7px] uppercase tracking-[0.14em] bg-[hsl(var(--gold))] text-accent-foreground px-2 py-0.5">{b}</span>
                                 ))}
                                 {form.badges?.ultimas && (
                                     <span className="text-[7px] uppercase tracking-[0.14em] bg-[hsl(var(--rose))] text-white px-2 py-0.5">Últimas peças</span>
@@ -124,7 +124,7 @@ export default function ProductPreview({ form, device: deviceProp }) {
                                 </div>
                                 <div className="flex flex-wrap gap-1.5">
                                     {form.sizes.map((s, i) => (
-                                        <span key={s} className={`min-w-[36px] h-8 border text-[10px] flex items-center justify-center ${i === 0 ? "border-foreground bg-foreground text-white" : "border-border text-muted-foreground"}`}>
+                                        <span key={s} className={`min-w-[36px] h-8 border text-[10px] flex items-center justify-center ${i === 0 ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground"}`}>
                                             {s}
                                         </span>
                                     ))}
@@ -139,7 +139,7 @@ export default function ProductPreview({ form, device: deviceProp }) {
                                 <span className="px-2 text-[10px]">1</span>
                                 <span className="px-2 py-1.5"><Plus className="w-2.5 h-2.5" strokeWidth={1.5} /></span>
                             </div>
-                            <button className="flex-1 bg-[hsl(var(--gold))] text-white text-[9px] uppercase tracking-[0.16em] py-2.5 flex items-center justify-center gap-1.5">
+                            <button className="flex-1 bg-[hsl(var(--gold))] text-accent-foreground text-[9px] uppercase tracking-[0.16em] py-2.5 flex items-center justify-center gap-1.5">
                                 <ShoppingBag className="w-3 h-3" strokeWidth={1.5} /> Adicionar à sacola
                             </button>
                         </div>
@@ -151,7 +151,7 @@ export default function ProductPreview({ form, device: deviceProp }) {
                         {/* Shipping */}
                         <div className="mt-4 pt-3 border-t border-border">
                             <p className="text-[9px] uppercase tracking-[0.16em] flex items-center gap-1.5 mb-2">
-                                <Truck className="w-3 h-3 text-[hsl(var(--gold))]" strokeWidth={1.25} /> Calcular frete
+                                <Truck className="w-3 h-3 text-gold-ink" strokeWidth={1.25} /> Calcular frete
                             </p>
                             <div className="flex gap-1.5">
                                 <div className="flex-1 border border-border px-2 py-1.5 text-[9px] text-muted-foreground">Digite seu CEP</div>
@@ -181,7 +181,7 @@ export default function ProductPreview({ form, device: deviceProp }) {
                     ))}
                     {!form.description && !form.details && !form.composition && !form.care && (
                         <div className="border-b border-border py-2.5">
-                            <span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground/50">Descrição</span>
+                            <span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">Descrição</span>
                         </div>
                     )}
                 </div>
@@ -193,7 +193,7 @@ export default function ProductPreview({ form, device: deviceProp }) {
                             <p className="text-[10px] font-medium">{formatBRL(price)}</p>
                             <p className="text-[8px] text-muted-foreground">{installments}x sem juros</p>
                         </div>
-                        <span className="flex-1 bg-[hsl(var(--gold))] text-white text-[9px] uppercase tracking-[0.14em] py-2 text-center">Adicionar</span>
+                        <span className="flex-1 bg-[hsl(var(--gold))] text-accent-foreground text-[9px] uppercase tracking-[0.14em] py-2 text-center">Adicionar</span>
                     </div>
                 )}
             </StorefrontFrame>

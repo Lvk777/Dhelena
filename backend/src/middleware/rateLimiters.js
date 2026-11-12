@@ -1,8 +1,11 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
-// ─── Helper: key generator (IP + optional user) ───────────────────
+// ─── Helper: key generator (trusted proxy IP + optional user) ─────
 const keyGenerator = (req) => {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+    // Never read X-Forwarded-For directly. Express applies the constrained
+    // proxy rule before deriving req.ip, but that value is only authoritative
+    // after infrastructure blocks direct access to the Railway origin.
+    const ip = ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown');
     return req.user?.id ? `${ip}:${req.user.id}` : ip;
 };
 
@@ -30,6 +33,15 @@ export const loginLimiter = rateLimit({
         logSecurityEvent(req, 'rate_limit_triggered', { limiter: 'login', email: req.body?.email });
         res.status(429).json({ error: 'Muitas tentativas de login. Aguarde 15 minutos.' });
     },
+});
+
+export const loginCodeLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator,
+    handler: (_req, res) => res.status(429).json({ error: 'Muitas tentativas. Aguarde alguns minutos.' }),
 });
 
 // ─── Auth: register ──────────────────────────────────────────────

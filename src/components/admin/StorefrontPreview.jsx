@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Search, Heart, ShoppingBag, Menu, ArrowRight, Monitor, Smartphone, Star, Truck } from "lucide-react";
+import { Search, Heart, ShoppingBag, Menu, ArrowRight, Monitor, Smartphone, Truck } from "lucide-react";
 
 /**
  * StorefrontPreview — simulates the real storefront using the same CSS classes
@@ -42,7 +42,7 @@ export default function StorefrontPreview({ position, banner, device: deviceProp
             <div className={`mx-auto bg-background border border-border rounded-lg overflow-hidden shadow-lg ${isMobile ? "max-w-[375px]" : "max-w-full"}`}>
                 {/* Top announcement bar */}
                 <div className="bg-[hsl(var(--rose))] text-white text-[8px] tracking-[0.25em] uppercase text-center py-1.5 px-4">
-                    Frete grátis acima de R$ 499
+                    Frete grátis a partir de R$ 499
                 </div>
 
                 {/* Header */}
@@ -88,7 +88,7 @@ export default function StorefrontPreview({ position, banner, device: deviceProp
 function BannerPreviewContent({ position, banner, img, isMobile, isHero, isCompact }) {
     if (!img) {
         return (
-            <div className={`flex items-center justify-center bg-bone text-muted-foreground/40 text-xs ${isHero ? (isMobile ? "h-60" : "h-72") : "h-24"}`}>
+            <div className={`flex items-center justify-center bg-bone text-muted-foreground text-xs ${isHero ? (isMobile ? "h-60" : "h-72") : "h-24"}`}>
                 Sem imagem — o banner não aparecerá
             </div>
         );
@@ -99,12 +99,12 @@ function BannerPreviewContent({ position, banner, img, isMobile, isHero, isCompa
         return (
             <div className="relative overflow-hidden bg-charcoal h-28">
                 <img src={img} alt={banner?.title || ""} className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-r from-charcoal/60 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-r from-charcoal/80 to-charcoal/30" />
                 <div className="absolute inset-0 flex items-center px-4">
-                    <div className="text-bone">
+                    <div className="text-on-dark">
                         {banner?.eyebrow && <p className="text-[8px] uppercase tracking-[0.25em] text-[hsl(var(--gold))] mb-0.5">{banner.eyebrow}</p>}
                         {banner?.title && <h2 className="font-heading text-sm tracking-wide">{banner.title}</h2>}
-                        {banner?.subtitle && <p className="font-heading text-[10px] italic text-bone/80">{banner.subtitle}</p>}
+                        {banner?.subtitle && <p className="font-heading text-[10px] italic text-on-dark/90">{banner.subtitle}</p>}
                         {banner?.button_text && (
                             <span className="inline-flex items-center gap-1 mt-1.5 bg-[hsl(var(--rose))] text-white text-[7px] uppercase tracking-[0.15em] px-3 py-1.5">
                                 {banner.button_text} <ArrowRight className="w-2.5 h-2.5" strokeWidth={1.5} />
@@ -126,20 +126,20 @@ function BannerPreviewContent({ position, banner, img, isMobile, isHero, isCompa
     return (
         <div className={`relative ${height} overflow-hidden`}>
             <img src={img} alt={banner?.title || ""} className="absolute inset-0 w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-charcoal/30" />
+            <div className="absolute inset-0 bg-charcoal/70" />
             <div className="relative h-full flex items-center justify-center text-center px-6">
-                <div className="max-w-lg text-bone">
+                <div className="max-w-lg text-on-dark">
                     {banner?.eyebrow && <p className="text-[8px] uppercase tracking-[0.3em] text-[hsl(var(--gold))] mb-1.5">{banner.eyebrow}</p>}
                     {banner?.title && <h2 className={`font-heading tracking-[0.03em] ${isMobile ? "text-xl" : "text-3xl"}`}>{banner.title}</h2>}
-                    {banner?.subtitle && <p className={`mt-1.5 font-heading italic text-bone/85 ${isMobile ? "text-sm" : "text-lg"}`}>{banner.subtitle}</p>}
-                    {banner?.text && <p className={`mt-2 text-bone/80 ${isMobile ? "text-[10px]" : "text-xs"} max-w-sm mx-auto`}>{banner.text}</p>}
+                    {banner?.subtitle && <p className={`mt-1.5 font-heading italic text-on-dark/90 ${isMobile ? "text-sm" : "text-lg"}`}>{banner.subtitle}</p>}
+                    {banner?.text && <p className={`mt-2 text-on-dark/90 ${isMobile ? "text-[10px]" : "text-xs"} max-w-sm mx-auto`}>{banner.text}</p>}
                     {banner?.button_text && (
                         <span className={`mt-4 inline-flex items-center gap-1.5 bg-[hsl(var(--rose))] text-white ${isMobile ? "text-[8px] px-4 py-2" : "text-[10px] px-6 py-2.5"} uppercase tracking-[0.2em]`}>
                             {banner.button_text} <ArrowRight className="w-3 h-3" strokeWidth={1.5} />
                         </span>
                     )}
                     {banner?.secondary_cta_label && (
-                        <span className={`mt-3 ml-2 inline-flex items-center gap-1.5 border border-bone/70 text-bone ${isMobile ? "text-[8px] px-4 py-2" : "text-[10px] px-6 py-2.5"} uppercase tracking-[0.2em]`}>
+                        <span className={`mt-3 ml-2 inline-flex items-center gap-1.5 border border-on-dark/70 text-on-dark ${isMobile ? "text-[8px] px-4 py-2" : "text-[10px] px-6 py-2.5"} uppercase tracking-[0.2em]`}>
                             {banner.secondary_cta_label}
                         </span>
                     )}
@@ -159,7 +159,7 @@ function BelowBannerContent({ position, isMobile }) {
                     {[1, 2, 3, 4].map(i => (
                         <div key={i} className="aspect-[3/4] bg-bone rounded">
                             <div className="w-full h-full flex items-center justify-center">
-                                <span className="text-[8px] text-muted-foreground/30">Produto {i}</span>
+                                <span className="text-[8px] text-muted-foreground">Produto {i}</span>
                             </div>
                         </div>
                     ))}

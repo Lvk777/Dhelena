@@ -1,0 +1,37 @@
+# Prontidão de lançamento — segurança Supabase (20/10/2026)
+
+**Conclusão:** correções locais preparadas e ensaiadas; lançamento público **bloqueado**. Este relatório usa dados sintéticos. Nenhuma alteração foi feita em Supabase, Railway, serviços de e-mail ou provedores. Nenhum push, deploy ou merge foi executado. As políticas de Trocas e Devoluções, Privacidade e Termos de Uso estão com a advogada; são pendência externa, sem publicação provisória.
+
+## Evidência local
+
+- O snapshot de metadados de 12/10 identificou 29 tabelas `public` sem RLS, privilégios diretos amplos para `anon`/`authenticated` e defaults de `supabase_admin`. É evidência histórica; conferir drift por consultas **somente leitura** imediatamente antes de qualquer corte.
+- O ensaio em PostgreSQL 16.13 e 17.11 descartáveis aplicou as fases de revogação e RLS: 29/29 tabelas com RLS, nenhum privilégio direto/por coluna para clientes, defaults de `postgres` revogados e zero políticas públicas. `postgres` proprietário e `service_role` preservaram o acesso previsto. A recuperação limitada manteve os grants revogados e permitiu reaplicar RLS.
+- As migrations 015–017 foram aplicadas **após** as fases de segurança dentro de transação revertida: 31/31 tabelas com RLS e zero acesso direto para `anon`/`authenticated`. A 015 adicionou as quatro colunas esperadas à fila; a 016 e a 017 criaram tabelas privadas. A ordem importa: aplicar 016/017 antes das fases de segurança muda o inventário de 29 tabelas e faz os guards abortarem. Não usar `npm run migrate` em produção: ele percorre todos os arquivos sem ledger e pode tentar reaplicar DDL antigo.
+- A migration 015 já passou em banco vazio isolado com rollback, preservação de linhas antigas, fila concorrente, idempotência, falha ambígua, expiração e gate desligado. Nenhum Resend real foi chamado. As migrations 016/017 passaram com rollback, sem criação automática de proprietária ou concessão administrativa.
+- Login/cadastro local e Auth simulado, perfis, catálogo, prévia de carrinho/cupom, painel, estoque, pedidos sintéticos e upload local passaram no banco protegido. O ensaio específico de Auth passou 14 verificações no PostgreSQL 17. O backend completo passou com Node 22. GoTrue, PostgREST, Storage hospedado, SMTP real e pagamentos reais não foram reproduzidos por este banco.
+
+## Correções no código local
+
+1. `016_profile_auth_links.sql` e `017_admin_authorities.sql` ativam RLS nas novas tabelas e revogam acesso de `PUBLIC`, `anon`, `authenticated` e `service_role` se os papéis existirem. O backend proprietário segue operacional. O runner isolado verifica o cenário de 31 tabelas antes de reverter.
+2. Um e-mail confirmado não reivindica mais um perfil administrativo legado com UUID diferente. É exigido vínculo explícito e verificado em `profile_auth_links`; um perfil já associado pelo próprio UUID continua acessível. O vínculo de uma cliente legada preserva UUID e histórico. Testes de rejeição e de vínculo manual sintético passaram.
+3. Nenhum backfill de `profile_auth_links`, nenhuma linha `owner` em `admin_authorities` e nenhuma ativação de `ADMIN_ACCESS_MANAGEMENT_ENABLED` foram feitos. A identidade da Juliane e os perfis administrativos existentes exigem reconciliação privada antes de publicar este código.
+
+## Riscos e dependências de produção
+
+1. **Backup/restauração:** falta backup real completo, criptografado, com restauração verificada em destino protegido. Objetos de Storage precisam de cópia e conferência separadas. Não usar dados pessoais reais em staging desprotegido.
+2. **Staging Supabase completo:** o PostgreSQL local não testa GoTrue, PostgREST, Storage nem SMTP. É necessário projeto isolado com dados fictícios para confirmar cadastro, Google PKCE, recuperação/alteração de e-mail, catálogo, checkout com mocks, painel, upload e Data API indisponível. A política de manutenção deve continuar ligada no projeto produtivo.
+3. **Inventário e consumidores:** confirmar que ainda são 29 tabelas com o mesmo esquema/ACLs e que não há automações externas dependentes da Data API. A última verificação produtiva documentada é de 12/10; não inferir estado atual. Data API permanece OFF por instrução e deve ser verificada antes/depois do corte.
+4. **Defaults internos:** `supabase_admin` manteve 36 concessões padrão no ensaio PG17. Uma tabela futura criada por esse papel pode herdar acesso. O papel `postgres` disponível ao SQL Editor não pode corrigir esse default; manter Data API OFF, revisar DDL futuro e buscar orientação da plataforma. `postgres` proprietário contorna RLS, portanto segurança do backend e da conexão continua essencial.
+5. **Identidade administrativa:** o vínculo da conta da Juliane com o perfil legado deve ser comprovado fora de heurísticas de e-mail; ativação de autoridade `owner` exige revisão e autorização específicas. Sem isso, o novo bloqueio pode impedir login administrativo legado após deploy.
+6. **Credenciais:** inventariar credenciais expostas e seus consumidores sem registrar valores; planejar rotação sequencial em janela autorizada, validando uma integração por vez e revogando o valor antigo somente após confirmação. Incluir conexão PostgreSQL, chaves Supabase com privilégio de serviço e segredos de integrações afetadas. Não girar chaves que invalidem sessões/webhooks sem plano de corte.
+7. **Outros gates de lançamento:** SMTP/Resend e migration 015 requerem autorização de produção; pagamentos de baixo valor, parcelamento e Pix 5% requerem homologação comercial; etiquetas reais requerem aprovação de custo/ação; os 14 SKUs precisam de confirmação de preço, estoque, fotos e embalagem pela Juliane; três políticas seguem com a advogada. Notificações automáticas, compra de etiquetas e worker permanecem OFF.
+
+## Sequência mínima segura
+
+1. Aprovar somente a publicação do código revisado na branch/PR e preparar Supabase staging completo com identidades fictícias; não ligar manutenção pública nem notificações.
+2. Em operação separadamente autorizada, fazer backup produtivo criptografado, restaurá-lo em ambiente protegido e verificar banco e Storage; reconciliar identidade administrativa, consumidores externos e snapshot de RLS/ACLs. Dados reais não devem ser usados para testes funcionais.
+3. Ensaiar no staging a ordem: fases 1/2 de segurança sobre as 29 tabelas, depois migrations 015–017, vínculos administrativos revisados, Auth/Storage/Data API e fluxos da loja com mocks. Interromper diante de drift ou acesso inesperado.
+4. Pedir autorização específica para o corte produtivo com SHA e SQL exatos, janela, plano de validação e responsáveis. Manter manutenção ON; executar fase 1, postcheck, fase 2, postcheck e, separadamente, migrations 015–017 conforme necessidade. Testar Auth, catálogo, checkout sem pagamento e painel; observar erros. Manter flags de e-mail/etiqueta/worker desligadas.
+5. Homologar pagamentos e etiquetas reais apenas em ações de baixo valor aprovadas separadamente; obter aprovação comercial da Juliane e textos finais da advogada. Só então pedir autorização independente para retirar a manutenção.
+
+**Reversão:** erro antes de `COMMIT` desfaz a fase; se a fase 2 falhar, manter fase 1 e Data API OFF. Após commit, não restaurar grants amplos. A recuperação limitada só desliga RLS depois de comprovar grants ainda revogados, com autorização própria. Para perda de dados, restaurar primeiro em projeto separado, preservar escritas posteriores e validar integridade antes de qualquer corte.

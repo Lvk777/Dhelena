@@ -1,7 +1,12 @@
 import React, { useEffect } from "react";
 import { Instagram, MessageCircle } from "lucide-react";
+import { usePublicSettings } from '@/context/PublicSettingsContext';
+import { instagramLink, whatsappLink } from '../../backend/src/lib/navigation.js';
 
 export default function ComingSoon() {
+    const { settings } = usePublicSettings();
+    const instagram = instagramLink(settings.social?.instagram || 'd.helenasstore');
+    const whatsapp = whatsappLink(settings.general?.whatsapp || settings.social?.whatsapp);
     useEffect(() => {
         // Add noindex meta tag for SEO while in maintenance
         const meta = document.createElement('meta');
@@ -18,7 +23,7 @@ export default function ComingSoon() {
                 <h1 className="font-heading text-5xl sm:text-6xl tracking-[0.04em] text-foreground">
                     D'Helenas
                 </h1>
-                <p className="text-[11px] uppercase tracking-[0.3em] text-[hsl(var(--gold))] mt-2">
+                <p className="text-[11px] uppercase tracking-[0.3em] text-gold-ink mt-2">
                     Método Ponte
                 </p>
 
@@ -36,24 +41,24 @@ export default function ComingSoon() {
 
                 {/* Social links */}
                 <div className="flex items-center justify-center gap-4 mt-10">
-                    <a
-                        href="https://instagram.com/dhelenas"
+                    {instagram && <a
+                        href={instagram}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-[hsl(var(--gold))] transition-colors"
+                        className="w-11 h-11 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-[hsl(var(--gold))] transition-colors"
                         aria-label="Instagram"
                     >
                         <Instagram className="w-4 h-4" strokeWidth={1.5} />
-                    </a>
-                    <a
-                        href="https://wa.me/5500000000000"
+                    </a>}
+                    {whatsapp && <a
+                        href={whatsapp}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-[hsl(var(--gold))] transition-colors"
+                        className="w-11 h-11 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-[hsl(var(--gold))] transition-colors"
                         aria-label="WhatsApp"
                     >
                         <MessageCircle className="w-4 h-4" strokeWidth={1.5} />
-                    </a>
+                    </a>}
                 </div>
             </div>
         </div>

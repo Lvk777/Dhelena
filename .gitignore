@@ -31,3 +31,6 @@ dist-ssr
 
 .env
 .vite
+
+# Local runtime secrets (Docker Compose resolves /run here on Windows)
+/run/

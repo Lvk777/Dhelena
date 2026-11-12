@@ -7,7 +7,7 @@ export default function PageNotFound() {
             <div className="max-w-md w-full text-center">
                 {/* 404 */}
                 <div className="space-y-2">
-                    <h1 className="font-heading text-7xl text-[hsl(var(--gold))]/40 tracking-[0.05em]">404</h1>
+                    <h1 className="font-heading text-7xl text-gold-ink/40 tracking-[0.05em]">404</h1>
                     <div className="h-px w-16 bg-[hsl(var(--gold))]/30 mx-auto" />
                 </div>
 

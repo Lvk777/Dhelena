@@ -49,7 +49,7 @@ export default function Collections() {
                                         <Link key={p.id} to={`/produto/${p.id}`} className="flex items-center gap-3 group">
                                             <img src={p.images[0]} alt={p.name} className="w-12 h-16 object-cover bg-bone" loading="lazy" />
                                             <div>
-                                                <p className="text-sm font-medium group-hover:text-[hsl(var(--rose))] transition-colors">{p.name}</p>
+                                                <p className="text-sm font-medium group-hover:text-rose-ink transition-colors">{p.name}</p>
                                                 <p className="text-[11px] text-muted-foreground">{p.category}</p>
                                             </div>
                                         </Link>

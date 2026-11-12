@@ -55,6 +55,9 @@ export const pool = {
         await ensurePool();
         return _pool.connect();
     },
+    async end() {
+        return _pool.end();
+    },
     on(event, handler) {
         return _pool.on(event, handler);
     },

@@ -1,0 +1,44 @@
+# D'Helenas — revisão local de conformidade, acessibilidade e segurança
+
+Data: 21/10/2026. Base: `930d0087ba887ead65ab4b9e5ec09afda139532c` na branch `codex/production-hardening`. Escopo: código local, testes com dados fictícios e observação pública somente leitura. Esta revisão não aprova textos jurídicos nem substitui a validação da advogada.
+
+## Evidências e decisão por item
+
+| # | Item | Estado | Evidência e pendência |
+|---|---|---|---|
+| 1 | Privacidade | Dependente da advogada ou da Juliane | `src/pages/PolicyPage.jsx` e `src/lib/policyContent.js` ocultam a minuta de teste; o texto definitivo e os dados do controlador ainda faltam. |
+| 2 | Termos de Uso | Dependente da advogada ou da Juliane | `PolicyPage.jsx` só exibe conteúdo aprovado/configurado; o valor público observado estava vazio. |
+| 3 | Cookies | Pendente de validação | A sessão pública de manutenção não criou cookies. O Cloudflare injetou `beacon.min.js` e enviou `/cdn-cgi/rum`. Definir finalidade, base legal e transparência com a advogada; configurar controle ou desativação somente após autorização. `src/components/ui/sidebar.jsx` contém cookie de preferência, mas não foi encontrado consumidor ativo. |
+| 4 | Reembolso, trocas e devoluções | Dependente da advogada ou da Juliane | Texto público de teste é ocultado por `policyContent.js`. `src/components/checkout/CustomerAfterSales.jsx` e `backend/src/afterSalesService.js` tornaram o motivo opcional. O fluxo ainda exige pedido enviado e item selecionado; avaliar exercício integral do arrependimento pelo mesmo canal, prazo e prova de confirmação antes da abertura. |
+| 5 | Formulários e LGPD | Corrigido e testado localmente | `src/pages/Contact.jsx` informa finalidade, vincula rótulo/erro e mostra falha de envio; `src/pages/Checkout.jsx` e `src/components/AddressFields.jsx` vinculam erros a campos. Teste de contato com dados fictícios: mensagem curta bloqueada, mensagem válida enviada apenas ao mock. A informação jurídica integral continua no item 1. |
+| 6 | Minimização | Corrigido e testado localmente | `src/pages/Register.jsx` solicita nome, e-mail e senha; telefone/CPF ficam para compra. Cadastro inspecionado em navegador local. Rever retenção no backend em homologação. |
+| 7 | Tracking e publicidade | Pendente de validação | `src/lib/analytics.js` depende de `VITE_ANALYTICS_ENABLED=true`; mock local observou zero eventos. GA/Meta não apareceram na sessão pública observada e IDs públicos estavam vazios. Cloudflare RUM estava ativo na borda; revisar base legal e configuração antes de afirmar ausência de tracking. |
+| 8 | Acessibilidade geral | Corrigido e testado localmente | `src/components/AuthLayout.jsx`, formulários, botões e painéis receberam marcos/rótulos/estados. Lighthouse de páginas locais selecionadas em 375 px: acessibilidade 100 para home, contato, cadastro e etapa de pagamento. A amostra não certifica WCAG integral. |
+| 9 | Textos alternativos | Corrigido e testado localmente | Imagens decorativas ou duplicadas em `src/pages/Home.jsx` e `src/components/ProductCard.jsx` têm `alt=""`; imagens de produto mantêm nome. A adequação descritiva foto a foto requer a Juliane. |
+| 10 | Contraste | Corrigido e testado localmente | `src/index.css`, `src/components/layout/Footer.jsx`, `src/pages/ProductDetail.jsx` e `ProductCard.jsx` corrigem combinações identificadas; auditoria automatizada local das páginas selecionadas não apontou violação. Validar conteúdo e imagens definitivos. |
+| 11 | Teclado | Corrigido e testado localmente | `src/lib/hooks/useDialogKeyboard.js`, `src/components/layout/Header.jsx` e `src/components/CartDrawer.jsx` dão foco inicial, Tab cíclico, Escape e retorno ao botão. Navegador local confirmou teclado para menu, sacola e escolhas no checkout; campos inválidos recebem foco. |
+| 12 | Avaliações falsas | Aprovado com evidência | Busca nos componentes públicos não encontrou renderização de depoimentos ou notas. `src/data/initialData.json` e o mapeamento de produtos ainda têm ratings legados: bloquear exibição futura sem fonte verificável. |
+| 13 | Promessas comerciais | Corrigido e testado localmente | `src/components/Newsletter.jsx` deixou de confirmar inscrição inexistente; `ProductCard.jsx`/`Home.jsx` removeram promessa genérica de parcelamento. Condições comerciais futuras exigem validação da Juliane. |
+| 14 | Direitos de imagens | Dependente da advogada ou da Juliane | Catálogo público observado: 14 produtos, 11 URLs únicas em `media.base44.com`; `src/data/initialData.json` tem imagens legadas, `index.html` uma imagem social no Storage. Pedir origem, licença comercial, escopo/validade, autoria, comprovante de aquisição e autorização de pessoas retratadas vinculados a cada arquivo. |
+| 15 | Identificação e contato | Dependente da advogada ou da Juliane | `src/components/layout/Footer.jsx` e `src/pages/Contact.jsx` exibem dados somente quando configurados. Consulta pública não mostrou razão social, CNPJ ou endereço físico; e-mail e telefone estavam presentes. Confirmar identidade e contatos legais antes de publicar. |
+| 16 | Proteção de dados | Pendente de validação | `backend/docs/launch-readiness-2026-10-20.md` documenta 29 tabelas sem RLS e privilégios amplos no snapshot produtivo anterior, com scripts aprovados em PostgreSQL descartável. Data API OFF é contenção temporária; faltam backup restaurado, staging Supabase e aplicação produtiva especificamente autorizada. |
+| 17 | Outros riscos de e-commerce | Pendente de validação | `src/pages/Checkout.jsx` mostra itens, descontos, frete, prazo e total e usa prévia do servidor; fluxo fictício validou resumo antes da criação do pedido. Permanecem comprovação de resumo/correção pré-contratual, entrega durável do contrato, confirmação imediata e arrependimento integral no mesmo canal, além de homologação produtiva de Auth, pagamentos e frete. |
+
+## Referência normativa e limite da revisão
+
+- Exigências legais a conferir com a advogada: [CDC, art. 49](https://www.planalto.gov.br/ccivil_03/leis/l8078compilado.htm), [Decreto 7.962/2013, arts. 2º, 4º e 5º](https://planalto.gov.br/ccivil_03/_ato2011-2014/2013/decreto/d7962.htm), [LGPD](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm) e [Lei Brasileira de Inclusão, art. 63](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2015/lei/l13146.htm).
+- Critérios técnicos: [WCAG 2.2](https://www.w3.org/TR/WCAG22/), [guia de cookies da ANPD](https://www.gov.br/anpd/pt-br/centrais-de-conteudo/materiais-educativos-e-publicacoes/processo-guia-orientativo-cookies-e-protecao-de-dados-pessoais.pdf), [segurança para agentes de pequeno porte da ANPD](https://www.gov.br/anpd/pt-br/centrais-de-conteudo/materiais-educativos-e-publicacoes/guia_seguranca_da_informacao_para_atpps___defeso_eleitoral.pdf) e [Cloudflare Web Analytics](https://developers.cloudflare.com/web-analytics/data-metrics/data-origin-and-collection/).
+- Lighthouse e inspeção visual/teclado cobrem uma amostra local. Não demonstram conformidade integral de todas as rotas, dados e tecnologias assistivas em produção.
+
+## Testes locais desta revisão
+
+- `npm run lint`, `npm run typecheck`, `npm run build` com `VITE_API_URL=https://api.dhelenas.com`, `npm run test:static`: aprovados.
+- `node --test test/physical-returns.test.js test/production-api-consumers.test.js test/customer-auth.test.js` em `backend/`: 36/36 aprovados.
+- Navegador isolado com API mock e dados fictícios: catálogo vazio em 375/768/1024/1440 px sem rolagem horizontal; sacola antiga sem item comprável; checkout vazio; checkout fictício com validação de CPF/telefone, cotação e resumo; contato; cadastro; menu e sacola por teclado. Nenhum pedido ou pagamento criado. Auditoria Lighthouse local: acessibilidade 100 nas quatro páginas selecionadas.
+
+## Bloqueios de abertura e ações produtivas futuras
+
+1. **Jurídico e conteúdo da Juliane:** políticas definitivas aprovadas, identidade/CNPJ/endereço, canal e procedimento do arrependimento, comprovação de direitos das imagens e condições comerciais. Não publicar textos provisórios.
+2. **Segurança:** backup produtivo de banco e Storage com restauração verificada, staging Supabase com dados fictícios, confirmação atual de RLS/privilégios e aplicação controlada das fases de segurança e migrations 015–017; manter Data API OFF até validação. Nenhuma dessas ações foi executada nesta revisão.
+3. **Medição e atendimento:** decidir com a advogada sobre o Cloudflare RUM e configurar a borda com autorização; homologar o canal de contato/arrependimento e a entrega de confirmação/contrato em meio durável.
+4. **Operação:** homologar Auth/SMTP, checkout e frete; implantar manualmente código aprovado; arquivar os 14 produtos e criar o marco operacional somente com prévia, backup e autorização específica. Manutenção deve continuar ON até todos os bloqueios serem resolvidos.
