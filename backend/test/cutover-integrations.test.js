@@ -104,16 +104,22 @@ for (const mode of ['sandbox', 'production']) test(`Freight quote uses ${mode} e
             const payload = JSON.parse(options.body);
             assert.equal(payload.products[0].weight, 0.3);
             assert.equal(payload.products[0].height, 4);
+            assert.equal(payload.products[0].quantity, 2);
+            assert.equal(payload.products[1].quantity, 1);
             return { ok: true, json: async () => [
                 { id: 1, name: 'Mock service', price: '12.50', company: { name: 'Mock carrier' }, delivery_time: 3,
-                    packages: [{ dimensions: { height: 4, width: 15, length: 20 }, weight: 0.3, insurance_value: 80 }] },
+                    packages: [{ dimensions: { height: 4, width: 15, length: 20 }, weight: 0.9, insurance_value: 120 }] },
                 { id: 2, name: 'Invalid SEDEX', price: '10.00', company: { name: 'Correios' },
                     packages: [{ dimensions: { height: 0.4, width: 8, length: 13 }, weight: 0.3 }] },
             ] };
         };
         try {
-            const quote = await calculateShipping({ fromPostalCode: '01001000', toPostalCode: '02002000', products: [{ id: 'fixture', height: 4, width: 15, length: 20, weight: 0.3, insurance_value: 80, qty: 1 }], totalValue: 80 });
+            const quote = await calculateShipping({ fromPostalCode: '01001000', toPostalCode: '02002000', products: [
+                { id: 'fixture', height: 4, width: 15, length: 20, weight: 0.3, insurance_value: 80, qty: 2 },
+                { id: 'second', height: 3, width: 15, length: 20, weight: 0.3, insurance_value: 40, qty: 1 },
+            ], totalValue: 120 });
             assert.equal(quote[0].price, 12.5);
+            assert.equal(quote[0].packages[0].weight, 0.9);
             assert.equal(quote.length, 1);
             assert.equal(calls, 1);
         } finally { pool.query = query; globalThis.fetch = fetchImpl; }

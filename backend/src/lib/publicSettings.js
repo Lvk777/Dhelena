@@ -2,6 +2,7 @@ import { httpsOrigin, instagramLink, whatsappLink, validEmail, validCnpjFormat }
 import { preparationPolicy } from './deliveryEstimate.js';
 import { creditInstallmentPolicy } from './paymentChoice.js';
 import { validPixDiscountPercentage } from './checkoutDiscount.js';
+import { assertCorreiosPackage } from './shipping.js';
 
 export const PUBLIC_SETTING_FIELDS = {
     general: ['store_name', 'trade_name', 'company_name', 'cnpj', 'email', 'phone', 'whatsapp', 'logo', 'logo_dark', 'public_address', 'business_hours', 'external_link_origins'],
@@ -60,6 +61,22 @@ export function validateSettingValue(key, value) {
     if (key === 'shipping' && value.melhor_envio_extra_days != null
         && (!Number.isInteger(value.melhor_envio_extra_days) || value.melhor_envio_extra_days < 0 || value.melhor_envio_extra_days > 365)) {
         invalid('Preparação deve ser um número inteiro de dias úteis entre 0 e 365.');
+    }
+    if (key === 'shipping' && value.package_presets !== undefined) {
+        const presets = value.package_presets;
+        if (!Array.isArray(presets) || presets.length > 10) invalid('Informe até 10 embalagens adicionais.');
+        const ids = new Set(['light-clothing']);
+        for (const preset of presets) {
+            if (!preset || typeof preset !== 'object' || Array.isArray(preset)
+                || typeof preset.id !== 'string' || !/^[a-z0-9-]{1,40}$/.test(preset.id)
+                || ids.has(preset.id) || typeof preset.name !== 'string'
+                || !preset.name.trim() || preset.name.length > 80) invalid('Identificação da embalagem inválida.');
+            ids.add(preset.id);
+            if (['weight', 'package_height', 'package_width', 'package_length'].some(field =>
+                typeof preset[field] !== 'number' || !Number.isFinite(preset[field]))) invalid('Medidas da embalagem inválidas.');
+            assertCorreiosPackage({ weight: preset.weight, height: preset.package_height,
+                width: preset.package_width, length: preset.package_length });
+        }
     }
     if (key === 'social') {
         if (value.instagram && !instagramLink(value.instagram)) invalid('Instagram inválido.');

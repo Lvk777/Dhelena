@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Truck, Loader2, Check, X } from "lucide-react";
+import { Truck, Loader2, Check, X, Plus } from "lucide-react";
 import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminTextarea from "@/components/admin/AdminTextarea";
@@ -14,6 +14,9 @@ export default function ShippingTab({ data, onChange }) {
         base44.custom.integrationStatus().then(rows => setActiveMode(rows.find(row => row.key === 'melhorEnvio')?.environment || 'INDETERMINADO')).catch(() => {});
     }, []);
     const set = (k, v) => onChange({ ...data, [k]: v });
+    const presets = Array.isArray(data.package_presets) ? data.package_presets : [];
+    const updatePreset = (index, field, value) => set('package_presets', presets.map((preset, i) => i === index
+        ? { ...preset, [field]: field === 'name' ? value : value === '' ? null : Number(value) } : preset));
 
     const testConnection = async () => {
         setTesting(true);
@@ -46,6 +49,29 @@ export default function ShippingTab({ data, onChange }) {
                 </div>
                 <p className="text-sm text-muted-foreground">Frete grátis para pedidos de R$ 499 ou mais, após descontos. A regra é aplicada no servidor.</p>
                 <div />
+            </AdminFormSection>
+
+            <AdminFormSection title="Embalagens adicionais" description="O padrão para uma roupa leve (5 × 25 × 30 cm; 0,400 kg) já aparece no cadastro. Crie outros tipos somente com medidas conferidas do pacote fechado.">
+                {presets.map((preset, index) => <div key={preset.id} className="sm:col-span-2 rounded-lg border border-border p-4 space-y-3">
+                    <div className="flex justify-between items-center gap-3">
+                        <p className="text-xs text-muted-foreground">Tipo de embalagem {index + 1}</p>
+                        <button type="button" className="btn-outline text-xs" onClick={() => set('package_presets', presets.filter((_, i) => i !== index))}>Remover</button>
+                    </div>
+                    <AdminInput label="Nome" value={preset.name} onChange={v => updatePreset(index, 'name', v)} placeholder="Ex.: Casaco dobrado" />
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <AdminInput label="Altura (cm)" type="number" min={1} step="0.1" value={preset.package_height} onChange={v => updatePreset(index, 'package_height', v)} />
+                        <AdminInput label="Largura (cm)" type="number" min={8} step="0.1" value={preset.package_width} onChange={v => updatePreset(index, 'package_width', v)} />
+                        <AdminInput label="Comprimento (cm)" type="number" min={13} step="0.1" value={preset.package_length} onChange={v => updatePreset(index, 'package_length', v)} />
+                        <AdminInput label="Peso total (kg)" type="number" min={0.001} step="0.001" value={preset.weight} onChange={v => updatePreset(index, 'weight', v)} />
+                    </div>
+                </div>)}
+                <div className="sm:col-span-2">
+                    <button type="button" className="btn-outline text-xs inline-flex items-center gap-2" disabled={presets.length >= 10}
+                        onClick={() => set('package_presets', [...presets, { id: `custom-${crypto.randomUUID().slice(0, 12)}`,
+                            name: '', package_height: null, package_width: null, package_length: null, weight: null }])}>
+                        <Plus className="w-3 h-3" /> Adicionar tipo de embalagem
+                    </button>
+                </div>
             </AdminFormSection>
 
             <AdminFormSection title="Melhor Envio" description="Integração com a API do Melhor Envio para cálculo de frete real">

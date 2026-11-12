@@ -9,6 +9,7 @@ import AdminWizard from "@/components/admin/AdminWizard";
 import ProductPreview from "@/components/admin/ProductPreview";
 import { logAdminAction } from "@/lib/audit";
 import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
+import { applyPackagePreset, availablePackagePresets, packageMeasurementsError } from '@/lib/packagePresets';
 
 const TAGS = [
     { key: "novo", label: "Novidade" },
@@ -25,7 +26,7 @@ const WIZARD_STEPS = [
     { id: "variants", label: "Variações", icon: Palette },
     { id: "price", label: "Preço", icon: DollarSign },
     { id: "category", label: "Organização", icon: FolderTree },
-    { id: "seo", label: "SEO", icon: Settings },
+    { id: "seo", label: "Detalhes e frete", icon: Settings },
     { id: "review", label: "Revisão", icon: Check },
 ];
 
@@ -36,6 +37,10 @@ export default function ProductForm() {
     const { categories, collections, reload } = useCatalog();
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState("");
+    const [packagePresets, setPackagePresets] = useState(() => availablePackagePresets());
+    const [selectedPackagePreset, setSelectedPackagePreset] = useState('');
+    const [packageOpen, setPackageOpen] = useState(!id);
+    const [packagePresetError, setPackagePresetError] = useState(false);
     const [loadedUpdatedDate, setLoadedUpdatedDate] = useState(null);
     const [form, setForm] = useState({
         name: "", sku: "", category: "", subcategory: "", collection: "",
@@ -49,6 +54,16 @@ export default function ProductForm() {
         weight: "", package_height: "", package_width: "", package_length: "",
         status: "draft",
     });
+
+    useEffect(() => {
+        let current = true;
+        base44.entities.Setting.list().then(records => {
+            if (!current) return;
+            const shipping = records.find(record => record.key === 'shipping')?.value;
+            setPackagePresets(availablePackagePresets(shipping?.package_presets));
+        }).catch(() => { if (current) setPackagePresetError(true); });
+        return () => { current = false; };
+    }, []);
 
     useEffect(() => {
         if (!id) return;
@@ -78,6 +93,12 @@ export default function ProductForm() {
     }, [id]);
 
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+    const setPackage = (key, value) => { setSelectedPackagePreset(''); set(key, value); };
+    const selectPackagePreset = (presetId) => {
+        setSelectedPackagePreset(presetId);
+        const preset = packagePresets.find(item => item.id === presetId);
+        if (preset) setForm(formValue => applyPackagePreset(formValue, preset));
+    };
 
     const addColor = (colorId) => {
         const sw = COLOR_SWATCHES[colorId];
@@ -165,6 +186,8 @@ export default function ProductForm() {
                 || Object.keys(color.stock || {}).some((size) => !form.sizes.includes(size)))) {
                 errors.variants = "Tamanhos e estoque das cores não correspondem";
             }
+            const packageError = packageMeasurementsError(form);
+            if (packageError) { errors.package = packageError; setPackageOpen(true); }
             setSaveError(Object.values(errors)[0] || "");
         }
         return Object.keys(errors).length > 0 ? errors : null;
@@ -323,16 +346,30 @@ export default function ProductForm() {
                             <WizardInput label="Forro" value={form.lining} onChange={(v) => set("lining", v)} />
                             <WizardInput label="Transparência" value={form.transparency} onChange={(v) => set("transparency", v)} />
                             <WizardInput label="Elasticidade" value={form.elasticity} onChange={(v) => set("elasticity", v)} />
-                            <WizardInput label="Peso (kg)" value={form.weight} onChange={(v) => set("weight", v)} type="number" />
                         </div>
                         <WizardTextarea label="Cuidados de lavagem" value={form.care} onChange={(v) => set("care", v)} full rows={2} />
                         <WizardTextarea label="Guia de medidas" value={form.measurements} onChange={(v) => set("measurements", v)} full rows={3} />
-                        <div className="grid grid-cols-3 gap-4">
-                            <WizardInput label="Altura emb. (cm)" value={form.package_height} onChange={(v) => set("package_height", v)} type="number" />
-                            <WizardInput label="Largura emb. (cm)" value={form.package_width} onChange={(v) => set("package_width", v)} type="number" />
-                            <WizardInput label="Compr. emb. (cm)" value={form.package_length} onChange={(v) => set("package_length", v)} type="number" />
-                        </div>
-                        <p className="text-xs text-muted-foreground">Informe as medidas da embalagem fechada em centímetros e o peso total com embalagem em quilogramas. Para PAC/SEDEX no Melhor Envio: mínimo 1 × 8 × 13 cm.</p>
+                        <details className="border border-border rounded-lg p-4" open={packageOpen} onToggle={event => setPackageOpen(event.currentTarget.open)}>
+                            <summary className="cursor-pointer text-sm font-medium">Embalagem e frete</summary>
+                            <div className="pt-4 space-y-4">
+                                <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                    Tipo de embalagem
+                                    <select value={selectedPackagePreset} onChange={event => selectPackagePreset(event.target.value)} className="admin-field mt-2">
+                                        <option value="">Medidas personalizadas — escolher somente se couber</option>
+                                        {packagePresets.map(preset => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
+                                    </select>
+                                </label>
+                                {packagePresetError && <p className="text-xs text-error-ink">Não foi possível carregar embalagens adicionais. O padrão para roupa leve continua disponível.</p>}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                    <WizardInput label="Altura emb. (cm)" value={form.package_height} onChange={v => setPackage("package_height", v)} type="number" min="1" step="0.1" />
+                                    <WizardInput label="Largura emb. (cm)" value={form.package_width} onChange={v => setPackage("package_width", v)} type="number" min="8" step="0.1" />
+                                    <WizardInput label="Compr. emb. (cm)" value={form.package_length} onChange={v => setPackage("package_length", v)} type="number" min="13" step="0.1" />
+                                    <WizardInput label="Peso total (kg)" value={form.weight} onChange={v => setPackage("weight", v)} type="number" min="0.001" step="0.001" />
+                                </div>
+                                <p className="text-xs text-muted-foreground">Meça o pacote fechado e inclua a embalagem no peso. O padrão de roupa leve é apenas um ponto de partida; ajuste para jeans, casacos, calçados e várias peças. Para PAC/SEDEX: mínimo 1 × 8 × 13 cm.</p>
+                                {form.package_height && packageMeasurementsError(form) && <p role="alert" className="text-xs text-error-ink">{packageMeasurementsError(form)}</p>}
+                            </div>
+                        </details>
                     </div>
                 );
             case "review":
@@ -400,11 +437,12 @@ function SummaryRow({ label, value }) {
     );
 }
 
-function WizardInput({ label, value, onChange, type = "text", full = false, placeholder = "" }) {
+function WizardInput({ label, value, onChange, type = "text", full = false, placeholder = "", min = undefined, step = undefined }) {
+    const inputId = React.useId();
     return (
         <div className={full ? "" : ""}>
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
-            <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="admin-field" />
+            <label htmlFor={inputId} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
+            <input id={inputId} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} min={min} step={step} className="admin-field" />
         </div>
     );
 }
