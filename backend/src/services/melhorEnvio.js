@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { melhorEnvioMode, melhorEnvioTokens } from './melhorEnvioToken.js';
 import { melhorEnvioEnvironment, melhorEnvioUserAgent } from './melhorEnvioEnvironment.js';
+import { assertCorreiosPackage } from '../lib/shipping.js';
 
 /**
  * Melhor Envio Service — Freight calculation, label generation, tracking
@@ -11,6 +12,22 @@ import { melhorEnvioEnvironment, melhorEnvioUserAgent } from './melhorEnvioEnvir
 
 function isSandbox() {
     return melhorEnvioMode() === 'sandbox';
+}
+
+const validationLabels = {
+    'volumes.height': 'altura da embalagem', 'volumes.width': 'largura da embalagem',
+    'volumes.length': 'comprimento da embalagem', 'volumes.weight': 'peso da embalagem',
+    'options.invoice.key': 'chave do documento fiscal', 'from.state_register': 'inscrição estadual do remetente',
+    'from.postal_code': 'CEP do remetente', 'to.postal_code': 'CEP da destinatária',
+    'from.document': 'documento do remetente', 'from.company_document': 'CNPJ do remetente',
+    'to.document': 'documento da destinatária', 'service': 'serviço de transporte',
+};
+
+export function safeMelhorEnvioValidation(data) {
+    const keys = Object.keys(data?.errors && typeof data.errors === 'object' ? data.errors : {});
+    const fields = [...new Set(keys.map(key => key.replace(/\.\d+(?=\.|$)/g, '')).filter(key =>
+        Object.hasOwn(validationLabels, key)).map(key => validationLabels[key]))].slice(0, 8);
+    return fields;
 }
 
 async function meFetch(path, options = {}) {
@@ -30,7 +47,11 @@ async function meFetch(path, options = {}) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-        throw Object.assign(new Error(`Melhor Envio API error (${res.status})`), { status: res.status });
+        const fields = res.status === 422 ? safeMelhorEnvioValidation(data) : [];
+        const message = res.status === 422
+            ? `Melhor Envio rejeitou a preparação${fields.length ? `: confira ${fields.join(', ')}` : '; confira os dados fiscais, da embalagem e dos participantes'}. Nenhum novo envio será tentado antes da conciliação.`
+            : `Melhor Envio indisponível (${res.status}). Confira o status no provedor antes de repetir a operação.`;
+        throw Object.assign(new Error(message), { status: res.status, provider_validation: fields });
     }
     return data;
 }
@@ -90,6 +111,14 @@ export async function calculateShipping({ fromPostalCode, toPostalCode, products
             if (svc.error) continue;
             const price = Number.parseFloat(svc.custom_price ?? svc.price);
             if (!Number.isFinite(price) || price < 0) continue;
+            const quotedPackages = Array.isArray(svc.packages) ? svc.packages.map(pkg => ({
+                height: Number(pkg.dimensions?.height), width: Number(pkg.dimensions?.width),
+                length: Number(pkg.dimensions?.length), weight: Number(pkg.weight),
+                insurance_value: Number(pkg.insurance_value || 0),
+            })) : [];
+            if (['1','2'].includes(String(svc.id)) && (!quotedPackages.length || quotedPackages.some(pkg => {
+                try { assertCorreiosPackage(pkg); return false; } catch { return true; }
+            }))) continue;
             options.push({
                 id: svc.id,
                 name: svc.name,
@@ -101,13 +130,7 @@ export async function calculateShipping({ fromPostalCode, toPostalCode, products
                 delivery_time_min: svc.custom_delivery_range?.min ?? svc.delivery_range?.min ?? null,
                 delivery_time_max: svc.custom_delivery_range?.max ?? svc.delivery_range?.max ?? null,
                 carrier: group.carrier || svc.company?.name || null,
-                packages: Array.isArray(svc.packages) ? svc.packages.map(pkg => ({
-                    height: Number(pkg.dimensions?.height),
-                    width: Number(pkg.dimensions?.width),
-                    length: Number(pkg.dimensions?.length),
-                    weight: Number(pkg.weight),
-                    insurance_value: Number(pkg.insurance_value || 0),
-                })) : [],
+                packages: quotedPackages,
             });
         }
     }

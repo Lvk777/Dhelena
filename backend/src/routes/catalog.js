@@ -6,6 +6,7 @@ import { searchLimiter } from '../middleware/rateLimiters.js';
 import { publicSetting, validateSettingValue } from '../lib/publicSettings.js';
 import { safeNavigation } from '../lib/navigation.js';
 import { effectiveSizes, stockForSize } from '../lib/variantStock.js';
+import { assertCorreiosPackage } from '../lib/shipping.js';
 
 const router = Router();
 
@@ -97,6 +98,8 @@ export function validateProductForPublication(product) {
         !Number.isFinite(Number(product[field])) || Number(product[field]) <= 0)) {
         throw Object.assign(new Error('Informe peso e dimensões válidos para calcular o frete'), { status: 400 });
     }
+    assertCorreiosPackage({ weight: product.weight, height: product.package_height,
+        width: product.package_width, length: product.package_length });
     const sizes = product.sizes || [];
     const colors = product.colors || [];
     if (!Array.isArray(sizes) || !sizes.length || !Array.isArray(colors) || !colors.length) {

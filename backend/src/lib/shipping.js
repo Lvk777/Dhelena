@@ -2,6 +2,31 @@ function invalid(message) {
     return Object.assign(new Error(message), { status: 400 });
 }
 
+// Melhor Envio's Correios PAC/SEDEX limits are for the CLOSED parcel, in cm/kg.
+export function assertCorreiosPackage(packageData) {
+    const { height, width, length, weight } = packageData || {};
+    const values = [height, width, length, weight].map(Number);
+    if (values.some(value => !Number.isFinite(value) || value <= 0)) {
+        throw invalid('Informe peso (kg) e dimensões (cm) reais da embalagem fechada.');
+    }
+    if (values[0] < 1 || values[1] < 8 || values[2] < 13 ||
+        values.slice(0, 3).some(value => value > 100) ||
+        values[0] + values[1] + values[2] > 200 || values[3] > 30) {
+        throw invalid('Embalagem fora dos limites PAC/SEDEX: mínimo 1 × 8 × 13 cm; máximo 100 cm por lado, 200 cm na soma e 30 kg. Confira o pacote fechado.');
+    }
+    return { height: values[0], width: values[1], length: values[2], weight: values[3] };
+}
+
+export function fiscalKeyModel(value) {
+    const key = String(value || '').replace(/\D/g, '');
+    if (key.length !== 44) return null;
+    const digits = key.slice(0, 43).split('').map(Number);
+    const sum = digits.reverse().reduce((total, digit, index) => total + digit * (index % 8 + 2), 0);
+    const remainder = sum % 11;
+    const check = remainder < 2 ? 0 : 11 - remainder;
+    return check === Number(key[43]) ? key.slice(20, 22) : null;
+}
+
 /** Melhor Envio expects a Brazilian DDD + number, without the optional +55. */
 export function normalizeBrazilianPhone(value) {
     const digits = String(value || '').replace(/\D/g, '');

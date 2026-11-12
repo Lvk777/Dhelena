@@ -820,10 +820,16 @@ router.post('/orders/:id/shipping/label', auth, requireSupabaseAdmin, async (req
 
 router.get('/orders/:id/shipping/readiness', auth, requireSupabaseAdmin, async (req, res, next) => {
     try {
-        const { rows } = await pool.query('SELECT snapshot, shipping_status FROM orders WHERE id=$1', [req.params.id]);
+        const { rows } = await pool.query(`SELECT snapshot, shipping_status, shipping_carrier,
+            shipping_service_name, shipping_cost, melhor_envio_shipment_id FROM orders WHERE id=$1`, [req.params.id]);
         if (!rows.length) return res.status(404).json({ error: 'Pedido não encontrado' });
-        res.json({ environment: rows[0].snapshot?.shipping_environment || null,
-            status: rows[0].shipping_status, price: rows[0].snapshot?.shipping_operation?.price ?? null,
+        const row = rows[0], operation = row.snapshot?.shipping_operation || {};
+        res.json({ environment: row.snapshot?.shipping_environment || null,
+            status: row.shipping_status, carrier: row.shipping_carrier, service: row.shipping_service_name,
+            customer_shipping_cost: row.shipping_cost, shipment_id: row.melhor_envio_shipment_id,
+            packages: row.snapshot?.shipping_packages || [], fiscal_model: operation.fiscal_model || null,
+            fiscal_key_last4: operation.fiscal_key_last4 || null,
+            rejection_fields: operation.rejection_fields || [], price: operation.price ?? null,
             purchase_enabled: process.env.SHIPPING_LABEL_PURCHASE_ENABLED === 'true' });
     } catch (err) { next(err); }
 });

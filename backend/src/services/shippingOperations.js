@@ -1,7 +1,7 @@
 import { refundInFlight } from '../lib/refundState.js';
 import { pool } from '../config/db.js';
 import * as melhorEnvio from './melhorEnvio.js';
-import { assertLabelEligible, getPersistedShippingService, normalizeBrazilianPhone, safeShippingPrintUrl } from '../lib/shipping.js';
+import { assertCorreiosPackage, assertLabelEligible, fiscalKeyModel, getPersistedShippingService, normalizeBrazilianPhone, safeShippingPrintUrl } from '../lib/shipping.js';
 import { moneyCents } from '../lib/afterSalesPolicy.js';
 import { assertNoWithdrawalRequest } from '../lib/withdrawalRequest.js';
 
@@ -14,20 +14,29 @@ export function shippingEnvironment(order) {
 
 export function shippingPreparation(order, address, sender, invoiceKey) {
     const phone = normalizeBrazilianPhone(sender.phone), document = String(sender.document || '').replace(/\D/g, '');
+    const fiscalKey = String(invoiceKey || '').replace(/\D/g, '');
     if (!sender.name || !sender.email || ![10, 11].includes(phone.length) || ![11, 14].includes(document.length)
         || !/^\d{8}$/.test(String(address.cep || '').replace(/\D/g, '')) || !address.street || !address.number
         || !address.district || !address.city || !/^[A-Z]{2}$/.test(address.state || '')) throw error('Dados do remetente incompletos.', 422);
+    if (shippingEnvironment(order) === 'production' && document.length === 14 && !String(sender.state_register || '').trim()) {
+        throw error('Inscrição estadual do remetente ausente para envio comercial; confirme o cadastro fiscal.', 422);
+    }
     const to = order.shipping_address || {}, customer = order.snapshot?.customer || {};
     if (!to.street || !to.number || !to.district || !to.city || !/^[A-Z]{2}$/.test(to.state || '')
         || !/^\d{8}$/.test(String(to.cep || '').replace(/\D/g, '')) || !customer.name || !customer.email
-        || String(customer.cpf || '').replace(/\D/g, '').length !== 11) throw error('Dados da destinatária incompletos.', 422);
-    if (shippingEnvironment(order) === 'production' && !/^\d{44}$/.test(invoiceKey || '')) throw error('Informe a chave de 44 dígitos da NF-e do envio comercial.', 422);
-    if (invoiceKey && !/^\d{44}$/.test(invoiceKey)) throw error('Chave de NF-e inválida.', 422);
+        || String(customer.cpf || '').replace(/\D/g, '').length !== 11
+        || ![10,11].includes(normalizeBrazilianPhone(customer.phone).length)) throw error('Dados da destinatária incompletos.', 422);
+    if (shippingEnvironment(order) === 'production' && !fiscalKey) throw error('Informe a chave de NF-e modelo 55 autorizada para o envio comercial.', 422);
+    if (fiscalKey && fiscalKeyModel(fiscalKey) !== '55') throw error('Este envio comercial exige NF-e modelo 55 válida. NFC-e modelo 65 não é aceita nesta integração; confirme o documento com a contabilidade.', 422);
     const volumes = order.snapshot?.shipping_packages;
     if (!Array.isArray(volumes) || !volumes.length || volumes.some(v => ['weight', 'height', 'width', 'length'].some(k => !Number.isFinite(Number(v[k])) || Number(v[k]) <= 0))) throw error('Volumes da cotação ausentes ou inválidos.');
     // Multiple-volume carrier contracts require a separate reviewed packing flow.
     if (volumes.length > 1) throw error('Envio com múltiplos volumes exige expedição assistida; nenhuma etiqueta foi comprada.');
-    return { environment: shippingEnvironment(order), serviceId: getPersistedShippingService(order), invoiceKey,
+    if (['1','2'].includes(String(order.shipping_quote_id))) {
+        try { volumes.forEach(assertCorreiosPackage); }
+        catch (cause) { throw error(cause.message, 422); }
+    }
+    return { environment: shippingEnvironment(order), serviceId: getPersistedShippingService(order), invoiceKey: fiscalKey,
         from: { ...sender, phone, document, address: address.street, ...address, postal_code: address.cep.replace(/\D/g, '') },
         to: { name: customer.name, phone: normalizeBrazilianPhone(customer.phone), email: customer.email,
             document: customer.cpf.replace(/\D/g, ''), address: to.street, number: to.number, complement: to.complement || '',
@@ -40,7 +49,7 @@ export function createShippingOperations({ db = pool, provider = melhorEnvio, en
     return async function operate(orderId, action, input = {}, actorId = null) {
         if (!['prepare', 'purchase', 'generate', 'print', 'refresh'].includes(action)) throw error('Ação de envio inválida.', 400);
         if (action === 'purchase' && (env.SHIPPING_LABEL_PURCHASE_ENABLED !== 'true' || input.confirm_purchase !== true)) throw error('Compra de etiquetas exige liberação operacional e confirmação explícita.', 403);
-        const client = await db.connect(); let locked = false, inTransaction = false;
+        const client = await db.connect(); let locked = false, inTransaction = false, preparationRecord = null;
         const begin = async () => { await client.query('BEGIN'); inTransaction = true; await client.query("SET LOCAL lock_timeout='2000ms'"); await client.query("SET LOCAL statement_timeout='5000ms'"); };
         const commit = async () => { await client.query('COMMIT'); inTransaction = false; };
         const read = async () => {
@@ -72,12 +81,16 @@ export function createShippingOperations({ db = pool, provider = melhorEnvio, en
                 const settings = await client.query("SELECT key,value FROM settings WHERE key IN ('address','shipping_sender')");
                 const values = Object.fromEntries(settings.rows.map(r => [r.key, r.value]));
                 const request = shippingPreparation(order, values.address || {}, values.shipping_sender || {}, input.invoice_key);
-                await save('cart_inflight', null); await commit();
+                preparationRecord = { ...operation, attempted_at: new Date().toISOString(),
+                    fiscal_model: request.invoiceKey ? fiscalKeyModel(request.invoiceKey) : null,
+                    fiscal_key_last4: request.invoiceKey?.slice(-4) || null,
+                    packages: request.volumes, service_id: request.serviceId };
+                await save('cart_inflight', null, preparationRecord); await commit();
                 // Durable reservation survives a crash before or after the provider accepted the cart.
                 await begin(); await read();
                 const shipment = await provider.addShipmentToCart(request);
                 id = shipment.shipment_id;
-                await save('cart_created', id, { price: shipment.price });
+                await save('cart_created', id, { ...preparationRecord, price: shipment.price });
                 await record('label_prepared','Etiqueta preparada; compra ainda não realizada',{environment:mode});
                 await commit(); return { shipment_id: id, status: 'cart_created', environment: mode, price: shipment.price };
             }
@@ -121,6 +134,21 @@ export function createShippingOperations({ db = pool, provider = melhorEnvio, en
             return { ...printed, shipment_id: id, status: 'generated', environment: mode };
         } catch (err) {
             if (inTransaction) await client.query('ROLLBACK').catch(() => {});
+            if (action === 'prepare' && preparationRecord && err.status === 422 && Array.isArray(err.provider_validation)) {
+                // A 422 alone cannot prove that no provider record exists. Retain the
+                // durable block and store only whitelisted field labels, never payloads.
+                try {
+                    await begin();
+                    const current = await read();
+                    if (current.shipping_status === 'cart_inflight' && !current.melhor_envio_shipment_id) {
+                        await save('cart_uncertain', null, { ...preparationRecord,
+                            rejected_at: new Date().toISOString(), rejection_fields: err.provider_validation });
+                        await record('label_rejected','Preparação rejeitada; conciliação pendente',
+                            { fields: err.provider_validation });
+                    }
+                    await commit();
+                } catch { if (inTransaction) await client.query('ROLLBACK').catch(() => {}); }
+            }
             // Do not clear a durable in-flight checkpoint on uncertain external outcomes.
             throw err;
         } finally {

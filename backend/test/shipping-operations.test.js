@@ -2,7 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createShippingOperations,shippingEnvironment,shippingPreparation} from '../src/services/shippingOperations.js';
 import {createShippingWebhookWorker,officialShippingUpdate} from '../src/services/shippingWebhookQueue.js';
-import {safeShippingPrintUrl} from '../src/lib/shipping.js';
+import {assertCorreiosPackage,fiscalKeyModel,safeShippingPrintUrl} from '../src/lib/shipping.js';
+import {safeMelhorEnvioValidation} from '../src/services/melhorEnvio.js';
+function fiscalKey(model){
+    const first43=`35${'2611'}${'12345678000195'}${model}${'001'}${'123456789'}${'12345678'}${'1'}`;
+    const sum=[...first43].reverse().reduce((total,digit,index)=>total+Number(digit)*(index%8+2),0);
+    const remainder=sum%11;
+    return `${first43}${remainder<2?0:11-remainder}`;
+}
 const origin={cep:'01001000',street:'Origem',number:'1',district:'Centro',city:'São Paulo',state:'SP'};
 const sender={name:'Fixture',document:'12345678909',phone:'11999999999',email:'sender@example.test'};
 const orderFixture={id:'fixture',shipping_quote_id:'1',payment_status:'approved',status:'pagamento_aprovado',shipping_method:'melhor_envio',
@@ -49,6 +56,23 @@ test('timeout after cart acceptance preserves in-flight reservation across resta
     await assert.rejects(f.operate('fixture','prepare'));await assert.rejects(f.operate('fixture','prepare'));
     assert.equal(f.calls.length,1);assert.equal(f.order.shipping_status,'cart_inflight');
 });
+test('provider 422 records only safe fields and blocks a duplicate cart call',async()=>{
+    const f=fixture();
+    f.provider.addShipmentToCart=async()=>{f.calls.push(['cart']);throw Object.assign(new Error('Rejeição segura'),
+        {status:422,provider_validation:['altura da embalagem','chave do documento fiscal']});};
+    const original={payment_status:f.order.payment_status,subtotal:f.order.subtotal,
+        items:structuredClone(f.order.snapshot.items),packages:structuredClone(f.order.snapshot.shipping_packages)};
+    await assert.rejects(f.operate('fixture','prepare'));
+    assert.equal(f.order.shipping_status,'cart_uncertain');
+    assert.deepEqual(f.order.snapshot.shipping_operation.rejection_fields,
+        ['altura da embalagem','chave do documento fiscal']);
+    await assert.rejects(f.operate('fixture','prepare'));
+    assert.equal(f.calls.length,1);
+    assert.equal(f.order.payment_status,original.payment_status);
+    assert.equal(f.order.subtotal,original.subtotal);
+    assert.deepEqual(f.order.snapshot.items,original.items);
+    assert.deepEqual(f.order.snapshot.shipping_packages,original.packages);
+});
 test('uncertain purchase cannot issue another checkout; official release resolves without charging',async()=>{
     const f=fixture();await f.operate('fixture','prepare');f.provider.checkoutShipments=async()=>{f.calls.push(['checkout']);throw new Error('timeout');};
     await assert.rejects(f.operate('fixture','purchase',{confirm_purchase:true,expected_price_cents:1890}));
@@ -68,8 +92,28 @@ test('tracking keeps the original Sandbox even when the active environment chang
 test('production requires a real fiscal key and unsupported multiple volumes fail before cart',()=>{
     const order=structuredClone(orderFixture);order.snapshot.shipping_environment='production';
     assert.throws(()=>shippingPreparation(order,origin,sender));
-    assert.equal(shippingPreparation(order,origin,sender,'1'.repeat(44)).invoiceKey.length,44);
-    order.snapshot.shipping_packages.push(order.snapshot.shipping_packages[0]);assert.throws(()=>shippingPreparation(order,origin,sender,'1'.repeat(44)));
+    assert.equal(fiscalKeyModel(fiscalKey('55')),'55');
+    assert.equal(fiscalKeyModel(fiscalKey('65')),'65');
+    assert.throws(()=>shippingPreparation(order,origin,sender,fiscalKey('65')),/NFC-e/);
+    assert.throws(()=>shippingPreparation(order,origin,sender,'1'.repeat(44)));
+    assert.equal(shippingPreparation(order,origin,sender,fiscalKey('55')).invoiceKey.length,44);
+    order.snapshot.shipping_packages.push(order.snapshot.shipping_packages[0]);assert.throws(()=>shippingPreparation(order,origin,sender,fiscalKey('55')));
+});
+test('SEDEX validates actual closed package in cm and kg before contacting provider',()=>{
+    const order=structuredClone(orderFixture);order.shipping_quote_id='2';
+    order.snapshot.shipping_packages=[{height:0.4,width:8,length:13,weight:0.3}];
+    assert.throws(()=>shippingPreparation(order,origin,sender),/1 × 8 × 13/);
+    order.snapshot.shipping_packages=[{height:5,width:25,length:30,weight:0.3}];
+    assert.deepEqual(assertCorreiosPackage(order.snapshot.shipping_packages[0]),{height:5,width:25,length:30,weight:0.3});
+    assert.equal(shippingPreparation(order,origin,sender).volumes.length,1);
+    order.snapshot.shipping_packages[0].weight=31;
+    assert.throws(()=>shippingPreparation(order,origin,sender));
+});
+test('provider validation reports field labels only, never submitted private values',()=>{
+    assert.deepEqual(safeMelhorEnvioValidation({errors:{'volumes.0.height':['0.4'],
+        'options.invoice.key':['private-fiscal-key'], 'to.document':['private-document'],
+        'some.private.field':['secret']}}),
+    ['altura da embalagem','chave do documento fiscal','documento da destinatária']);
 });
 test('shipping status cannot regress a delivered order or advance an unpaid one',()=>{
     const order={status:'entregue',payment_status:'approved',tracking_code:'MOCK'};

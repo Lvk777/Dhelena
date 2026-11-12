@@ -332,6 +332,7 @@ export default function ProductForm() {
                             <WizardInput label="Largura emb. (cm)" value={form.package_width} onChange={(v) => set("package_width", v)} type="number" />
                             <WizardInput label="Compr. emb. (cm)" value={form.package_length} onChange={(v) => set("package_length", v)} type="number" />
                         </div>
+                        <p className="text-xs text-muted-foreground">Informe as medidas da embalagem fechada em centímetros e o peso total com embalagem em quilogramas. Para PAC/SEDEX no Melhor Envio: mínimo 1 × 8 × 13 cm.</p>
                     </div>
                 );
             case "review":
