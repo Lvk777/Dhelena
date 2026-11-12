@@ -10,7 +10,7 @@ import { track } from "@/lib/analytics";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { isSupabaseConfigured } from "@/api/supabaseClient";
 
-const emailOtpAvailable = isSupabaseConfigured && import.meta.env.VITE_EMAIL_OTP_LOGIN_ENABLED === 'true';
+const emailOtpBuildEnabled = isSupabaseConfigured && import.meta.env.VITE_EMAIL_OTP_LOGIN_ENABLED === 'true';
 
 export default function Login() {
     const [email, setEmail] = useState("");
@@ -23,8 +23,21 @@ export default function Login() {
     const [resendSeconds, setResendSeconds] = useState(0);
     const returnTo = safeReturnTo();
     const adminDestination = returnTo === '/admin' || returnTo.startsWith('/admin/');
-    const [useEmailOtp, setUseEmailOtp] = useState(emailOtpAvailable && !adminDestination);
+    const [emailOtpAvailable, setEmailOtpAvailable] = useState(false);
+    const [useEmailOtp, setUseEmailOtp] = useState(false);
     const showingCode = pendingCode || pendingEmailOtp;
+
+    useEffect(() => {
+        if (!emailOtpBuildEnabled) return undefined;
+        let active = true;
+        client.auth.providerStatus().then(status => {
+            if (active && status?.passwordless_email_otp === true) {
+                setEmailOtpAvailable(true);
+                if (!adminDestination) setUseEmailOtp(true);
+            }
+        }).catch(() => {});
+        return () => { active = false; };
+    }, [adminDestination]);
 
     useEffect(() => {
         if (!resendSeconds) return undefined;

@@ -36,16 +36,22 @@ try {
     assert.equal((await db.query('SELECT count(*)::int AS n FROM notification_logs WHERE source_event_id IS NOT NULL')).rows[0].n, 0);
     pass('migration 015 rolls back and preserves legacy notifications');
 
-    const env = { TRANSACTIONAL_EMAIL_ENABLED: 'true', TRANSACTIONAL_EMAIL_ENVIRONMENT: 'production', RESEND_API_KEY: 'synthetic',
+    const env = { TRANSACTIONAL_EMAIL_ENABLED: 'true', TRANSACTIONAL_EMAIL_ENVIRONMENT: 'production',
+        TRANSACTIONAL_EMAIL_START_AT: new Date(Date.now() - 60_000).toISOString(), RESEND_API_KEY: 'synthetic',
         EMAIL_FROM: 'Boutique <sender@example.test>', EMAIL_REPLY_TO: 'support@example.test' };
     await db.query("INSERT INTO settings(key,value) VALUES('emails',$1),('general','{}'),('notifications',$2)", [
         JSON.stringify({ customer_enabled: true }), JSON.stringify({ recipients: [{ active: true, email: 'admin@example.test' }] })]);
+    const historic = (await db.query(`INSERT INTO order_events(order_id,event,metadata,created_at)
+        VALUES($1,'order_created',$2,$3) RETURNING id`,
+        [order, JSON.stringify({ transactional_email_version: 1, payment_environment: 'production' }),
+            new Date(Date.now() - 86_400_000).toISOString()])).rows[0].id;
     const event = (await db.query(`INSERT INTO order_events(order_id,event,metadata) VALUES($1,'order_created',$2) RETURNING id`,
         [order, JSON.stringify({ transactional_email_version: 1, payment_environment: 'production' })])).rows[0].id;
     await Promise.all([queueOrderEmails(null, null, { db, env }), queueOrderEmails(null, null, { db, env })]);
     const jobs = (await db.query('SELECT * FROM notification_logs WHERE source_event_id=$1 ORDER BY recipient', [event])).rows;
     assert.equal(jobs.length, 2);
     assert.deepEqual(jobs.map(job => job.recipient), ['admin@example.test', 'customer@example.test']);
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM notification_logs WHERE source_event_id=$1', [historic])).rows[0].n, 0);
     pass('concurrent queueing creates one immutable job per recipient');
 
     let sends = 0;

@@ -148,6 +148,16 @@ test('only getUser returned identity reaches provisioning', async () => {
     assert.deepEqual(await authenticateSupabaseProfile(admin, db, 'validated-token'), customer);
 });
 
+test('unverified second-factor session cannot provision or read a profile', async () => {
+    const db = database([]);
+    const admin = { auth: { getUser: async () => ({ data: { user }, error: null }) } };
+    let inspected = false;
+    const result = await authenticateSupabaseProfile(admin, db, 'validated-token', () => { inspected = true; }, () => false);
+    assert.equal(inspected, true);
+    assert.equal(result, null);
+    assert.equal(db.calls.length, 0);
+});
+
 test('confirmed Auth email synchronizes only the matching immutable profile without changing role or UUID', async () => {
     const previous = { ...customer, email: 'old@example.invalid', role: 'admin', phone: 'preserved' };
     const updated = { ...previous, email: customer.email };

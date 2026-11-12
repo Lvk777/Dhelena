@@ -127,6 +127,11 @@ function makeEntity(name) {
 // ─── Auth (Supabase when configured, Express JWT fallback) ──────────
 const auth = {
     providerStatus: () => apiFetch('/auth/capabilities'),
+    adminStepUpStatus: () => apiFetch('/auth/admin-step-up/status'),
+    adminStepUpSetup: (bootstrap, passphrase) => apiFetch('/auth/admin-step-up/setup', { method: 'POST', body: JSON.stringify({ bootstrap, passphrase }) }),
+    adminStepUpStart: passphrase => apiFetch('/auth/admin-step-up/start', { method: 'POST', body: JSON.stringify({ passphrase }) }),
+    adminStepUpVerify: code => apiFetch('/auth/admin-step-up/verify', { method: 'POST', body: JSON.stringify({ code }) }),
+    adminStepUpRevoke: () => apiFetch('/auth/admin-step-up/revoke', { method: 'POST', body: '{}' }),
     async me() {
         // When supabase is configured, try its session first;
         // fall back to JWT token from localStorage if no supabase session

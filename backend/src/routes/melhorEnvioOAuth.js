@@ -5,6 +5,7 @@ import { pool } from '../config/db.js';
 import { requireAdmin } from '../middleware.js';
 import { encrypt } from '../lib/crypto.js';
 import { melhorEnvioEnvironment, melhorEnvioOAuthSettings, melhorEnvioUserAgent, MELHOR_ENVIO_OAUTH_SCOPES } from '../services/melhorEnvioEnvironment.js';
+import { adminEmailGateEnabled, createAdminEmailStepUp } from '../services/adminEmailStepUp.js';
 
 const TTL_MS = 10 * 60 * 1000;
 
@@ -45,6 +46,7 @@ function safeResponse(res, status, message) {
 
 export function createMelhorEnvioOAuthRouter({ db = pool, exchange = exchangeCode, now = () => Date.now() } = {}) {
     const router = Router();
+    const adminStepUp = createAdminEmailStepUp({ db });
     const limiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false });
     router.use('/integrations/melhor-envio/oauth', limiter, (req, res, next) => {
         res.set('Cache-Control', 'no-store');
@@ -68,7 +70,9 @@ export function createMelhorEnvioOAuthRouter({ db = pool, exchange = exchangeCod
             await db.query(
                 `INSERT INTO integration_configs (service_key, service_name, config_data, is_active)
                  VALUES ($1, 'OAuth ${label} pendente', $2, false)`,
-                [stateKey(mode, state), JSON.stringify({ admin_id: req.user.id, mode, client_id: settings.clientId, redirect_uri: settings.redirectUri, expires_at: now() + TTL_MS })]
+                [stateKey(mode, state), JSON.stringify({ admin_id: req.user.id,
+                    auth_user_id: req.supabaseUserId, session_id: req.supabaseSession?.sessionId,
+                    mode, client_id: settings.clientId, redirect_uri: settings.redirectUri, expires_at: now() + TTL_MS })]
             );
         } catch {
             return safeResponse(res, 503, 'Não foi possível iniciar a autorização.');
@@ -119,6 +123,9 @@ export function createMelhorEnvioOAuthRouter({ db = pool, exchange = exchangeCod
         try {
             const admin = await db.query("SELECT id FROM profiles WHERE id = $1 AND role = 'admin' LIMIT 1", [pending.admin_id]);
             if (admin.rows.length !== 1) return safeResponse(res, 403, 'Administrador não autorizado.');
+            if (adminEmailGateEnabled() && !await adminStepUp.granted(
+                { userId: pending.auth_user_id, sessionId: pending.session_id },
+                { id: pending.admin_id, role: 'admin' })) return safeResponse(res, 403, 'Verificação administrativa expirada.');
             const codeHash = environment.codePrefix + crypto.createHash('sha256').update(code).digest('hex');
             const claimed = await db.query(
                 `INSERT INTO integration_configs (service_key, service_name, config_data, is_active)

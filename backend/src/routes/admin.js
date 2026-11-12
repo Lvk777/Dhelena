@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../config/db.js';
 import { auth, requireAdmin } from '../middleware.js';
-import { notificationSchemaReady } from '../services/notificationOutbox.js';
+import { notificationSchemaReady, transactionalEmailCutover } from '../services/notificationOutbox.js';
 import { orderEmailReadiness } from '../services/orderEmail.js';
 import { readAdminAccess, changeAdminAccess } from '../services/adminAccess.js';
 import { readLaunchSummary } from '../services/launchSummary.js';
@@ -21,6 +21,7 @@ router.get('/notifications/readiness',auth,requireAdmin,async(req,res,next)=>{
         const {rows}=await pool.query("SELECT key,value FROM settings WHERE key IN ('emails','general')");
         res.json({...orderEmailReadiness(Object.fromEntries(rows.map(r=>[r.key,r.value]))),
             delivery_enabled:process.env.TRANSACTIONAL_EMAIL_ENABLED==='true',outbox_schema_ready:await notificationSchemaReady(),
+            cutover_configured:!!transactionalEmailCutover(process.env),
             environment:process.env.TRANSACTIONAL_EMAIL_ENVIRONMENT||'production',auth_email_provider:'supabase_smtp_separate'});
     }catch(err){next(err);}
 });

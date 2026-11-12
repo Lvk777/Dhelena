@@ -1,4 +1,4 @@
-export const MELHOR_ENVIO_USER_AGENT_FALLBACK = "D'Helenas (atendimento@dhelenas.com.br)";
+export const MELHOR_ENVIO_USER_AGENT_FALLBACK = "D'Helenas (suporte@dhelenas.com)";
 export const MELHOR_ENVIO_OAUTH_SCOPES = 'shipping-calculate cart-read cart-write shipping-checkout shipping-generate shipping-print shipping-tracking users-read';
 
 export function melhorEnvioUserAgent(mode) {

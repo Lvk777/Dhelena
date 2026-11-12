@@ -25,3 +25,10 @@ test('AAL1 administrators can inspect identity to complete enrollment but cannot
     }
     assert.equal(adminRequestRequiresStepUp({ ...req, user: { role: 'customer' }, path: '/api/orders' }, env), false);
 });
+
+test('independent email gate never trusts an Auth AAL2 token or a customer role as admin authority', () => {
+    const env = { ADMIN_EMAIL_STEP_UP_REQUIRED: 'true', ADMIN_AAL2_REQUIRED: 'false' };
+    assert.equal(adminAssuranceAllowed({ authProvider: 'supabase', supabaseSession: { aal: 'aal2' } }, env), false);
+    assert.equal(adminAssuranceAllowed({ authProvider: 'supabase', supabaseSession: { aal: 'aal1' }, adminStepUpVerified: true }, env), true);
+    assert.equal(adminRequestRequiresStepUp({ user: { role: 'customer' }, method: 'GET', path: '/api/products' }, env), false);
+});

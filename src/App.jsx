@@ -47,6 +47,7 @@ import AccountFavorites from '@/pages/account/Favorites';
 import Addresses from '@/pages/account/Addresses';
 import Profile from '@/pages/account/Profile';
 import ChangePassword from '@/pages/account/ChangePassword';
+import AdminEmailVerification from '@/pages/account/AdminEmailVerification';
 
 const Checkout = lazy(() => import('@/pages/Checkout'));
 const AdminRoutes = lazy(() => import('@/pages/admin/AdminRoutes'));
@@ -124,6 +125,7 @@ const AuthenticatedApp = () => {
                                     <Route path="enderecos" element={<Addresses />} />
                                     <Route path="dados" element={<Profile />} />
                                     <Route path="senha" element={<ChangePassword />} />
+                                    <Route path="verificacao-admin" element={<AdminEmailVerification />} />
                                 </Route>
                             </Route>
 

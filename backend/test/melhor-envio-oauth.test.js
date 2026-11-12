@@ -7,7 +7,8 @@ import { decrypt } from '../src/lib/crypto.js';
 const PATH = '/api/integrations/melhor-envio/oauth';
 
 async function fixture({ mode = 'sandbox', admin = true, exchange = async () => ({ access_token: 'private-access', refresh_token: 'private-refresh', expires_in: 3600 }) } = {}) {
-    const previous = Object.fromEntries(['MELHOR_ENVIO_MODE', 'MELHOR_ENVIO_CLIENT_ID', 'MELHOR_ENVIO_CLIENT_SECRET', 'MELHOR_ENVIO_REDIRECT_URI', 'MELHOR_ENVIO_PRODUCTION_CLIENT_ID', 'MELHOR_ENVIO_PRODUCTION_CLIENT_SECRET', 'MELHOR_ENVIO_PRODUCTION_REDIRECT_URI', 'MELHOR_ENVIO_PRODUCTION_USER_AGENT', 'INTEGRATION_ENCRYPTION_KEY'].map(k => [k, process.env[k]]));
+    const previous = Object.fromEntries(['MELHOR_ENVIO_MODE', 'MELHOR_ENVIO_CLIENT_ID', 'MELHOR_ENVIO_CLIENT_SECRET', 'MELHOR_ENVIO_REDIRECT_URI', 'MELHOR_ENVIO_PRODUCTION_CLIENT_ID', 'MELHOR_ENVIO_PRODUCTION_CLIENT_SECRET', 'MELHOR_ENVIO_PRODUCTION_REDIRECT_URI', 'MELHOR_ENVIO_PRODUCTION_USER_AGENT', 'INTEGRATION_ENCRYPTION_KEY', 'ADMIN_EMAIL_STEP_UP_REQUIRED'].map(k => [k, process.env[k]]));
+    delete process.env.ADMIN_EMAIL_STEP_UP_REQUIRED;
     Object.assign(process.env, {
         MELHOR_ENVIO_MODE: 'sandbox', MELHOR_ENVIO_CLIENT_ID: '123', MELHOR_ENVIO_CLIENT_SECRET: 'private-client',
         MELHOR_ENVIO_REDIRECT_URI: 'https://api.dhelenas.com/api/integrations/melhor-envio/oauth/callback',
@@ -108,6 +109,16 @@ test('Production authorization uses isolated credentials, callback and encrypted
         assert.equal(decrypt(f.getSaved().access_token), 'private-production-access');
         assert.equal(decrypt(f.getSaved().refresh_token), 'private-production-refresh');
         assert.equal(process.env.MELHOR_ENVIO_MODE, 'sandbox');
+    } finally { await f.close(); }
+});
+
+test('OAuth state started before email gate activation cannot complete after activation', async () => {
+    const f = await fixture({ mode: 'production' });
+    try {
+        const state = await f.authorize();
+        process.env.ADMIN_EMAIL_STEP_UP_REQUIRED = 'true';
+        assert.equal((await f.request(`${f.modePath}/callback?state=${state}&code=old-state`)).status, 403);
+        assert.equal(f.getSaved(), undefined);
     } finally { await f.close(); }
 });
 

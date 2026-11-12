@@ -1,7 +1,5 @@
 # Política de Entrega e Frete
 
-> Condição de preparação e postagem aprovada pelo responsável em 13/10/2026. Publicação desta política autorizada no mesmo pedido; as demais políticas permanecem minutas.
-
 **D’Helenas Boutique**
 
 Na D’Helenas, cada pedido é preparado com cuidado para que suas escolhas cheguem até você com segurança.
@@ -60,9 +58,11 @@ A D’Helenas opera como loja on-line e **não oferece retirada presencial de pe
 
 ## 9. Atendimento
 
-E-mail: julianeassousa@outlook.com
+E-mail: suporte@dhelenas.com
 
-WhatsApp: (11) 93803-3499
+WhatsApp: (11) 92718-9069
+
+Atendimento: segunda a sexta-feira, das 8h às 18h. Resposta inicial em até 1 dia útil.
 
 Nossa equipe está disponível para esclarecer dúvidas sobre envio, frete e acompanhamento dos pedidos.
 

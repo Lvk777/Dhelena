@@ -29,7 +29,7 @@ export default function EmailsTab({ data, onChange }) {
             </div>
             <AdminFormSection title="Notificações transacionais">
                 <div className="sm:col-span-2 space-y-1">
-                    <AdminToggle label="Notificar a cliente" checked={data.customer_enabled !== false} onChange={(v) => set("customer_enabled", v)} description="Enviar eventos transacionais ao e-mail verificado da cliente" />
+                    <AdminToggle label="Notificar a cliente" checked={data.customer_enabled !== false} onChange={(v) => set("customer_enabled", v)} description="Enviar eventos transacionais ao e-mail informado na compra; usar o e-mail da conta se ausente ou inválido" />
                     <AdminToggle label="Reembolso confirmado" checked={data.refund_processed !== false} onChange={(v) => set("refund_processed", v)} description="Somente após confirmação oficial do reembolso" />
                     <AdminToggle label="Pedido recebido" checked={data.order_received} onChange={(v) => set("order_received", v)} description="Confirmação de pedido realizado" />
                     <AdminToggle label="Pagamento aprovado" checked={data.payment_approved} onChange={(v) => set("payment_approved", v)} description="Confirmação de pagamento" />

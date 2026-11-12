@@ -236,7 +236,11 @@ export function createSupabaseAuthFlow({ supabase, api, origin, location, histor
         requestReauthentication() { return once('reauthenticate', async () => { check(await a.reauthenticate()); return {}; }); },
         logout() { return once('logout', async () => {
             // Always erase local state, including when the provider is temporarily unavailable.
-            try { await api('/auth/code/logout', { method: 'POST', body: '{}' }).catch(() => {}); check(await a.signOut({ scope: 'global' })); }
+            try {
+                await api('/auth/admin-step-up/revoke', { method: 'POST', body: '{}' }).catch(() => {});
+                await api('/auth/code/logout', { method: 'POST', body: '{}' }).catch(() => {});
+                check(await a.signOut({ scope: 'global' }));
+            }
             finally { recovery = null; setToken(null); setUser(null); }
         }); },
         onSessionChange(callback) {

@@ -1,4 +1,8 @@
-# Entrada por código Supabase — execução controlada no projeto atual
+# OBSOLETO — não executar este roteiro
+
+Em 30/10/2026, a proprietária descartou aplicativo autenticador para Vitor e Juliane. O roteiro TOTP abaixo fica **cancelado**, inclusive a sequência de ativação AAL2 e troca global do template Magic Link. O procedimento vigente está em `admin-email-step-up-rollout-2026-10-30.md`. A proteção por senha administrativa própria e código por e-mail foi preparada localmente, mas permanece desligada até a inscrição e recuperação testadas dos dois administradores. Não modificar Auth em produção nem ativar Email OTP antes disso.
+
+# Entrada por código Supabase — roteiro histórico cancelado
 
 Projeto `huxwnoxkqtmpvxrapmyz`, branch `main` de produção. Autorização: 30/10/2026. Não há projeto Supabase separado. Não usar a migration 020 nem ativar `LOGIN_EMAIL_CODE_ENABLED`.
 

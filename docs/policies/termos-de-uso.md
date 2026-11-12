@@ -1,8 +1,8 @@
 # Termos de Uso
 
-> MINUTA PARA APROVAÇÃO — 13/10/2026. Completar identificação legal antes de publicar.
-
 **D’Helenas Boutique** — Site: https://dhelenas.com
+
+Última atualização: 30/10/2026.
 
 Bem-vinda à D’Helenas! Ao navegar e realizar compras em nosso site, você utiliza uma plataforma de comércio eletrônico dedicada à moda feminina e aos acessórios.
 
@@ -10,11 +10,9 @@ Estes Termos de Uso apresentam as condições gerais de utilização do site e d
 
 ## 1. Identificação da loja
 
-A D’Helenas Boutique comercializa produtos de moda feminina e acessórios por meio de seu site oficial.
+A D’Helenas Boutique comercializa produtos de moda feminina e acessórios por meio de seu site oficial. A responsável legal é **61.738.801 JULIANE APARECIDA SILVESTRE SOUSA**, CNPJ **61.738.801/0001-43**, com endereço cadastral na **Rua Shiela, 65, Casa 01, Parque São George, Cotia/SP, CEP 06708-100**. Esse endereço identifica a fornecedora e não constitui ponto de retirada ou visitação.
 
-**Pendente de comprovação e aprovação para publicação: razão social, CNPJ e endereço físico legal do fornecedor.** O endereço legal identifica o fornecedor e não constitui ponto de retirada ou visitação.
-
-Atendimento: julianeassousa@outlook.com. WhatsApp: (11) 93803-3499.
+Contato geral: contato@dhelenas.com. Suporte, trocas e privacidade: suporte@dhelenas.com. WhatsApp: (11) 92718-9069. Atendimento de segunda a sexta-feira, das 8h às 18h, com resposta inicial em até 1 dia útil.
 
 ## 2. Uso do site
 
@@ -42,11 +40,11 @@ Antes da confirmação da compra, serão apresentados os valores de produtos, de
 
 ## 5. Pagamentos
 
-Os pagamentos serão processados pelos meios disponibilizados no checkout.
+Os pagamentos serão processados pelos meios efetivamente disponibilizados no checkout, que podem incluir Pix e cartões de crédito ou débito quando habilitados. Não oferecemos boleto se ele não aparecer como opção na finalização.
 
 A confirmação do pagamento e a liberação para preparação dependem da efetiva confirmação pela instituição de pagamento. O registro inicial de um pedido não significa que ele já esteja pago.
 
-As condições de parcelamento, quando disponíveis, serão apresentadas antes da finalização da compra.
+As condições de parcelamento, juros, quantidade e valor mínimo, quando disponíveis, serão apresentadas antes da confirmação. Cupons e promoções seguem as regras e os valores exibidos no resumo final. O recebimento de um Pix ou a criação do pedido não significam aprovação: somente a confirmação validada do provedor altera o estado de pagamento.
 
 ## 6. Entregas
 
@@ -76,7 +74,7 @@ Alterações destes Termos serão publicadas no site, sem prejuízo dos direitos
 
 ## 11. Atendimento e resolução de conflitos
 
-Dúvidas, solicitações ou reclamações poderão ser encaminhadas para julianeassousa@outlook.com ou WhatsApp (11) 93803-3499.
+Dúvidas, solicitações ou reclamações poderão ser encaminhadas para suporte@dhelenas.com.
 
 Buscaremos solucionar as demandas de forma transparente e respeitosa. A legislação brasileira de proteção ao consumidor será observada, inclusive quanto à competência jurisdicional e ao acesso aos órgãos de defesa do consumidor.
 

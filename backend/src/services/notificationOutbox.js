@@ -5,6 +5,15 @@ import { validEmail } from '../lib/navigation.js';
 import { logSafeError } from '../lib/safeErrorLog.js';
 
 const permanent = new Set(['EMAIL_IDEMPOTENCY_EXPIRED', 'EMAIL_PAYLOAD_CONFLICT']);
+export function transactionalEmailCutover(env = process.env) {
+    if (env.TRANSACTIONAL_EMAIL_ENABLED !== 'true') return null;
+    const value = env.TRANSACTIONAL_EMAIL_START_AT;
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)) return null;
+    const time = Date.parse(value);
+    if (!Number.isFinite(time)) return null;
+    const normalized = new Date(time).toISOString();
+    return normalized.slice(0, 19) === value.slice(0, 19) ? normalized : null;
+}
 export function notificationMetadata(metadata = {}, env = process.env) {
     return { ...metadata, transactional_email_version: 1, payment_environment: env.MERCADO_PAGO_MODE || 'unverified' };
 }
@@ -18,23 +27,27 @@ export async function notificationSchemaReady(db = pool) {
 
 // Only explicitly marked future events are discovered; no historical financial reconciliation.
 export async function queueOrderEmails(orderId = null, event = null, { db = pool, env = process.env } = {}) {
-    if (env.TRANSACTIONAL_EMAIL_ENABLED !== 'true' || !await notificationSchemaReady(db)) return 0;
+    const cutover = transactionalEmailCutover(env);
+    if (!cutover || !await notificationSchemaReady(db)) return 0;
     const { rows: settingsRows } = await db.query("SELECT key,value FROM settings WHERE key IN ('general','emails','notifications')");
     const settings = Object.fromEntries(settingsRows.map(row => [row.key, row.value]));
     const config = orderEmailConfig(settings, env);
-    const { rows } = await db.query(`SELECT e.id AS source_event_id,e.event AS notification_event,o.*,p.email AS user_email,p.full_name AS user_name
+    const { rows } = await db.query(`SELECT e.id AS source_event_id,e.event AS notification_event,o.*,
+        o.snapshot->'customer'->>'email' AS checkout_email,p.email AS user_email,p.full_name AS user_name
         FROM order_events e JOIN orders o ON o.id=e.order_id JOIN profiles p ON p.id=o.user_id
         WHERE e.metadata->>'transactional_email_version'='1'
         AND e.event=ANY($4::text[]) AND ($1::uuid IS NULL OR o.id=$1) AND ($2::text IS NULL OR e.event=$2)
         AND e.metadata->>'payment_environment'=$3
+        AND e.created_at >= $5::timestamptz
         AND COALESCE(e.metadata->>'email_outbox_queued','false')<>'true'
-        ORDER BY e.created_at LIMIT 20`, [orderId, event, env.TRANSACTIONAL_EMAIL_ENVIRONMENT || 'production',Object.keys(EMAIL_EVENTS)]);
+        ORDER BY e.created_at LIMIT 20`, [orderId, event, env.TRANSACTIONAL_EMAIL_ENVIRONMENT || 'production',Object.keys(EMAIL_EVENTS),cutover]);
     let queued = 0;
     for (const order of rows) {
         const name = order.notification_event;
         if (settings.emails?.[EMAIL_EVENTS[name][0]] === false) { await db.query("UPDATE order_events SET metadata=jsonb_set(metadata,'{email_outbox_queued}','true') WHERE id=$1",[order.source_event_id]);continue; }
         const recipients = new Set();
-        if (settings.emails?.customer_enabled !== false && validEmail(order.user_email)) recipients.add(order.user_email.toLowerCase());
+        const customerEmail = validEmail(order.checkout_email) ? order.checkout_email : order.user_email;
+        if (settings.emails?.customer_enabled !== false && validEmail(customerEmail)) recipients.add(customerEmail.toLowerCase());
         for (const r of settings.notifications?.recipients || []) {
             if (r.active && validEmail(r.email) && (r.events || ['order_created','payment_approved']).includes(name)
                 && settings.notifications?.email_enabled !== false) recipients.add(r.email.toLowerCase());
@@ -61,13 +74,17 @@ export function createNotificationWorker({ db = pool, env = process.env, now = D
     send = async (payload, key) => new Resend(env.RESEND_API_KEY).emails.send(payload, { idempotencyKey: key, signal: AbortSignal.timeout(15000) }), intervalMs = 30000 } = {}) {
     let timer, running, stopped = false;
     async function processOne() {
-        if (env.TRANSACTIONAL_EMAIL_ENABLED !== 'true' || !env.RESEND_API_KEY || !await notificationSchemaReady(db)) return false;
+        const cutover = transactionalEmailCutover(env);
+        if (!cutover || !env.RESEND_API_KEY || !await notificationSchemaReady(db)) return false;
         const client = await db.connect(); let job, lockId, locked = false;
         try {
             const rows = await client.query(`SELECT * FROM notification_logs WHERE channel='email' AND source_event_id IS NOT NULL
                 AND delivery_payload IS NOT NULL AND status IN ('pending','retrying','failed')
                 AND COALESCE(error,'') NOT IN ('EMAIL_IDEMPOTENCY_EXPIRED','EMAIL_PAYLOAD_CONFLICT')
-                AND COALESCE(next_attempt_at,created_at)<=now() ORDER BY created_at LIMIT 10`);
+                AND COALESCE(next_attempt_at,created_at)<=now()
+                AND EXISTS (SELECT 1 FROM order_events e WHERE e.id=notification_logs.source_event_id
+                    AND e.created_at >= $1::timestamptz)
+                ORDER BY created_at LIMIT 10`, [cutover]);
             for (const candidate of rows.rows) {
                 const lock = await client.query('SELECT pg_try_advisory_lock(hashtext($1)) AS locked', [`notification:${candidate.id}`]);
                 if (lock.rows[0]?.locked) { job = candidate;lockId=candidate.id; locked = true; break; }
@@ -102,11 +119,11 @@ export function createNotificationWorker({ db = pool, env = process.env, now = D
         }
     }
     async function tick() {
-        if (stopped || running || env.TRANSACTIONAL_EMAIL_ENABLED !== 'true') return running;
+        if (stopped || running || !transactionalEmailCutover(env)) return running;
         running = (async () => { await queueOrderEmails(null, null, { db, env }).catch(e=>logSafeError('email_queue_failed',e)); for (let i=0;i<10&&!stopped;i++) if (!await processOne()) break; })()
             .catch(err => logSafeError('email_outbox_failed', err)).finally(() => { running = null; });
         return running;
     }
-    return { tick, processOne, start() { if (timer || env.TRANSACTIONAL_EMAIL_ENABLED !== 'true') return; stopped=false; void tick(); timer=setInterval(()=>void tick(),intervalMs); timer.unref?.(); },
+    return { tick, processOne, start() { if (timer || !transactionalEmailCutover(env)) return; stopped=false; void tick(); timer=setInterval(()=>void tick(),intervalMs); timer.unref?.(); },
         async stop() { stopped=true; clearInterval(timer); await running; } };
 }

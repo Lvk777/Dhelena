@@ -3,6 +3,7 @@ import { authenticateSupabaseProfile } from './lib/supabaseProfile.js';
 import { pool } from './config/db.js';
 import { logSafeError } from './lib/safeErrorLog.js';
 import { loginCodeEnabled, sessionAllowed, trustedSession } from './services/loginCode.js';
+import { adminEmailGateEnabled, createAdminEmailStepUp } from './services/adminEmailStepUp.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -31,10 +32,12 @@ export async function getSupabaseAdmin() {
 }
 
 export const isSupabaseMode = () => _supabaseAdmin !== null && _supabaseAdmin !== undefined;
+const adminEmailService = createAdminEmailStepUp({ db: pool });
 
 export const adminAssuranceRequired = (env = process.env) => env.ADMIN_AAL2_REQUIRED === 'true';
 
 export function adminAssuranceAllowed(req, env = process.env) {
+    if (adminEmailGateEnabled(env)) return req.adminStepUpVerified === true;
     return !adminAssuranceRequired(env) || req.authProvider === 'supabase'
         && req.supabaseSession?.aal === 'aal2';
 }
@@ -64,11 +67,19 @@ export async function auth(req, res, next) {
             if (profile) {
                 req.user = profile;
                 req.authProvider = 'supabase';
-                // The assurance gate is off until every administrator has enrolled
-                // a verified native TOTP factor. Once on, no role-based API branch
-                // may be reached with an AAL1 token, including OTP and OAuth logins.
+                if (profile.role === 'admin' && adminEmailGateEnabled()) {
+                    req.adminEligibleProfile = profile;
+                    // No Auth JWT, including a pre-existing AAL2 token, carries
+                    // administrative authority until this exact session passes
+                    // the independent server-side challenge.
+                    req.adminStepUpVerified = await adminEmailService.granted(req.supabaseSession, profile);
+                    if (!req.adminStepUpVerified) req.user = { ...profile, role: 'customer' };
+                }
+                // The historical native-AAL gate remains separate. It must not
+                // silently replace the server-side email step-up or unlock a
+                // role branch for a token obtained through passwordless login.
                 if (adminRequestRequiresStepUp(req)) {
-                    return res.status(403).json({ error: 'Confirme o aplicativo autenticador para acessar o painel.', code: 'admin_mfa_required' });
+                    return res.status(403).json({ error: 'Verificação administrativa necessária.', code: 'admin_step_up_required' });
                 }
             }
         } catch (error) {
@@ -99,7 +110,7 @@ export async function auth(req, res, next) {
 export function requireAdmin(req, res, next) {
     if (!req.user) return res.status(401).json({ error: 'Autenticação necessária' });
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito a administradores' });
-    if (!adminAssuranceAllowed(req)) return res.status(403).json({ error: 'Confirme o aplicativo autenticador para acessar o painel.', code: 'admin_mfa_required' });
+    if (!adminAssuranceAllowed(req)) return res.status(403).json({ error: 'Verificação administrativa necessária.', code: 'admin_step_up_required' });
     next();
 }
 

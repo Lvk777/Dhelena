@@ -25,6 +25,7 @@ import webhookRoutes from './routes/webhooks.js';
 import melhorEnvioOAuthRoutes from './routes/melhorEnvioOAuth.js';
 import { createOrderWebhookWorker } from './services/mercadoPagoWebhookQueue.js';
 import { createOrderReservationExpiryWorker } from './services/orderReservationExpiry.js';
+import { createLoginCodeCleanupWorker } from './services/loginCode.js';
 
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -34,6 +35,10 @@ if (isProduction) {
     const missing = required.filter((name) => !process.env[name]);
     if (missing.length > 0 || process.env.CORS_ORIGIN === '*') {
         console.error('[API] FATAL: production configuration is incomplete or unsafe.');
+        process.exit(1);
+    }
+    if (process.env.ADMIN_EMAIL_STEP_UP_REQUIRED === 'true' && process.env.ADMIN_AAL2_REQUIRED === 'true') {
+        console.error('[API] FATAL: choose one reviewed administrative assurance gate.');
         process.exit(1);
     }
 }
@@ -180,6 +185,7 @@ const orderWebhookWorker = createOrderWebhookWorker();
 const notificationWorker = createNotificationWorker();
 const shippingWebhookWorker = createShippingWebhookWorker();
 const reservationExpiryWorker = createOrderReservationExpiryWorker();
+const loginCodeCleanupWorker = createLoginCodeCleanupWorker({ db: pool });
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[D'Helenas API] Running on port ${PORT}`);
     ensureInitialized();
@@ -187,6 +193,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     notificationWorker.start();
     shippingWebhookWorker.start();
     reservationExpiryWorker.start();
+    loginCodeCleanupWorker.start();
 });
 
 let shuttingDown = false;
@@ -199,6 +206,7 @@ async function shutdown(signal) {
         await notificationWorker.stop();
         await shippingWebhookWorker.stop();
         await reservationExpiryWorker.stop();
+        loginCodeCleanupWorker.stop();
         try { await pool.end(); } catch { /* pool may not have connected yet */ }
         process.exit(0);
     });

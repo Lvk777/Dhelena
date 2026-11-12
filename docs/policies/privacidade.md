@@ -1,16 +1,16 @@
 # Política de Privacidade
 
-> MINUTA PARA APROVAÇÃO — 13/10/2026. Não publicada. As notas finais são de revisão interna e não devem integrar o texto público.
-
 **D’Helenas Boutique — https://dhelenas.com**
+
+Última atualização: 30/10/2026.
 
 Esta política explica como tratamos dados pessoais na navegação, no cadastro, nas compras e no atendimento. O tratamento observa a Lei Geral de Proteção de Dados Pessoais (LGPD).
 
 ## 1. Quem responde pelo tratamento
 
-A responsável pelas decisões de tratamento relacionadas à loja é a pessoa jurídica que opera a D’Helenas Boutique. **Identificação pendente para publicação: razão social, CNPJ e endereço legal confirmados em fonte oficial.**
+A controladora dos dados tratados pela loja é **61.738.801 JULIANE APARECIDA SILVESTRE SOUSA**, CNPJ **61.738.801/0001-43**, com endereço cadastral na **Rua Shiela, 65, Casa 01, Parque São George, Cotia/SP, CEP 06708-100**.
 
-Nosso canal para questões de privacidade e exercício de direitos é **julianeassousa@outlook.com**. Também é possível iniciar atendimento pelo WhatsApp **(11) 93803-3499**, indicando que a solicitação trata de dados pessoais. Esses canais não significam que exista atendimento presencial.
+Nosso canal para questões de privacidade e exercício de direitos é **suporte@dhelenas.com**. O atendimento ocorre de segunda a sexta-feira, das 8h às 18h, com resposta inicial em até 1 dia útil. Também é possível iniciar o contato pelo WhatsApp **(11) 92718-9069**. A loja não oferece atendimento presencial.
 
 ## 2. Dados que podemos tratar
 
@@ -40,7 +40,9 @@ Compartilhamos apenas as informações necessárias à finalidade de cada servi�
 - **Mercado Pago:** processamento dos pagamentos e retorno da situação das transações, quando a cliente usa o checkout habilitado.
 - **Melhor Envio e transportadora escolhida:** cotação, contratação do transporte, entrega e acompanhamento, quando esses serviços são utilizados.
 - **ViaCEP:** consulta do CEP digitado para auxiliar o preenchimento do endereço. A consulta transmite o CEP e os dados técnicos da conexão; não envia nome, CPF ou pedido a esse serviço.
-- **Microsoft/Outlook e WhatsApp/Meta:** atendimento quando a cliente escolhe esses canais e envia uma mensagem. O acesso aos canais externos também está sujeito às respectivas políticas de privacidade.
+- **Resend:** envio dos e-mails de autenticação do Supabase e, quando autorizado e ativado, das comunicações transacionais de pedidos.
+- **Cloudflare:** serviços de rede e encaminhamento dos endereços institucionais da loja.
+- **WhatsApp/Meta:** atendimento quando a cliente escolhe esse canal e envia uma mensagem; a disponibilidade do canal deve corresponder ao contato publicado no site.
 
 Prestadores podem atuar como operadores ou controladores independentes, conforme o serviço e suas responsabilidades. Dados também poderão ser compartilhados para atender determinações legais ou de autoridades competentes, proteger direitos e resolver solicitações da cliente, dentro dos limites aplicáveis.
 
@@ -50,7 +52,7 @@ Integrações de envio automático de mensagens somente serão usadas após sua 
 
 Utilizamos armazenamento local e de sessão para autenticação, sacola, favoritos e funcionamento da interface. Apagar esses dados ou bloquear esse armazenamento pode encerrar a sessão ou remover escolhas salvas neste dispositivo. Preferências vinculadas à conta podem continuar no servidor.
 
-O rastreamento opcional de navegação não faz parte das funções indispensáveis à compra. Qualquer ativação futura de análise de navegação ou publicidade exigirá informação clara, definição da base legal e controles de escolha adequados antes da coleta. Não presumimos autorização para Google Analytics ou Meta Pixel por existir um campo de configuração no painel.
+O site possui registros técnicos de funcionamento e segurança. A coleta opcional de eventos de navegação depende da configuração publicada e deve ser informada de forma específica quando ativa. Ferramentas de publicidade ou análise de terceiros exigem informação clara, base legal adequada e controles aplicáveis antes da coleta. Um campo no painel não significa, por si só, que Google Analytics ou Meta Pixel estejam ativos.
 
 Links para redes sociais e serviços de pagamento ou atendimento levam a ambientes com práticas próprias. Esta política trata da operação da D’Helenas e não substitui as políticas desses serviços.
 
@@ -74,7 +76,7 @@ Mantenha seus meios de acesso protegidos e avise o atendimento se suspeitar de u
 
 Você pode solicitar confirmação de tratamento, acesso, correção, informações sobre compartilhamento, portabilidade nos termos da regulamentação, anonimização, bloqueio ou eliminação quando cabíveis, revogação do consentimento e informações sobre as consequências de não consentir. Também pode se opor ao tratamento nas hipóteses legais e pedir revisão de decisões tomadas unicamente por tratamento automatizado que afetem seus interesses.
 
-Envie a solicitação para julianeassousa@outlook.com. Poderemos pedir apenas elementos proporcionais para confirmar sua identidade e evitar entrega de dados a terceiros. O atendimento é gratuito e observará os prazos legais. Para confirmação e acesso, a LGPD prevê resposta simplificada imediata ou declaração completa em até 15 dias, conforme a modalidade aplicável.
+Envie a solicitação para suporte@dhelenas.com. Poderemos pedir apenas elementos proporcionais para confirmar sua identidade e evitar entrega de dados a terceiros. O atendimento é gratuito e observará os prazos legais. Para confirmação e acesso, a LGPD prevê resposta simplificada imediata ou declaração completa em até 15 dias, conforme a modalidade aplicável.
 
 Quando não pudermos atender integralmente ao pedido, informaremos as razões e os meios de prosseguir. Você também pode recorrer à ANPD e aos órgãos de defesa do consumidor.
 
@@ -87,14 +89,3 @@ A loja não é direcionada especificamente a crianças. Quando houver tratamento
 Alterações serão informadas nesta página, com a data de atualização. Mudanças relevantes de finalidade serão comunicadas e, quando necessário, dependerão de nova manifestação válida da pessoa titular.
 
 ---
-
-## Notas internas obrigatórias antes da aprovação
-
-- Completar a identificação legal do controlador; não inferir a razão social a partir do nome do remetente. Confirmar quem é responsável por atender o canal de privacidade e se é aplicável a obrigação de encarregado ou alguma dispensa regulamentar.
-- Supabase/Railway estão em uso. Mercado Pago está em TEST e Melhor Envio em Sandbox: descrevemos seus papéis para o lançamento, sem alegar homologação de produção. Resend e WhatsApp Cloud API estão pendentes e não foram apresentados como canais automáticos ativos. Nenhuma configuração foi alterada para elaborar esta minuta.
-- O frontend só emite analytics próprios com `VITE_ANALYTICS_ENABLED=true`; não há carregamento de GA/Meta Pixel encontrado no código. Confirmar o build de lançamento e manter coleta opcional desativada até revisão e controles adequados. O endpoint de analytics existir não autoriza ativar rastreamento.
-- Definir uma tabela operacional de retenção, responsáveis por exportação/eliminação e rotina de atendimento, sem inventar prazos uniformes para todas as classes de dados. Não existe promessa de botão automático de exclusão/exportação nesta minuta.
-- Conferir contratos, regiões e mecanismos de transferência internacional com os prestadores. Não declarar cláusulas contratuais implementadas ou certificações não comprovadas.
-- Homologar mensagens essenciais do Supabase Auth e pedidos antes da inauguração. Rever o inventário se os provedores mudarem.
-
-Fontes normativas e orientativas constam no README desta pasta. Esta minuta requer aprovação da responsável pela loja e validação das pendências operacionais acima; não é uma certificação de conformidade.

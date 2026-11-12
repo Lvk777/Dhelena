@@ -9,11 +9,56 @@ import { logSecurityEvent } from '../middleware/securityLog.js';
 import { recordLoginEvent } from './security.js';
 import { normalizeBirthDate, normalizeProfileInput } from '../lib/validation.js';
 import { authCapabilities } from '../lib/authCapabilities.js';
+import { adminEmailGateEnabled, createAdminEmailStepUp } from '../services/adminEmailStepUp.js';
 
 const router = Router();
 const isProduction = process.env.NODE_ENV === 'production';
 const codeService = createLoginCodeService({ db: pool });
-router.get('/capabilities', async (_req, res) => { res.json({ ...await authCapabilities(), email_code: loginCodeEnabled() }); });
+const adminEmailService = createAdminEmailStepUp({ db: pool });
+router.get('/capabilities', async (_req, res) => {
+    const status = await authCapabilities();
+    res.json({ ...status, email_code: loginCodeEnabled(),
+        passwordless_email_otp: status.available === true && adminEmailGateEnabled()
+            && process.env.PASSWORDLESS_EMAIL_OTP_ENABLED === 'true' });
+});
+
+function eligibleAdmin(req, res) {
+    const profile = req.adminEligibleProfile || req.user;
+    if (req.authProvider !== 'supabase' || !req.supabaseSession || profile?.role !== 'admin') {
+        res.status(403).json({ error: 'Verificação administrativa indisponível.' });
+        return null;
+    }
+    return profile;
+}
+router.get('/admin-step-up/status', auth, async (req, res, next) => {
+    try {
+        const profile = eligibleAdmin(req, res); if (!profile) return;
+        res.json({ enrolled: await adminEmailService.enrolled(req.supabaseSession, profile),
+            verified: adminEmailGateEnabled() ? req.adminStepUpVerified === true : false });
+    } catch (error) { next(error); }
+});
+router.post('/admin-step-up/setup', loginCodeLimiter, auth, async (req, res, next) => {
+    try {
+        const profile = eligibleAdmin(req, res); if (!profile) return;
+        res.json(await adminEmailService.setup(req.supabaseSession, profile, req.body?.bootstrap, req.body?.passphrase));
+    } catch (error) { next(error); }
+});
+router.post('/admin-step-up/start', loginCodeLimiter, auth, async (req, res, next) => {
+    try {
+        const profile = eligibleAdmin(req, res); if (!profile) return;
+        res.json(await adminEmailService.start(req.supabaseSession, profile, req.body?.passphrase));
+    } catch (error) { next(error); }
+});
+router.post('/admin-step-up/verify', loginCodeLimiter, auth, async (req, res, next) => {
+    try {
+        const profile = eligibleAdmin(req, res); if (!profile) return;
+        res.json(await adminEmailService.verify(req.supabaseSession, profile, req.body?.code));
+    } catch (error) { next(error); }
+});
+router.post('/admin-step-up/revoke', auth, async (req, res, next) => {
+    try { await adminEmailService.revoke(req.supabaseSession); res.json({ success: true }); }
+    catch (error) { next(error); }
+});
 
 // These routes accept an already verified Supabase identity, but deliberately
 // do not require an authorized profile: that is what the second factor unlocks.
@@ -112,7 +157,8 @@ router.post('/login', loginLimiter, async (req, res, next) => {
 // GET /api/auth/me
 router.get('/me', auth, async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'Não autenticado' });
-    res.json({ ...req.user, admin_mfa_required: req.user.role === 'admin' && adminAssuranceRequired(),
+    res.json({ ...req.user, admin_mfa_required: !adminEmailGateEnabled() && req.user.role === 'admin' && adminAssuranceRequired(),
+        admin_step_up_required: adminEmailGateEnabled() && !!req.adminEligibleProfile && !req.adminStepUpVerified,
         auth_aal: req.supabaseSession?.aal || 'aal1', email_change_supported: req.authProvider === 'supabase'
         && (req.supabaseUserId === req.user.id || req.user.identity_linked === true) });
 });

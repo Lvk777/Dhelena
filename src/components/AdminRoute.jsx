@@ -19,6 +19,9 @@ export default function AdminRoute({ children }) {
     }
 
     if (authError) return <main role="alert" className="p-8 text-center"><p>Não foi possível verificar sua permissão.</p><button className="btn-gold mt-4" onClick={() => checkUserAuth()}>Tentar novamente</button></main>;
+    if (user.admin_step_up_required) {
+        return <Navigate to="/minha-conta/verificacao-admin" state={{ from: location.pathname }} replace />;
+    }
     if (user.role !== "admin") {
         return <Navigate to="/minha-conta" replace />;
     }
