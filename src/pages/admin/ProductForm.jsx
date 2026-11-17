@@ -194,7 +194,10 @@ export default function ProductForm() {
     };
 
     const save = async (status) => {
-        if (!form.name.trim()) return;
+        if (!form.name.trim()) {
+            setSaveError("Informe o nome do produto antes de salvar.");
+            return;
+        }
         setSaveError("");
         setSaving(true);
         try {
@@ -375,7 +378,6 @@ export default function ProductForm() {
             case "review":
                 return (
                     <div className="max-w-3xl mx-auto space-y-6">
-                        {saveError && <p role="alert" className="p-3 border border-destructive text-error-ink text-sm">{saveError}</p>}
                         <div className="bg-muted/30 rounded-lg border border-border p-6 space-y-2">
                             <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-gold-ink mb-3">Resumo do Produto</h3>
                             <SummaryRow label="Nome" value={form.name || "—"} />
@@ -421,6 +423,7 @@ export default function ProductForm() {
                 draftLabel="Salvar rascunho"
                 onSaveDraft={(status) => save("draft")}
                 saving={saving}
+                saveError={saveError}
             >
                 {renderStep}
             </AdminWizard>

@@ -37,6 +37,7 @@ export default function AdminWizard({
     draftLabel = null,
     onSaveDraft = undefined,
     saving = false,
+    saveError = '',
     children,
 }) {
     const [currentStep, setCurrentStep] = useState(0);
@@ -167,6 +168,7 @@ export default function AdminWizard({
                             <span>{Object.values(stepErrors)[0]}</span>
                         </div>
                     )}
+                    {saveError && <p role="alert" className="mb-5 border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-error-ink">{saveError}</p>}
                     {typeof children === "function"
                         ? children(steps[currentStep], { currentStep, stepErrors, setStepErrors })
                         : children}

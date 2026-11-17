@@ -53,7 +53,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground flex items-center gap-2"><FileText className="w-4 h-4" /> Nota fiscal</h2>
         {loadError && <p role="alert" className="text-sm text-error-ink">{loadError}</p>}
         {error && <p role="alert" className="text-sm text-error-ink">{error}</p>}
-        {!document && !loadError ? <>
+        {!document ? !loadError && <>
             <p className="text-sm">Importe o XML autorizado da NF-e modelo 55 emitida no Nota Fiscal Fácil. A importação não emite outra nota nem altera o pedido.</p>
             <input ref={inputRef} type="file" accept=".xml,text/xml,application/xml" onChange={importFile} className="sr-only" aria-label="Arquivo XML da NF-e" />
             <button type="button" className="btn-outline text-xs inline-flex items-center gap-2 min-h-11" disabled={busy} onClick={() => inputRef.current?.click()}>

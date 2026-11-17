@@ -26,7 +26,7 @@ jobs:
         env:
           VITE_API_URL: https://api.dhelenas.com
       - run: npm run test:static
-      - run: npm run test:crop
+      - run: npm run test:admin
 
   backend:
     name: Backend tests
