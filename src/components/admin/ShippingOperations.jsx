@@ -3,7 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { formatBRL } from '@/data/products';
 import { safeShippingPrintUrl } from '../../../backend/src/lib/shipping.js';
 
-export default function ShippingOperations({ order, onChanged }) {
+export default function ShippingOperations({ order, fiscalDocument, onChanged }) {
     const [ready, setReady] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
     const [invoice, setInvoice] = useState(''), [printUrl, setPrintUrl] = useState(''), [confirm, setConfirm] = useState(false);
     const reload = () => base44.functions.invoke('shippingReadiness', { orderId: order.id }).then(setReady).catch(() => setReady(null));
@@ -12,7 +12,8 @@ export default function ShippingOperations({ order, onChanged }) {
         setBusy(true); setError('');
         try {
             const result = await base44.functions.invoke('generateShippingLabel', { orderId: order.id, action,
-                invoice_key: invoice || undefined, confirm_purchase: confirm,
+                invoice_key: ready?.environment === 'production' ? fiscalDocument?.status === 'verified' ? fiscalDocument.access_key : undefined : invoice || undefined,
+                confirm_purchase: confirm,
                 expected_price_cents: ready?.price != null ? Math.round(Number(ready.price) * 100) : undefined });
             if (result.print_url) setPrintUrl(result.print_url);
             setConfirm(false); await reload(); if(action !== 'print') onChanged?.();
@@ -42,11 +43,12 @@ export default function ShippingOperations({ order, onChanged }) {
                 {ready.fiscal_model && <p>Documento informado: modelo {ready.fiscal_model}, chave terminada em {ready.fiscal_key_last4}. Confira a correspondência com a venda.</p>}
                 {ready.rejection_fields?.length > 0 && <p role="alert" className="text-error-ink">Rejeição anterior: confira {ready.rejection_fields.join(', ')}. O envio permanece bloqueado até conciliação.</p>}
                 {!order.melhor_envio_shipment_id && <>
-                    <label className="block">Chave da NF-e modelo 55 {ready.environment === 'production' ? '(obrigatória)' : '(opcional em Sandbox)'}
-                        <input aria-label="Chave da NF-e modelo 55" value={invoice} onChange={e=>setInvoice(e.target.value.replace(/\D/g,'').slice(0,44))}
-                            className="block w-full admin-field p-3 mt-1" inputMode="numeric" />
-                    </label>
-                    <button className="btn-outline text-xs" disabled={busy || ['cart_inflight','cart_uncertain'].includes(state)} onClick={()=>run('prepare')}>Preparar envio (sem compra)</button>
+                    {ready.environment === 'production' ? <p>Chave fiscal: {fiscalDocument?.status === 'verified' ? fiscalDocument.access_key : 'importe e confira a NF-e acima antes de preparar o envio'}.</p> :
+                        <label className="block">Chave da NF-e modelo 55 (opcional em Sandbox)
+                            <input aria-label="Chave da NF-e modelo 55" value={invoice} onChange={e=>setInvoice(e.target.value.replace(/\D/g,'').slice(0,44))}
+                                className="block w-full admin-field p-3 mt-1" inputMode="numeric" />
+                        </label>}
+                    <button className="btn-outline text-xs" disabled={busy || ['cart_inflight','cart_uncertain'].includes(state) || ready.environment === 'production' && fiscalDocument?.status !== 'verified'} onClick={()=>run('prepare')}>Preparar envio (sem compra)</button>
                 </>}
                 {state === 'cart_created' && <>
                     <p>Envio no carrinho; etiqueta ainda não comprada. Custo: {ready.price == null ? 'consulte novamente' : formatBRL(Number(ready.price))}. Frete cobrado da cliente: {formatBRL(Number(ready.customer_shipping_cost || 0))}.</p>

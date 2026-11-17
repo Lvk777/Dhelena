@@ -1,5 +1,6 @@
 import OperationalRefund from '@/components/admin/OperationalRefund';
 import ShippingOperations from '@/components/admin/ShippingOperations';
+import FiscalDocumentPanel from '@/components/admin/FiscalDocumentPanel';
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Truck, Loader2, Copy, MapPin, QrCode, CreditCard, Banknote } from "lucide-react";
@@ -28,12 +29,16 @@ export default function AdminOrderDetail() {
     const [saving, setSaving] = useState(false);
     const [trackingInfo, setTrackingInfo] = useState(null);
     const [trackingLoading, setTrackingLoading] = useState(false);
+    const [fiscalDocument, setFiscalDocument] = useState(null);
+    const [fiscalLoadError, setFiscalLoadError] = useState('');
 
     const load = async () => {
         setLoading(true);
         try {
             const o = await base44.entities.Order.get(id);
             setOrder(o);
+            try { setFiscalDocument(await base44.functions.invoke('getFiscalDocument', { orderId: id })); setFiscalLoadError(''); }
+            catch { setFiscalDocument(null); setFiscalLoadError('Não foi possível consultar a nota fiscal deste pedido. Tente atualizar a página.'); }
             // Load timeline events
             try {
                 const evs = await base44.functions.invoke("getOrderEvents", { orderId: id });
@@ -148,6 +153,8 @@ export default function AdminOrderDetail() {
                     <AdminAfterSales order={order} onChanged={load} />
                     <OperationalRefund key={order.id} order={order} onChanged={load} />
 
+                    <FiscalDocumentPanel order={order} document={fiscalDocument} loadError={fiscalLoadError} onChanged={setFiscalDocument} />
+
                     {/* Delivery / Shipping */}
                     <div className="bg-background text-foreground p-5">
                         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4 flex items-center gap-2"><Truck className="w-4 h-4" strokeWidth={1.5} /> Entrega</h2>
@@ -160,7 +167,7 @@ export default function AdminOrderDetail() {
                             <InfoRow label="ID Melhor Envio" value={order.melhor_envio_shipment_id || "—"} />
                         </div>
 
-                        <ShippingOperations order={order} onChanged={load} />
+                        <ShippingOperations order={order} fiscalDocument={fiscalDocument} onChanged={load} />
                         {order.melhor_envio_shipment_id && <button onClick={fetchTracking} disabled={trackingLoading} className="btn-outline text-xs mt-3">
                             {trackingLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />} Acompanhar entrega
                         </button>}

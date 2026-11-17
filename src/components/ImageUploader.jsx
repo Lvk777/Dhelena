@@ -24,8 +24,12 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
     const [pendingFiles, setPendingFiles] = useState([]);
     const [cropIndex, setCropIndex] = useState(0);
     const inputRef = useRef(null);
+    const imagesRef = useRef(images);
+    const uploadRef = useRef(false);
+    imagesRef.current = images;
 
     const handleFiles = useCallback(async (fileList) => {
+        if (uploadRef.current || pendingFiles.length) return;
         setUploadError("");
         const files = Array.from(fileList);
         if (!files.length) return;
@@ -36,7 +40,7 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
             if (!v.valid) { setUploadError(v.error); return; }
         }
 
-        if (images.length + files.length > max) {
+        if (imagesRef.current.length + files.length > max) {
             setUploadError(`Máximo de ${max} fotos.`);
             return;
         }
@@ -44,31 +48,30 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
         // Queue files for cropping one by one
         setPendingFiles(files);
         setCropIndex(0);
-    }, [images.length, max]);
+    }, [max, pendingFiles.length]);
 
     const handleCropConfirm = useCallback(async (file, previewUrl) => {
+        if (uploadRef.current) return;
+        uploadRef.current = true;
         setUploading(true);
         try {
             const folder = PRESET_FOLDERS.product_image || "product";
             const { file_url } = await base44.integrations.Core.UploadFile({ file, folder });
-            onChange([...images, file_url]);
+            const nextImages = [...imagesRef.current, file_url];
+            imagesRef.current = nextImages;
+            onChange(nextImages);
+            const nextIndex = cropIndex + 1;
+            if (nextIndex < pendingFiles.length) setCropIndex(nextIndex);
+            else { setPendingFiles([]); setCropIndex(0); }
         } catch (e) {
-            console.error("[ImageUploader] Upload error:", e);
-            setUploadError("Erro ao enviar arquivo. Tente novamente.");
+            setUploadError("Não foi possível enviar a foto. Tente novamente.");
+            throw e;
         } finally {
             setUploading(false);
             URL.revokeObjectURL(previewUrl);
-
-            // Move to next file or finish
-            const nextIndex = cropIndex + 1;
-            if (nextIndex < pendingFiles.length) {
-                setCropIndex(nextIndex);
-            } else {
-                setPendingFiles([]);
-                setCropIndex(0);
-            }
+            uploadRef.current = false;
         }
-    }, [images, onChange, cropIndex, pendingFiles.length]);
+    }, [onChange, cropIndex, pendingFiles.length]);
 
     const handleCropCancel = useCallback(() => {
         setPendingFiles([]);
@@ -101,7 +104,7 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
-                onClick={() => !uploading && inputRef.current?.click()}
+                onClick={() => !uploading && !pendingFiles.length && inputRef.current?.click()}
                 className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${dragOver ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold))]/5" : "border-border hover:border-foreground/30"} ${uploading ? "pointer-events-none opacity-60" : ""}`}
                 style={{ minHeight: "120px", maxHeight: "160px" }}
             >
@@ -179,7 +182,7 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
                     {images.length < max && (
                         <button
                             type="button"
-                            onClick={() => inputRef.current?.click()}
+                    onClick={() => !pendingFiles.length && inputRef.current?.click()}
                             className="aspect-[3/4] border-2 border-dashed border-border rounded flex flex-col items-center justify-center hover:border-foreground/30 transition-colors"
                         >
                             <ImageIcon className="w-6 h-6 text-muted-foreground mb-1" strokeWidth={1} />
@@ -196,6 +199,7 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
             {/* Cropper modal for multi-image upload */}
             {pendingFiles.length > 0 && pendingFiles[cropIndex] && (
                 <CropperModal
+                    key={cropIndex}
                     imageFile={pendingFiles[cropIndex]}
                     preset={PRODUCT_PRESET}
                     title={`Ajustar foto ${cropIndex + 1} de ${pendingFiles.length}`}

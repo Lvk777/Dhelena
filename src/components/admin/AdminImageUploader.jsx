@@ -70,9 +70,9 @@ export default function AdminImageUploader({
             onChange(file_url);
             setStatus(STATES.DONE);
         } catch (e) {
-            console.error("[AdminImageUploader] Upload error:", e);
             setErrorMsg("Não foi possível enviar a imagem. Tente novamente.");
             setStatus(STATES.ERROR);
+            throw e;
         }
     }, [onChange, preset]);
 
@@ -104,6 +104,7 @@ export default function AdminImageUploader({
     }, []);
 
     const handleCropConfirm = useCallback(async (file, previewUrl, dimensions) => {
+        await startUpload(file);
         setShowCropper(false);
         setPendingFile(null);
         setStatusUrl(previewUrl);
@@ -113,7 +114,6 @@ export default function AdminImageUploader({
             height: dimensions.height,
             size: file.size,
         }));
-        await startUpload(file);
     }, [startUpload, setStatusUrl]);
 
     const handleCropCancel = useCallback(() => {

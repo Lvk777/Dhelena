@@ -80,7 +80,13 @@ export function createShippingOperations({ db = pool, provider = melhorEnvio, en
                 if (['cart_inflight', 'cart_uncertain'].includes(state)) throw error('Preparação com resultado incerto. Confira o painel do Melhor Envio antes de outra tentativa.');
                 const settings = await client.query("SELECT key,value FROM settings WHERE key IN ('address','shipping_sender')");
                 const values = Object.fromEntries(settings.rows.map(r => [r.key, r.value]));
-                const request = shippingPreparation(order, values.address || {}, values.shipping_sender || {}, input.invoice_key);
+                let invoiceKey = input.invoice_key;
+                if (mode === 'production') {
+                    const fiscal = await client.query("SELECT access_key FROM fiscal_documents WHERE order_id=$1 AND status='verified'", [orderId]);
+                    if (!fiscal.rows[0]) throw error('Importe e confira a NF-e com o pedido e a fonte oficial antes de preparar o envio.', 422);
+                    invoiceKey = fiscal.rows[0].access_key.trim();
+                }
+                const request = shippingPreparation(order, values.address || {}, values.shipping_sender || {}, invoiceKey);
                 preparationRecord = { ...operation, attempted_at: new Date().toISOString(),
                     fiscal_model: request.invoiceKey ? fiscalKeyModel(request.invoiceKey) : null,
                     fiscal_key_last4: request.invoiceKey?.slice(-4) || null,

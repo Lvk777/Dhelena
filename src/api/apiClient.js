@@ -40,7 +40,7 @@ async function apiFetch(path, options = {}) {
         identity = data?.session?.user?.id || null;
         setToken(token);
     }
-    const headers = { 'Content-Type': 'application/json', ...options.headers };
+    const headers = { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...options.headers };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const res = await fetch(apiUrl(API_BASE, path), { ...options, headers });
@@ -370,6 +370,17 @@ const functions = {
                 return apiFetch(`/orders/${args.orderId}/shipping/label`, { method: 'POST', body: JSON.stringify(args) });
             case 'shippingReadiness':
                 return apiFetch(`/orders/${args.orderId}/shipping/readiness`);
+            case 'getFiscalDocument':
+                return apiFetch(`/orders/${args.orderId}/fiscal`);
+            case 'importFiscalXml': {
+                const form = new FormData();
+                form.append('file', args.file);
+                return apiFetch(`/orders/${args.orderId}/fiscal`, { method: 'POST', body: form });
+            }
+            case 'verifyFiscalDocument':
+                return apiFetch(`/orders/${args.orderId}/fiscal/verify`, { method: 'POST', body: JSON.stringify(args.verification) });
+            case 'downloadFiscalXml':
+                return apiFetch(`/orders/${args.orderId}/fiscal/download`);
             case 'getTrackingInfo':
                 return apiFetch(`/orders/${args.orderId}/tracking`);
             // ─── Shipping quote ───

@@ -16,7 +16,7 @@ const orderFixture={id:'fixture',shipping_quote_id:'1',payment_status:'approved'
     subtotal:100,discount:5,shipping_address:{...origin},snapshot:{shipping_environment:'sandbox',customer:{...sender,cpf:sender.document},
         items:[{product_name:'Peça',quantity:1,unit_price:100}],shipping_packages:[{weight:0.3,height:3,width:20,length:30}]}};
 function fixture(){
-    let order=structuredClone(orderFixture),locked=false,backup;const calls=[];
+    let order=structuredClone(orderFixture),locked=false,backup,fiscalKeyValue=null;const calls=[];
     const query=async(sql,args=[])=>{
         if(sql==='BEGIN'){backup=structuredClone(order);return {rows:[]};}
         if(sql==='ROLLBACK'){order=backup;return {rows:[]};}
@@ -26,18 +26,19 @@ function fixture(){
         if(sql.includes('to_regclass'))return {rows:[{relation:null}]};
         if(sql.includes('FROM orders'))return {rows:[structuredClone(order)]};
         if(sql.includes('FROM settings'))return {rows:[{key:'address',value:origin},{key:'shipping_sender',value:sender}]};
+        if(sql.includes('FROM fiscal_documents'))return {rows:fiscalKeyValue?[{access_key:fiscalKeyValue}]:[]};
         if(sql.startsWith('UPDATE orders')){order.shipping_status=args[1];order.melhor_envio_shipment_id=args[2]||order.melhor_envio_shipment_id;
             order.snapshot.shipping_operation=JSON.parse(args[3]);return {rows:[]};}
         if(sql.startsWith('INSERT INTO order_events') || sql.startsWith('INSERT INTO audit_logs'))return {rows:[]};
         throw new Error('Unexpected mock SQL:'+sql);
     };
-    const provider={addShipmentToCart:async request=>{calls.push(['cart',request.environment,request.to.complement]);return {shipment_id:'shipping-fixture',price:'18.90'};},
+    const provider={addShipmentToCart:async request=>{calls.push(['cart',request.environment,request.to.complement,request.invoiceKey]);return {shipment_id:'shipping-fixture',price:'18.90'};},
         getShipment:async(id,mode)=>{calls.push(['read',mode]);return {shipment_id:id,status:'pending',price:'18.90'};},
         checkoutShipments:async(ids,mode)=>calls.push(['checkout',mode]),generateShipments:async(ids,mode)=>calls.push(['generate',mode]),
         printShipments:async(ids,mode)=>{calls.push(['print',mode]);return {print_url:'https://sandbox.melhorenvio.com.br/imprimir/fixture'};},
         getTracking:async(id,mode)=>{calls.push(['tracking',mode]);return {status:'released',tracking_code:'MOCK'};}};
     const db={query,connect:async()=>({query,release(){}})},env={SHIPPING_LABEL_PURCHASE_ENABLED:'true'};
-    return {operate:createShippingOperations({db,provider,env}),provider,env,calls,get order(){return order;}};
+    return {operate:createShippingOperations({db,provider,env}),provider,env,calls,setFiscal(value){fiscalKeyValue=value;},get order(){return order;}};
 }
 test('preparation and retries never buy a label; destination complement is preserved',async()=>{
     const f=fixture();f.order.shipping_address.complement='Apto fixture';await f.operate('fixture','prepare');await f.operate('fixture','prepare');
@@ -98,6 +99,17 @@ test('production requires a real fiscal key and unsupported multiple volumes fai
     assert.throws(()=>shippingPreparation(order,origin,sender,'1'.repeat(44)));
     assert.equal(shippingPreparation(order,origin,sender,fiscalKey('55')).invoiceKey.length,44);
     order.snapshot.shipping_packages.push(order.snapshot.shipping_packages[0]);assert.throws(()=>shippingPreparation(order,origin,sender,fiscalKey('55')));
+});
+test('production preparation uses only the verified imported key and keeps uncertain carts blocked',async()=>{
+    const f=fixture();f.order.snapshot.shipping_environment='production';
+    await assert.rejects(f.operate('fixture','prepare',{invoice_key:fiscalKey('55')}),/Importe e confira/);
+    assert.equal(f.calls.length,0);
+    f.setFiscal(fiscalKey('55'));
+    await f.operate('fixture','prepare',{invoice_key:fiscalKey('65')});
+    assert.equal(f.calls[0][3],fiscalKey('55'));
+    const g=fixture();g.order.snapshot.shipping_environment='production';g.order.shipping_status='cart_inflight';g.setFiscal(fiscalKey('55'));
+    await assert.rejects(g.operate('fixture','prepare'),/resultado incerto/);
+    assert.equal(g.calls.length,0);
 });
 test('SEDEX validates actual closed package in cm and kg before contacting provider',()=>{
     const order=structuredClone(orderFixture);order.shipping_quote_id='2';

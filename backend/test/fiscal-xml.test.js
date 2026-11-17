@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { parseAuthorizedNfe, reconcileNfe, validNfeKey } from '../src/lib/fiscalXml.js';
+
+function accessKey() {
+    const prefix = '3526116173880100014355026161110001394826583';
+    for (let digit = 0; digit <= 9; digit += 1) if (validNfeKey(prefix + digit)) return prefix + digit;
+    throw new Error('No check digit');
+}
+const key = accessKey();
+const xml = ({ model = '55', status = '100', keyValue = key, freight = '9.98', products = '30.00', total = '39.98' } = {}) => `<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe"><NFe><infNFe Id="NFe${keyValue}"><ide><cUF>35</cUF><mod>${model}</mod><tpAmb>1</tpAmb><nNF>161110001</nNF><serie>026</serie><tpEmis>3</tpEmis><cNF>94826583</cNF><dhEmi>2026-11-16T12:00:00-03:00</dhEmi></ide><emit><CNPJ>61738801000143</CNPJ><xNome>Dhelenas</xNome></emit><dest><CPF>12345678909</CPF><xNome>Cliente</xNome></dest><det><prod><cProd>SKU1</cProd><xProd>Shorts Angel Marfim P</xProd><qCom>1</qCom><vUnCom>${products}</vUnCom><vProd>${products}</vProd></prod></det><total><ICMSTot><vProd>${products}</vProd><vFrete>${freight}</vFrete><vDesc>0.00</vDesc><vNF>${total}</vNF></ICMSTot></total></infNFe><Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo/></Signature></NFe><protNFe><infProt><chNFe>${keyValue}</chNFe><cStat>${status}</cStat><nProt>235260655386875</nProt><dhRecbto>2026-11-16T12:01:00-03:00</dhRecbto></infProt></protNFe></nfeProc>`;
+
+test('accepts the structural authorization fields but does not claim official status', () => {
+    const parsed = parseAuthorizedNfe(Buffer.from(xml()));
+    assert.equal(parsed.key, key);
+    assert.equal(parsed.protocol, '235260655386875');
+    assert.equal(parsed.shippingCents, 998);
+    const order = { subtotal: 30, discount: 0, shipping_cost: 9.98, total: 39.98,
+        snapshot: { customer: { cpf: '123.456.789-09', name: 'Cliente' } } };
+    const items = [{ product_sku: 'SKU1', product_name: 'Shorts Angel Marfim P', quantity: 1, subtotal: 30 }];
+    assert.deepEqual(reconcileNfe(parsed, order, items, '61.738.801/0001-43'), []);
+    assert.deepEqual(reconcileNfe(parsed, order, [{ product_name: 'Shorts Angel', color_name: 'Marfim', size: 'P', quantity: 1, subtotal: 30 }], '61738801000143'), []);
+    assert.deepEqual(reconcileNfe(parseAuthorizedNfe(Buffer.from(xml({ freight: '0.00', products: '39.98' }))), order, items, '61738801000143'), ['Valor dos produtos', 'Subtotal das mercadorias', 'Frete']);
+});
+
+test('rejects unsafe, malformed, inconsistent or non-authorized XML', () => {
+    for (const input of [xml({ model: '65' }), xml({ status: '110' }), xml({ keyValue: key.slice(0, 43) + (key[43] === '0' ? '1' : '0') }),
+        '<!DOCTYPE a [<!ENTITY x "unsafe">]>' + xml(), '<nfeProc><NFe></nfeProc>']) {
+        assert.throws(() => parseAuthorizedNfe(Buffer.from(input)));
+    }
+});
