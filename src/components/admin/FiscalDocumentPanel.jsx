@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { FileText, Upload, Download, ExternalLink } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { formatBRL } from '@/data/products';
+import ManualFiscalForm from './ManualFiscalForm';
 
 const OFFICIAL_PORTALS = {
     national: 'https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx',
@@ -17,6 +18,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
     const [source, setSource] = useState('national');
     const [confirmed, setConfirmed] = useState(false);
     const [contentMatched, setContentMatched] = useState(false);
+    const [manualOpen, setManualOpen] = useState(false);
 
     const importFile = async event => {
         const file = event.target.files?.[0];
@@ -56,12 +58,19 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
         {loadError && <p role="alert" className="text-sm text-error-ink">{loadError}</p>}
         {error && <p role="alert" className="text-sm text-error-ink">{error}</p>}
         {!document ? !loadError && <>
-            <p className="text-sm">Importe o XML autorizado da NF-e modelo 55 emitida no Nota Fiscal Fácil. A importação não emite outra nota nem altera o pedido.</p>
+            <p className="text-sm">Cadastre a NF-e modelo 55 já emitida no Nota Fiscal Fácil. Nenhuma opção emite uma nova nota ou altera o pedido.</p>
             <input ref={inputRef} type="file" accept=".xml,text/xml,application/xml" onChange={importFile} className="sr-only" aria-label="Arquivo XML da NF-e" />
-            <button type="button" className="btn-outline text-xs inline-flex items-center gap-2 min-h-11" disabled={busy} onClick={() => inputRef.current?.click()}>
-                <Upload className="w-4 h-4" /> {busy ? 'Importando...' : 'Importar nota fiscal'}
-            </button>
+            <div className="flex flex-wrap gap-2">
+                <button type="button" className="btn-outline text-xs inline-flex items-center gap-2 min-h-11" disabled={busy} onClick={() => inputRef.current?.click()}>
+                    <Upload className="w-4 h-4" /> {busy ? 'Importando...' : 'Importar XML'}
+                </button>
+                <button type="button" className="btn-outline text-xs min-h-11" disabled={busy} aria-expanded={manualOpen}
+                    onClick={() => setManualOpen(value => !value)}>Preencher manualmente</button>
+            </div>
+            {manualOpen && <ManualFiscalForm orderId={order.id} onSaved={value => { setManualOpen(false); onChanged(value); }}
+                onCancel={() => setManualOpen(false)} />}
         </> : <>
+            <p className="text-xs font-medium">Origem: {document.origin === 'manual' ? 'Preenchimento manual' : 'XML importado'}{document.created_at && ` · cadastrado em ${new Date(document.created_at).toLocaleString('pt-BR')}`}</p>
             <p className="text-sm font-medium">NF-e {document.data.number} · série {document.data.series} · modelo 55</p>
             <p className="text-xs break-all">Chave: {document.access_key}</p>
             <p className="text-xs">Protocolo: {document.data.protocol} · Emissão: {new Date(document.data.issuedAt).toLocaleString('pt-BR')}</p>
@@ -73,9 +82,9 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
                 <p className="font-medium">Divergência com o pedido. Associação e uso no Melhor Envio bloqueados.</p>
                 <p>Conferir com a administração e a contabilidade: {document.differences.join(', ')}.</p>
             </div> : document.status === 'verified' ? <p role="status" className="text-sm">Conferência manual em fonte oficial registrada em {new Date(document.official_checked_at).toLocaleString('pt-BR')}. Chave liberada para a preparação do envio, sujeita às demais proteções.</p>
-                : <p role="status" className="text-sm">XML e pedido conferem. Falta confirmar a situação atual da NF-e no portal oficial.</p>}
+                : <p role="status" className="text-sm">Dados cadastrados e pedido conferem. Falta confirmar a situação atual da NF-e no portal oficial.</p>}
             {document.status === 'pending_official' && <div className="border border-border p-3 space-y-3 text-sm">
-                <p>Abra o portal oficial e compare a chave, o protocolo, o emitente, o destinatário, os produtos, as quantidades, os valores e o frete com esta nota. Confirme a autorização atual e a ausência de cancelamento. O XML por si só não comprova autenticidade ou situação fiscal.</p>
+                <p>Abra o portal oficial e compare a chave, o protocolo, o emitente, o destinatário, os produtos, as quantidades, os valores e o frete com esta nota. Confirme a autorização atual e a ausência de cancelamento. O cadastro por XML ou manual não comprova autenticidade ou situação fiscal.</p>
                 <label className="block">Portal consultado
                     <select className="admin-field block w-full p-2 mt-1" value={source} onChange={event => setSource(event.target.value)}>
                         <option value="national">Portal Nacional da NF-e</option><option value="svrs">Portal SVRS</option>
@@ -88,7 +97,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
                 <label className="flex gap-2 items-start"><input type="checkbox" checked={contentMatched} onChange={event => setContentMatched(event.target.checked)} className="mt-1" />Comparei no documento oficial emitente, destinatário, produtos, quantidades, mercadorias, frete e total; todos correspondem aos dados exibidos e ao pedido.</label>
                 <button type="button" className="btn-outline min-h-11 text-xs" disabled={busy || !confirmed || !contentMatched || key.length !== 44 || protocol.length !== 15} onClick={verify}>Registrar conferência oficial</button>
             </div>}
-            {document.status === 'verified' && <button type="button" className="btn-outline text-xs inline-flex items-center gap-2 min-h-11" disabled={busy} onClick={download}><Download className="w-4 h-4" /> Baixar XML autorizado</button>}
+            {document.status === 'verified' && document.origin !== 'manual' && <button type="button" className="btn-outline text-xs inline-flex items-center gap-2 min-h-11" disabled={busy} onClick={download}><Download className="w-4 h-4" /> Baixar XML autorizado</button>}
         </>}
     </section>;
 }

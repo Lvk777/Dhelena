@@ -377,6 +377,8 @@ const functions = {
                 form.append('file', args.file);
                 return apiFetch(`/orders/${args.orderId}/fiscal`, { method: 'POST', body: form });
             }
+            case 'recordManualFiscalDocument':
+                return apiFetch(`/orders/${args.orderId}/fiscal/manual`, { method: 'POST', body: JSON.stringify(args.data) });
             case 'verifyFiscalDocument':
                 return apiFetch(`/orders/${args.orderId}/fiscal/verify`, { method: 'POST', body: JSON.stringify(args.verification) });
             case 'downloadFiscalXml':

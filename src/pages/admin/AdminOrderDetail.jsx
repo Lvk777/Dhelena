@@ -86,6 +86,9 @@ export default function AdminOrderDetail() {
     const customer = snapshot.customer || {};
     const shippingAddress = order.shipping_address || snapshot.shipping_address || {};
     const isPaid = order.payment_status === "approved";
+    const uncertainPayment = order.payment_status === 'pending' && !!order.payment_attempt_started_at && !order.mercado_pago_order_id;
+    const uncertainShipping = ['cart_inflight', 'cart_uncertain', 'purchase_inflight', 'purchase_uncertain'].includes(order.shipping_status);
+    const fiscalDifferences = fiscalDocument?.differences?.length > 0;
 
     const PaymentIcon = order.payment_method === "pix" ? QrCode : order.payment_method === "debito" ? Banknote : CreditCard;
 
@@ -107,6 +110,16 @@ export default function AdminOrderDetail() {
                             .map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                     </select>
                 </div>
+            </div>
+
+            <div className="space-y-2 mb-5" aria-label="Pendências críticas do pedido">
+                {uncertainPayment && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Pagamento com tentativa inconclusiva. Concilie no Mercado Pago antes de liberar reserva, cancelar ou repetir a cobrança.</p>}
+                {uncertainShipping && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Expedição com resultado externo pendente ({order.shipping_status}). Confira o Melhor Envio antes de preparar ou comprar outra etiqueta.</p>}
+                {fiscalDifferences && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Divergência fiscal: {fiscalDocument.differences.join(', ')}. Chave bloqueada para o Melhor Envio.</p>}
+                {fiscalXmlImportEnabled && isPaid && order.shipping_method === 'melhor_envio' && !fiscalDocument && !fiscalLoadError &&
+                    <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">NF-e ainda não cadastrada. Importe o XML ou preencha os dados manualmente e confira a fonte oficial antes de usar a chave no Melhor Envio.</p>}
+                {fiscalDocument?.status === 'pending_official' && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">NF-e ainda sem conferência administrativa em fonte oficial. Chave fiscal bloqueada.</p>}
+                {fiscalLoadError && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Não foi possível consultar a situação fiscal. A preparação do envio permanece bloqueada.</p>}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -151,17 +164,25 @@ export default function AdminOrderDetail() {
                         </div>
                     </div>
 
-                    {snapshot.payment_context?.mode === 'test' &&
-                        <PaymentReconciliationPreview key={order.id} order={order} />}
+                    <OperationalPanel title="Conciliação de pagamento" badge={uncertainPayment ? 'Pendente' : null}>
+                        {snapshot.payment_context?.mode === 'test' ?
+                            <PaymentReconciliationPreview key={order.id} order={order} /> :
+                            <p className="text-sm text-muted-foreground">Consulte a situação financeira no provedor antes de qualquer regularização. Nenhuma consulta desta seção movimenta pagamentos.</p>}
+                    </OperationalPanel>
 
-                    <AdminAfterSales order={order} onChanged={load} />
-                    <OperationalRefund key={order.id} order={order} onChanged={load} />
+                    <OperationalPanel title="Trocas e devoluções">
+                        <AdminAfterSales order={order} onChanged={load} view="returns" />
+                    </OperationalPanel>
+                    <OperationalPanel title="Reembolso e estorno">
+                        <AdminAfterSales order={order} onChanged={load} view="refunds" />
+                        <OperationalRefund key={order.id} order={order} onChanged={load} />
+                    </OperationalPanel>
 
                     {fiscalXmlImportEnabled && <FiscalDocumentPanel order={order} document={fiscalDocument} loadError={fiscalLoadError} onChanged={setFiscalDocument} />}
 
                     {/* Delivery / Shipping */}
-                    <div className="bg-background text-foreground p-5">
-                        <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4 flex items-center gap-2"><Truck className="w-4 h-4" strokeWidth={1.5} /> Entrega</h2>
+                    <OperationalPanel title="Expedição e etiquetas" badge={uncertainShipping ? 'Pendente' : null}>
+                        <h3 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4 flex items-center gap-2"><Truck className="w-4 h-4" strokeWidth={1.5} /> Entrega</h3>
                         <div className="grid sm:grid-cols-2 gap-3 text-sm">
                             <InfoRow label="Transportadora" value={order.shipping_carrier || snapshot.shipping_carrier || "—"} />
                             <InfoRow label="Serviço" value={order.shipping_service_name || snapshot.shipping_service_name || SHIPPING_LABELS[order.shipping_method] || "—"} />
@@ -189,14 +210,13 @@ export default function AdminOrderDetail() {
                             </div>
                         )}
                         {trackingInfo?.error && <p className="text-xs text-error-ink mt-2">{trackingInfo.error}</p>}
-                    </div>
+                    </OperationalPanel>
 
                     {/* Timeline */}
-                    {events.length > 0 && (
-                        <div className="bg-background text-foreground p-5">
-                        <OrderTimeline events={events} paymentStatus={order.payment_status} />
-                        </div>
-                    )}
+                    <OperationalPanel title="Histórico do pedido">
+                        {events.length > 0 ? <OrderTimeline events={events} paymentStatus={order.payment_status} /> :
+                            <p className="text-sm text-muted-foreground">Nenhum evento disponível.</p>}
+                    </OperationalPanel>
                 </div>
 
                 {/* right: customer + address */}
@@ -236,6 +256,19 @@ export default function AdminOrderDetail() {
             </div>
         </div>
     );
+}
+
+function OperationalPanel({ title, badge = null, children }) {
+    return <details className="bg-background text-foreground group">
+        <summary className="min-h-11 p-5 flex items-center justify-between gap-3 cursor-pointer list-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[hsl(var(--gold))] [&::-webkit-details-marker]:hidden">
+            <span className="text-[11px] uppercase tracking-[0.18em] font-medium">{title}</span>
+            <span className="flex items-center gap-2 text-xs">
+                {badge && <span className="text-warning-ink font-semibold">{badge}</span>}
+                <span aria-hidden="true" className="text-xl leading-none group-open:rotate-45 transition-transform">+</span>
+            </span>
+        </summary>
+        <div className="border-t border-border p-5 min-w-0 [overflow-wrap:anywhere]">{children}</div>
+    </details>;
 }
 
 function InfoRow({ label, value }) {

@@ -12,7 +12,7 @@ const RETURN_NEXT = {
 };
 const showDate = value => value ? new Date(value).toLocaleString('pt-BR') : '—';
 
-export default function AdminAfterSales({ order, onChanged }) {
+export default function AdminAfterSales({ order, onChanged, view = 'all' }) {
     const dialogs = useBoutiqueDialogs();
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
@@ -124,7 +124,7 @@ export default function AdminAfterSales({ order, onChanged }) {
             {error && <p role="alert" className="text-xs text-error-ink mb-3">{error}</p>}
             {!data ? <p className="text-xs text-muted-foreground">Histórico de pós-venda indisponível.</p> : <div className="space-y-5 text-sm">
                 {!data.physical_schema_ready && <p role="status" className="text-xs text-warning-ink">Devoluções físicas aguardam a migração 013 do banco. O histórico continua disponível para consulta.</p>}
-                <div>
+                {view !== 'returns' && <div>
                     <h3 className="font-medium mb-2">Cancelamento</h3>
                     {order.status === 'cancelado' ? <p>Pedido cancelado.</p>
                         : SHIPPED.has(order.status) ? <p className="text-muted-foreground">Pedido enviado ou entregue: use devolução física, não cancelamento.</p>
@@ -134,9 +134,9 @@ export default function AdminAfterSales({ order, onChanged }) {
                                     || (!!order.mercado_pago_order_id && !data.pending_cancellation_enabled)} onClick={cancel}>Cancelar pedido</button>}
                     {!!order.mercado_pago_order_id && !data.pending_cancellation_enabled && order.payment_status === 'pending'
                         && <p className="text-xs text-muted-foreground mt-1">Cancelamento no provedor desabilitado até validação operacional.</p>}
-                </div>
+                </div>}
 
-                <div className="border-t border-border pt-4">
+                {view !== 'refunds' && <div className="border-t border-border pt-4">
                     <h3 className="font-medium mb-2">Devoluções físicas</h3>
                     {(data.returns || []).map(entry => <div key={entry.id} className="border border-border p-3 mb-2 space-y-2">
                         <p><span className="font-medium">{entry.status.replaceAll('_', ' ')}</span> · {entry.reason}</p>
@@ -176,10 +176,11 @@ export default function AdminAfterSales({ order, onChanged }) {
                             onClick={() => advance(entry, status)}>{status.replaceAll('_', ' ')}</button>)}</div>
                     </div>)}
                     {!data.returns?.length && <p className="text-xs text-muted-foreground">Nenhuma devolução solicitada.</p>}
-                </div>
+                </div>}
 
                 <div className="border-t border-border pt-4 space-y-2">
-                    <h3 className="font-medium">Nova solicitação / reembolso</h3>
+                    {view !== 'refunds' && <>
+                    <h3 className="font-medium">Nova solicitação de devolução</h3>
                     <textarea className="w-full admin-field p-2 text-sm" placeholder="Motivo (obrigatório)" value={reason} maxLength={500}
                         onChange={event => setReason(event.target.value)} />
                     <div className="flex flex-wrap gap-2">
@@ -192,6 +193,13 @@ export default function AdminAfterSales({ order, onChanged }) {
                             || !SHIPPED.has(order.status)} onClick={submitReturn}>Solicitar devolução</button>
                     </div>
                     {order.order_number === 'DH-2026-000006' && <p className="text-xs text-muted-foreground">Pedido preservado como evidência da homologação financeira.</p>}
+                    </>}
+                    {view !== 'returns' && <>
+                    {view === 'refunds' && !order.snapshot?.payment_context && ['approved', 'partially_refunded'].includes(order.payment_status) &&
+                        <label className="block text-sm">Motivo do reembolso
+                            <textarea className="block w-full admin-field p-2 mt-1" value={reason} maxLength={500}
+                                onChange={event => setReason(event.target.value)} />
+                        </label>}
                     {!order.snapshot?.payment_context && ['approved', 'partially_refunded'].includes(order.payment_status) && <div className="space-y-2 pt-2">
                         <div className="border border-border p-3 space-y-2" aria-label="Prévia de reembolso do saldo restante">
                             <h4 className="font-medium">Prévia do saldo restante · Mercado Pago TEST</h4>
@@ -218,9 +226,10 @@ export default function AdminAfterSales({ order, onChanged }) {
                         <button className="btn-outline text-xs" disabled={busy || !refundPreview?.safe_to_refund_remaining} onClick={submitRefund}>Solicitar reembolso do saldo MP TEST</button>
                     </div>}
                     {!data.refunds_enabled && <p className="text-xs text-muted-foreground">Reembolsos financeiros desabilitados até validação operacional.</p>}
+                    </>}
                 </div>
 
-                <div className="border-t border-border pt-4">
+                {view !== 'returns' && <div className="border-t border-border pt-4">
                     <h3 className="font-medium mb-2">Reembolsos</h3>
                     {(data.refunds || []).map(entry => <div key={entry.id} className="text-xs py-2 border-b border-border">
                         {entry.kind === 'full' ? 'Total' : entry.kind === 'remaining' ? 'Saldo restante' : 'Parcial'} · {formatBRL(Number(entry.amount))} · {entry.status}
@@ -229,7 +238,7 @@ export default function AdminAfterSales({ order, onChanged }) {
                             onClick={() => run(() => base44.functions.invoke(order.snapshot?.payment_context ? 'operationalRefundReconcile' : 'reconcileRefund', { orderId: order.id, refundId: entry.id }))}>Consultar MP</button>}
                     </div>)}
                     {!data.refunds?.length && <p className="text-xs text-muted-foreground">Nenhum reembolso.</p>}
-                </div>
+                </div>}
             </div>}
         </section>
     );

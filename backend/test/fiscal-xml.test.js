@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAuthorizedNfe, reconcileNfe, validNfeKey } from '../src/lib/fiscalXml.js';
+import { parseAuthorizedNfe, parseManualNfe, reconcileNfe, validNfeKey } from '../src/lib/fiscalXml.js';
 import { fiscalXmlImportEnabled, requireFiscalXmlImport, validateFiscalVerification } from '../src/routes/fiscalDocuments.js';
 
 function accessKey() {
@@ -11,6 +11,36 @@ function accessKey() {
 const key = accessKey();
 const xml = ({ model = '55', status = '100', keyValue = key, freight = '9.98', products = '30.00', total = '39.98' } = {}) => `<?xml version="1.0" encoding="UTF-8"?>
 <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe"><NFe><infNFe Id="NFe${keyValue}"><ide><cUF>35</cUF><mod>${model}</mod><tpAmb>1</tpAmb><nNF>161110001</nNF><serie>026</serie><tpEmis>3</tpEmis><cNF>94826583</cNF><dhEmi>2026-11-16T12:00:00-03:00</dhEmi></ide><emit><CNPJ>61738801000143</CNPJ><xNome>Dhelenas</xNome></emit><dest><CPF>12345678909</CPF><xNome>Cliente</xNome></dest><det><prod><cProd>SKU1</cProd><xProd>Shorts Angel Marfim P</xProd><qCom>1</qCom><vUnCom>${products}</vUnCom><vProd>${products}</vProd></prod></det><total><ICMSTot><vProd>${products}</vProd><vFrete>${freight}</vFrete><vDesc>0.00</vDesc><vNF>${total}</vNF></ICMSTot></total></infNFe><Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo/></Signature></NFe><protNFe><infProt><chNFe>${keyValue}</chNFe><cStat>${status}</cStat><nProt>235260655386875</nProt><dhRecbto>2026-11-16T12:01:00-03:00</dhRecbto></infProt></protNFe></nfeProc>`;
+
+const manual = () => ({ key, number: '161110001', series: '26', issuedAt: '2026-11-16T12:00',
+    protocol: '235260655386875', issuerCnpj: '61738801000143', issuerName: 'Dhelenas',
+    recipientDocument: '12345678909', recipientName: 'Cliente',
+    items: [{ code: 'SKU1', name: 'Shorts Angel Marfim P', quantity: '1', productValue: '30.00' }],
+    productValue: '30.00', shippingValue: '9.98', totalValue: '39.98' });
+
+test('manual NF-e data is normalized and reconciled without claiming authorization', () => {
+    const data = parseManualNfe(manual());
+    assert.equal(data.model, '55');
+    assert.equal(data.authorizedAt, null);
+    assert.equal(data.productCents, 3000);
+    assert.deepEqual(reconcileNfe(data, { subtotal: 30, discount: 0, shipping_cost: 9.98, total: 39.98,
+        snapshot: { customer: { cpf: '12345678909', name: 'Cliente' } } },
+    [{ product_sku: 'SKU1', product_name: 'Shorts Angel Marfim P', quantity: 1, subtotal: 30 }], '61738801000143'), []);
+    const divergent = parseManualNfe({ ...manual(), productValue: '39.98', shippingValue: '0',
+        items: [{ ...manual().items[0], productValue: '39.98' }] });
+    assert.ok(reconcileNfe(divergent, { subtotal: 30, discount: 0, shipping_cost: 9.98, total: 39.98,
+        snapshot: { customer: { cpf: '12345678909', name: 'Cliente' } } },
+    [{ product_sku: 'SKU1', product_name: 'Shorts Angel Marfim P', quantity: 1, subtotal: 30 }], '61738801000143').includes('Frete'));
+});
+
+test('manual entry rejects inconsistent fiscal identities, totals and items', () => {
+    for (const changed of [
+        { number: '2' }, { series: '2' }, { issuedAt: '2026-10-16T12:00' },
+        { protocol: '123' }, { issuerCnpj: '00000000000000' }, { issuedAt: '2026-11-31T12:00' },
+        { items: [] }, { items: [{ ...manual().items[0], quantity: 0 }] },
+        { totalValue: '40.00' }, { productValue: '40.00' },
+    ]) assert.throws(() => parseManualNfe({ ...manual(), ...changed }));
+});
 
 test('accepts the structural authorization fields but does not claim official status', () => {
     const parsed = parseAuthorizedNfe(Buffer.from(xml()));

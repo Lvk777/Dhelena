@@ -9,7 +9,7 @@
         "start": "node static-server.mjs",
         "test:static": "node --test scripts/static-server.test.mjs src/lib/packagePresets.test.js src/lib/adminOrderSummary.test.js src/lib/productDuplicate.test.js",
         "test:crop": "vitest run src/components/admin/CropperModal.test.jsx src/components/ImageUploader.test.jsx",
-        "test:admin": "vitest run src/components/admin/CropperModal.test.jsx src/components/ImageUploader.test.jsx src/components/admin/FiscalDocumentPanel.test.jsx src/pages/admin/ProductForm.test.jsx src/pages/Contact.test.jsx src/lib/fiscalFeature.test.js",
+        "test:admin": "vitest run src/components/admin/CropperModal.test.jsx src/components/ImageUploader.test.jsx src/components/admin/FiscalDocumentPanel.test.jsx src/pages/admin/AdminOrderDetail.test.jsx src/pages/admin/ProductForm.test.jsx src/pages/Contact.test.jsx src/lib/fiscalFeature.test.js",
         "lint": "eslint . --quiet",
         "lint:fix": "eslint . --fix",
         "typecheck": "tsc -p ./jsconfig.json",

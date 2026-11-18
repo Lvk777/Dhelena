@@ -21,6 +21,65 @@ export function validNfeKey(key) {
     return Number(key[43]) === (remainder < 2 ? 0 : 11 - remainder);
 }
 
+export function parseManualNfe(input) {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Preencha os dados da NF-e.');
+    const key = text(input.key);
+    const number = text(input.number), series = text(input.series);
+    const issuedAt = text(input.issuedAt), protocol = text(input.protocol);
+    const issueParts = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:Z|[+-]\d{2}:\d{2})?$/.exec(issuedAt);
+    const issueDate = issueParts && new Date(Date.UTC(Number(issueParts[1]), Number(issueParts[2]) - 1,
+        Number(issueParts[3]), Number(issueParts[4]), Number(issueParts[5]), Number(issueParts[6] || 0)));
+    const validIssueDate = !!issueParts && issueDate.getUTCFullYear() === Number(issueParts[1])
+        && issueDate.getUTCMonth() + 1 === Number(issueParts[2]) && issueDate.getUTCDate() === Number(issueParts[3])
+        && issueDate.getUTCHours() === Number(issueParts[4]) && issueDate.getUTCMinutes() === Number(issueParts[5]);
+    const issuerCnpj = digits(input.issuerCnpj), recipientDocument = digits(input.recipientDocument);
+    const issuerName = text(input.issuerName), recipientName = text(input.recipientName);
+    if (!validNfeKey(key) || !/^\d{1,9}$/.test(number) || !/^\d{1,3}$/.test(series)
+        || number !== String(Number(key.slice(25, 34))) || series.padStart(3, '0') !== key.slice(22, 25)
+        || !validIssueDate
+        || issuedAt.slice(2, 4) + issuedAt.slice(5, 7) !== key.slice(2, 6)
+        || !/^\d{15}$/.test(protocol) || issuerCnpj !== key.slice(6, 20)
+        || issuerName.length < 3 || issuerName.length > 200 || recipientName.length < 3 || recipientName.length > 200
+        || ![11, 14].includes(recipientDocument.length)) {
+        throw new Error('Chave, modelo 55, número, série, emissão, protocolo ou participantes incoerentes.');
+    }
+    if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 100) {
+        throw new Error('Informe de 1 a 100 itens da NF-e.');
+    }
+    const amount = (value, label) => {
+        const raw = String(value ?? '');
+        if (!/^\d{1,9}(?:[.,]\d{1,2})?$/.test(raw)) throw new Error(`Valor inválido: ${label}.`);
+        return Math.round(Number(raw.replace(',', '.')) * 100);
+    };
+    const items = input.items.map((item, index) => {
+        const name = text(item?.name), code = text(item?.code), quantity = Number(item?.quantity);
+        if (name.length < 2 || name.length > 200 || code.length > 60
+            || !Number.isInteger(quantity) || quantity < 1 || quantity > 10000) {
+            throw new Error(`Item ${index + 1} inválido.`);
+        }
+        const productCents = amount(item.productValue, `item ${index + 1}`);
+        if (productCents <= 0) throw new Error(`Valor do item ${index + 1} deve ser positivo.`);
+        return { code, name, quantity, productCents, unitCents: Math.round(productCents / quantity) };
+    });
+    const productCents = amount(input.productValue, 'mercadorias');
+    const shippingCents = amount(input.shippingValue, 'frete');
+    const totalCents = amount(input.totalValue, 'total');
+    const discountCents = amount(input.discountValue ?? '0', 'desconto');
+    const insuranceCents = amount(input.insuranceValue ?? '0', 'seguro');
+    const otherCents = amount(input.otherValue ?? '0', 'outras despesas');
+    const taxesCents = amount(input.taxesValue ?? '0', 'tributos adicionais');
+    const desonerationCents = amount(input.desonerationValue ?? '0', 'desoneração');
+    if (items.reduce((sum, item) => sum + item.productCents, 0) !== productCents
+        || Math.abs(productCents + shippingCents + insuranceCents + otherCents + taxesCents
+            - discountCents - desonerationCents - totalCents) > 1) {
+        throw new Error('Os valores manuais não fecham com os itens e o total da NF-e.');
+    }
+    return { key, model: '55', number, series, issuedAt, protocol, authorizedAt: null,
+        issuerCnpj, issuerName, recipientDocument, recipientName, items,
+        productCents, shippingCents, discountCents, totalCents,
+        insuranceCents, otherCents, taxesCents, desonerationCents };
+}
+
 export function parseAuthorizedNfe(buffer) {
     if (!Buffer.isBuffer(buffer) || !buffer.length || buffer.length > 1024 * 1024) throw new Error('Selecione um XML de NF-e de até 1 MB.');
     const xml = buffer.toString('utf8').replace(/^\uFEFF/, '');

@@ -50,6 +50,26 @@ try {
         assert.deepEqual(attempts.filter(result => result.status === 'rejected').map(result => result.reason.code), ['23505']);
     } finally { await second.end(); }
     assert.equal((await client.query('SELECT count(*)::int AS count FROM fiscal_documents')).rows[0].count, 1);
+    for (const name of ['023_manual_fiscal_documents.sql', '023_manual_fiscal_documents.sql']) {
+        await client.query(await fs.readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8'));
+    }
+    const existing = (await client.query('SELECT origin,xml_bytes,xml_sha256 FROM fiscal_documents WHERE order_id=$1', [orders[0].id])).rows[0];
+    assert.equal(existing.origin, 'xml');
+    assert.deepEqual(existing.xml_bytes, Buffer.from('<synthetic/>'));
+    assert.equal(existing.xml_sha256, 'a'.repeat(64));
+    const { rows: manualOrder } = await client.query(`INSERT INTO orders(order_number,user_id,subtotal,total,snapshot)
+        VALUES('FISCAL-MANUAL-FIXTURE',$1,30,39.98,'{}') RETURNING id`, [profiles[0].id]);
+    await client.query(`INSERT INTO fiscal_documents(order_id,access_key,origin,parsed_data,status,imported_by)
+        VALUES($1,$2,'manual','{}','pending_official',$3)`, [manualOrder[0].id, '2'.repeat(44), profiles[0].id]);
+    const { rows: invalidOrder } = await client.query(`INSERT INTO orders(order_number,user_id,subtotal,total,snapshot)
+        VALUES('FISCAL-INVALID-FIXTURE',$1,30,39.98,'{}') RETURNING id`, [profiles[0].id]);
+    await assert.rejects(client.query(`INSERT INTO fiscal_documents(order_id,access_key,origin,parsed_data,status,imported_by)
+        VALUES($1,$2,'xml','{}','pending_official',$3)`, [invalidOrder[0].id, '3'.repeat(44), profiles[0].id]), { code: '23514' });
+    const manual = (await client.query('SELECT origin,xml_bytes,xml_sha256 FROM fiscal_documents WHERE order_id=$1', [manualOrder[0].id])).rows[0];
+    assert.equal(manual.origin, 'manual');
+    assert.equal(manual.xml_bytes, null);
+    assert.equal(manual.xml_sha256, null);
+    assert.equal((await client.query("SELECT relrowsecurity FROM pg_class WHERE oid='fiscal_documents'::regclass")).rows[0].relrowsecurity, true);
     for (const role of ['anon', 'authenticated']) {
         await client.query('BEGIN');
         try {
