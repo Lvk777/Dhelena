@@ -45,7 +45,8 @@ test('cutover excludes historic events and queues distinct buyer and institution
     const cutover='2026-10-29T12:00:00.000Z';
     const env={TRANSACTIONAL_EMAIL_ENABLED:'true',TRANSACTIONAL_EMAIL_START_AT:cutover,
         TRANSACTIONAL_EMAIL_ENVIRONMENT:'production',EMAIL_FROM:'pedidos@dhelenas.com',
-        EMAIL_ALLOWED_SENDERS:'pedidos@dhelenas.com',EMAIL_REPLY_TO:'contato@dhelenas.com'};
+        EMAIL_ALLOWED_SENDERS:'pedidos@dhelenas.com',EMAIL_REPLY_TO:'contato@dhelenas.com',
+        TRANSACTIONAL_EMAIL_ADMIN_RECIPIENT:'pedidos@dhelenas.com'};
     const rows=[
         {source_event_id:'historic',notification_event:'order_created',created_at:'2026-10-28T12:00:00Z'},
         {source_event_id:'created',notification_event:'order_created',created_at:'2026-10-29T12:01:00Z'},
@@ -56,7 +57,7 @@ test('cutover excludes historic events and queues distinct buyer and institution
     const queuedEvents=new Set(), sent=new Map();
     const settings=[{key:'general',value:{email:'contato@dhelenas.com'}},
         {key:'emails',value:{sender_name:'D’Helenas Boutique',sender_email:'pedidos@dhelenas.com',reply_to:'pedidos@dhelenas.com',customer_enabled:true}},
-        {key:'notifications',value:{email_enabled:true,recipients:[{name:'Juliane',email:'',active:true},
+        {key:'notifications',value:{email_enabled:true,recipients:[{name:'Juliane',email:'outro@example.test',active:true},
             {name:'Lucilene',email:'',active:true},
             {name:'Pedidos',email:'pedidos@dhelenas.com',active:true,
                 events:['order_created','payment_approved','order_cancelled','order_shipped','order_delivered']}]}}];

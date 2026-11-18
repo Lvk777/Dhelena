@@ -48,7 +48,11 @@ export async function queueOrderEmails(orderId = null, event = null, { db = pool
         const recipients = new Set();
         const customerEmail = validEmail(order.checkout_email) ? order.checkout_email : order.user_email;
         if (settings.emails?.customer_enabled !== false && validEmail(customerEmail)) recipients.add(customerEmail.toLowerCase());
-        for (const r of settings.notifications?.recipients || []) {
+        const administrativeRecipient = env.TRANSACTIONAL_EMAIL_ADMIN_RECIPIENT;
+        if (administrativeRecipient) {
+            if (!validEmail(administrativeRecipient)) throw Object.assign(new Error('Destinatário administrativo inválido.'), { code: 'EMAIL_CONFIG_INVALID' });
+            if (settings.notifications?.email_enabled !== false) recipients.add(administrativeRecipient.toLowerCase());
+        } else for (const r of settings.notifications?.recipients || []) {
             if (r.active && validEmail(r.email) && (r.events || ['order_created','payment_approved']).includes(name)
                 && settings.notifications?.email_enabled !== false) recipients.add(r.email.toLowerCase());
         }

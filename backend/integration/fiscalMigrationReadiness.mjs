@@ -6,6 +6,10 @@ if (!process.env.TEST_DATABASE_URL) throw new Error('TEST_DATABASE_URL is requir
 const client = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
 await client.connect();
 try {
+    await client.query(`DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon NOLOGIN; END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
+    END $$`);
     for (const name of ['001_init.sql', '002_profiles_rename.sql', '022_fiscal_documents.sql', '022_fiscal_documents.sql']) {
         await client.query(await fs.readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8'));
     }
@@ -21,5 +25,37 @@ try {
         WHERE conrelid='fiscal_documents'::regclass AND contype='f'`);
     assert.ok(references.some(row => row.target === 'profiles'));
     assert.ok(references.some(row => row.target === 'orders'));
+    const { rows: roles } = await client.query(`SELECT rolname,
+        has_table_privilege(rolname, 'public.fiscal_documents', 'SELECT') AS can_read,
+        has_table_privilege(rolname, 'public.fiscal_documents', 'INSERT') AS can_insert,
+        has_table_privilege(rolname, 'public.fiscal_documents', 'UPDATE') AS can_update,
+        has_table_privilege(rolname, 'public.fiscal_documents', 'DELETE') AS can_delete
+        FROM pg_roles WHERE rolname IN ('anon', 'authenticated')`);
+    for (const role of roles) {
+        assert.deepEqual([role.can_read, role.can_insert, role.can_update, role.can_delete], [false, false, false, false]);
+    }
+    assert.equal(roles.length, 2);
+    const { rows: profiles } = await client.query(`INSERT INTO profiles(email,password_hash,role)
+        VALUES('fiscal-fixture@example.test','synthetic-only','admin') RETURNING id`);
+    const { rows: orders } = await client.query(`INSERT INTO orders(order_number,user_id,subtotal,total,snapshot)
+        VALUES('FISCAL-FIXTURE',$1,30,39.98,'{}') RETURNING id`, [profiles[0].id]);
+    const insert = `INSERT INTO fiscal_documents(order_id,access_key,xml_bytes,xml_sha256,parsed_data,status,imported_by)
+        VALUES($1,$2,$3,$4,'{}','pending_official',$5) RETURNING id`;
+    const values = [orders[0].id, '1'.repeat(44), Buffer.from('<synthetic/>'), 'a'.repeat(64), profiles[0].id];
+    const second = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
+    await second.connect();
+    try {
+        const attempts = await Promise.allSettled([client.query(insert, values), second.query(insert, values)]);
+        assert.equal(attempts.filter(result => result.status === 'fulfilled').length, 1);
+        assert.deepEqual(attempts.filter(result => result.status === 'rejected').map(result => result.reason.code), ['23505']);
+    } finally { await second.end(); }
+    assert.equal((await client.query('SELECT count(*)::int AS count FROM fiscal_documents')).rows[0].count, 1);
+    for (const role of ['anon', 'authenticated']) {
+        await client.query('BEGIN');
+        try {
+            await client.query(`SET LOCAL ROLE ${role}`);
+            await assert.rejects(client.query('SELECT xml_bytes FROM fiscal_documents'), { code: '42501' });
+        } finally { await client.query('ROLLBACK'); }
+    }
     console.log('PASS: fiscal document migration is idempotent, private and references orders/profiles');
 } finally { await client.end(); }

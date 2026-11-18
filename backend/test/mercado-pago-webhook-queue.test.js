@@ -9,6 +9,51 @@ import { paymentContexts, bindPaymentAttempt } from '../src/lib/mercadoPagoConte
 import { authenticateOrderDelivery, persistOrderDelivery, acknowledgeOrderDelivery, createOrderWebhookWorker } from '../src/services/mercadoPagoWebhookQueue.js';
 import { getOrderStatus, getWebhookCredentialIdentity } from '../src/services/mercadoPago.js';
 
+test('worker isolates a transient database connection failure and retries an empty queue safely', async () => {
+    const records = [], original = console.error;
+    let connections = 0, providerCalls = 0, writes = 0;
+    const client = { async query(sql) {
+        if (sql.startsWith('UPDATE') || sql.startsWith('INSERT')) writes++;
+        return { rows: [] };
+    }, release() {} };
+    const db = { async connect() {
+        if (++connections === 1) throw new Error('private database endpoint');
+        return client;
+    } };
+    const worker = createOrderWebhookWorker({ db, contexts: () => [testContext],
+        provider: { async getOrderStatus() { providerCalls++; } } });
+    console.error = value => records.push(value);
+    try { await worker.tick(); await worker.tick(); }
+    finally { console.error = original; }
+    assert.equal(connections, 2);
+    assert.equal(providerCalls, 0);
+    assert.equal(writes, 0);
+    assert.deepEqual(JSON.parse(records[0]), { event: 'mp_webhook_worker_failed',
+        error_type: 'Error', error_code: null, http_status: 500, phase: 'db_connect' });
+    assert.equal(records.length, 1);
+    assert.doesNotMatch(records.join(''), /private database endpoint/);
+});
+
+test('worker identifies SQL selection failures without exposing SQL or touching orders', async () => {
+    const records = [], original = console.error;
+    let rollbacks = 0, releases = 0, providerCalls = 0;
+    const db = { async connect() { return { async query(sql) {
+        if (sql.startsWith('SELECT * FROM webhook_events')) throw Object.assign(new Error('private SQL'), { code: '42883' });
+        if (sql === 'ROLLBACK') rollbacks++;
+        return { rows: [] };
+    }, release() { releases++; } }; } };
+    const worker = createOrderWebhookWorker({ db, contexts: () => [testContext],
+        provider: { async getOrderStatus() { providerCalls++; } } });
+    console.error = value => records.push(value);
+    try { await worker.tick(); } finally { console.error = original; }
+    assert.equal(rollbacks, 1);
+    assert.equal(releases, 1);
+    assert.equal(providerCalls, 0);
+    assert.deepEqual(JSON.parse(records[0]), { event: 'mp_webhook_worker_failed',
+        error_type: 'DatabaseError', error_code: '42883', http_status: 500, phase: 'queue_select' });
+    assert.doesNotMatch(records.join(''), /private SQL/);
+});
+
 const env = { MERCADO_PAGO_MODE: 'test', MERCADO_PAGO_ACCESS_TOKEN: 'synthetic-test-token', MERCADO_PAGO_WEBHOOK_SECRET: 'synthetic-test-secret' };
 const testContext = paymentContexts(env)[0];
 const productionContext = paymentContexts({ MERCADO_PAGO_MODE: 'production', MERCADO_PAGO_ACCESS_TOKEN: 'synthetic-production-token',

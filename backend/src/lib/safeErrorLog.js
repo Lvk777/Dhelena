@@ -15,7 +15,7 @@ export function safeErrorMetadata(error) {
     // Never copy message, stack, detail, query, request, config, headers or payload.
     try {
         const code = error?.code || error?.cause?.code;
-        if (DATABASE_CODES.has(code)) {
+        if (DATABASE_CODES.has(code) || (typeof code === 'string' && /^[A-Z0-9]{5}$/.test(code))) {
             result.error_type = 'DatabaseError';
             result.error_code = code;
         } else {
@@ -31,8 +31,11 @@ export function safeErrorMetadata(error) {
     return result;
 }
 
-export function logSafeError(event, error, level = 'error') {
+export function logSafeError(event, error, level = 'error', context = {}) {
     const eventName = typeof event === 'string' && /^[a-z][a-z0-9_]{1,63}$/.test(event) ? event : 'backend_error';
     const record = { event: eventName, ...safeErrorMetadata(error) };
+    if (['credentials', 'db_connect', 'db_begin', 'queue_select', 'event_processing', 'retry_checkpoint'].includes(context?.phase)) {
+        record.phase = context.phase;
+    }
     console[level === 'warn' ? 'warn' : 'error'](JSON.stringify(record));
 }

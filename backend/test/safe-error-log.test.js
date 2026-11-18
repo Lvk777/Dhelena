@@ -13,6 +13,8 @@ test('error logging retains only useful bounded technical metadata', () => {
     assert.deepEqual(safeErrorMetadata(error), { error_type: 'DatabaseError', error_code: '22P02', http_status: 400 });
     assert.deepEqual(safeErrorMetadata({ name: 'TypeError', cause: { code: 'ECONNRESET', message: 'private' } }),
         { error_type: 'TypeError', error_code: 'ECONNRESET', http_status: 500 });
+    assert.deepEqual(safeErrorMetadata({ code: '42883', message: 'private SQL' }),
+        { error_type: 'DatabaseError', error_code: '42883', http_status: 500 });
 });
 
 test('untrusted error codes, names and hostile getters never become log data', () => {
@@ -78,6 +80,17 @@ test('warning logger uses the same whitelist, without serializing error bodies',
             event: 'me_tracking_fetch_failed', error_type: 'Error', error_code: null, http_status: 503,
         });
     } finally { console.warn = saved; }
+});
+
+test('worker phase logging accepts only a fixed diagnostic vocabulary', () => {
+    const saved = console.error, records = [];
+    console.error = value => records.push(JSON.parse(value));
+    try {
+        logSafeError('mp_webhook_worker_failed', new Error('private'), 'error', { phase: 'queue_select' });
+        logSafeError('mp_webhook_worker_failed', new Error('private'), 'error', { phase: 'payer@example.invalid' });
+        assert.equal(records[0].phase, 'queue_select');
+        assert.equal(Object.hasOwn(records[1], 'phase'), false);
+    } finally { console.error = saved; }
 });
 
 test('reviewed runtime modules cannot regress to logging raw error messages', () => {

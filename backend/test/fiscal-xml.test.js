@@ -23,6 +23,12 @@ test('accepts the structural authorization fields but does not claim official st
     assert.deepEqual(reconcileNfe(parsed, order, items, '61.738.801/0001-43'), []);
     assert.deepEqual(reconcileNfe(parsed, order, [{ product_name: 'Shorts Angel', color_name: 'Marfim', size: 'P', quantity: 1, subtotal: 30 }], '61738801000143'), []);
     assert.deepEqual(reconcileNfe(parseAuthorizedNfe(Buffer.from(xml({ freight: '0.00', products: '39.98' }))), order, items, '61738801000143'), ['Valor dos produtos', 'Subtotal das mercadorias', 'Frete']);
+    assert.ok(reconcileNfe(parsed, order, items, '00.000.000/0000-00').includes('CNPJ emitente'));
+    assert.ok(reconcileNfe(parsed, { ...order, snapshot: { customer: { cpf: '00000000000', name: 'Outra pessoa' } } }, items,
+        '61738801000143').includes('Documento do destinatário'));
+    assert.ok(reconcileNfe(parsed, order, [{ ...items[0], quantity: 2 }], '61738801000143').includes('Quantidade dos produtos'));
+    assert.ok(reconcileNfe(parsed, order, [{ ...items[0], product_sku: 'OUTRO', product_name: 'Outra peça' }],
+        '61738801000143').includes('Identificação dos produtos'));
 });
 
 test('rejects unsafe, malformed, inconsistent or non-authorized XML', () => {

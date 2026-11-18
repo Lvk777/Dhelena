@@ -34,7 +34,7 @@ test('places accessible actions in body even inside an overflow-hidden animated 
     expect(screen.getByRole('button', { name: 'Fechar recorte' })).toBeTruthy();
     expect(dialog.className).toContain('max-h-[calc(100dvh-1rem)]');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Usar imagem' }).disabled).toBe(false));
-    expect(screen.getByText('Imagem pequena')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Imagem pequena')).toBeTruthy());
     fireEvent.change(screen.getByRole('slider', { name: 'Zoom' }), { target: { value: '2' } });
     expect(screen.getByText('2.0x')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));

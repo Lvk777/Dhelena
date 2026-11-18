@@ -106,16 +106,20 @@ export function createOrderWebhookWorker({ db = pool, provider = mp, contexts = 
     refund = reconcileRefundFromWebhook, now = Date.now, random = Math.random,
     intervalMs = 15000, logger = record => console.info(JSON.stringify(record)) } = {}) {
     let timer = null, running = null, stopped = false;
-    async function processOne() {
+    async function processOne(onPhase = () => {}) {
+        onPhase('credentials');
         const configured = contexts();
         if (!configured.length) return false;
+        onPhase('db_connect');
         const client = await db.connect();
         let event, payload, originalPayload, releaseError, context;
         try {
+            onPhase('db_begin');
             await client.query('BEGIN');
             await client.query("SET LOCAL lock_timeout = '1000ms'");
             await client.query("SET LOCAL statement_timeout = '5000ms'");
             await client.query("SET LOCAL idle_in_transaction_session_timeout = '60000ms'");
+            onPhase('queue_select');
             const result = await client.query(`SELECT * FROM webhook_events WHERE provider = 'mercado_pago' AND processed = false
                 AND ((payload->'mp_webhook'->>'version' = '1'
                     AND payload->'mp_webhook'->>'credential_id' = ANY($1::text[]))
@@ -127,6 +131,7 @@ export function createOrderWebhookWorker({ db = pool, provider = mp, contexts = 
                 ORDER BY created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`, [configured.map(c => c.credentialId), now()]);
             event = result.rows[0];
             if (!event) { await client.query('COMMIT'); return false; }
+            onPhase('event_processing');
             payload = event.payload;
             originalPayload = JSON.stringify(payload);
             const core = payload.mp_webhook;
@@ -180,6 +185,7 @@ export function createOrderWebhookWorker({ db = pool, provider = mp, contexts = 
             const attempts = Math.min(1000000, (Number(payload?.queue?.attempts) || 0) + 1);
             const delay = Math.min(300000, 15000 * 2 ** Math.min(attempts - 1, 5)) + Math.floor(random() * 3000);
             // After rollback acquire the row again: never overwrite another replica's completed/retried work.
+            onPhase('retry_checkpoint');
             await client.query(`UPDATE webhook_events SET payload = jsonb_set(payload,'{queue}',$2::jsonb)
                 WHERE id = $1 AND processed = false AND payload = $3::jsonb`, [event.id, JSON.stringify({
                 state: blocked ? 'blocked' : 'pending', attempts, next_at: now() + delay,
@@ -192,9 +198,10 @@ export function createOrderWebhookWorker({ db = pool, provider = mp, contexts = 
     }
     async function tick() {
         if (stopped || running) return running;
+        let failurePhase = 'credentials';
         running = (async () => {
-            for (let count = 0; count < 10 && !stopped; count++) if (!await processOne()) break;
-        })().catch(error => logSafeError('mp_webhook_worker_failed', error)).finally(() => { running = null; });
+            for (let count = 0; count < 10 && !stopped; count++) if (!await processOne(phase => { failurePhase = phase; })) break;
+        })().catch(error => logSafeError('mp_webhook_worker_failed', error, 'error', { phase: failurePhase })).finally(() => { running = null; });
         return running;
     }
     return { processOne, tick,
