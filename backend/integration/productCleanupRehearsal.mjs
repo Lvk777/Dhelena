@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { deleteProductPermanently } from '../src/services/productDeletion.js';
 import { assertHistoricalProductCanPublish } from '../src/lib/historicalProductPublication.js';
+import { cleanUnpaidTestOrders } from '../src/operations/safeTestOrderCleanup.js';
 
 const adminUrl = new URL(process.env.POSTGRES_ADMIN_URL || '');
 assert.ok(['localhost', '127.0.0.1'].includes(adminUrl.hostname));
@@ -19,10 +20,24 @@ try {
     await db.connect();
     await db.query(`
         CREATE TABLE products (id uuid PRIMARY KEY, name text, sku text, status text, colors jsonb, sold_count integer);
-        CREATE TABLE orders (id uuid PRIMARY KEY, order_number text, payment_status text);
+        CREATE TABLE orders (id uuid PRIMARY KEY, order_number text, status text,
+            payment_status text, paid_at timestamptz, payment_attempt_started_at timestamptz,
+            payment_updated_at timestamptz, payment_provider text, mercado_pago_order_id text,
+            mercado_pago_payment_id text, mercado_pago_external_reference text,
+            mercado_pago_status text, mercado_pago_status_detail text,
+            melhor_envio_shipment_id text, shipping_status text, tracking_code text,
+            pix_qr_code text, pix_qr_code_base64 text, snapshot jsonb);
         CREATE TABLE order_items (id uuid PRIMARY KEY, order_id uuid REFERENCES orders(id), product_id uuid REFERENCES products(id), product_sku text);
-        CREATE TABLE stock_reservations (id uuid PRIMARY KEY, order_id uuid REFERENCES orders(id), product_id uuid REFERENCES products(id));
+        CREATE TABLE stock_reservations (order_item_id uuid PRIMARY KEY, order_id uuid REFERENCES orders(id), product_id uuid REFERENCES products(id));
         CREATE TABLE stock_movements (id uuid PRIMARY KEY, order_id uuid REFERENCES orders(id), product_id uuid REFERENCES products(id));
+        CREATE TABLE order_events (id uuid PRIMARY KEY, order_id uuid REFERENCES orders(id), event text);
+        CREATE TABLE stock_restorations (id uuid PRIMARY KEY, order_id uuid REFERENCES orders(id));
+        CREATE TABLE order_refunds (id uuid PRIMARY KEY, order_id uuid REFERENCES orders(id));
+        CREATE TABLE order_returns (id uuid PRIMARY KEY, order_id uuid REFERENCES orders(id));
+        CREATE TABLE notification_logs (id uuid PRIMARY KEY, order_id uuid REFERENCES orders(id));
+        CREATE TABLE coupon_usages (id uuid PRIMARY KEY, order_id uuid REFERENCES orders(id));
+        CREATE TABLE webhook_events (id uuid PRIMARY KEY, payload jsonb);
+        CREATE TABLE settings (key text PRIMARY KEY, value jsonb);
         CREATE TABLE favorites (id uuid PRIMARY KEY, product_id uuid REFERENCES products(id));
         CREATE TABLE analytics_events (id uuid PRIMARY KEY, product_id uuid);
         CREATE TABLE look_promotions (id uuid PRIMARY KEY, eligible_products jsonb);
@@ -35,7 +50,8 @@ try {
         protectedProduct, 'Peça histórica', 'HIST-1', 'archived', JSON.stringify([{ stock: { P: 0 } }]), 1,
         discardable, 'Rascunho descartável', 'DRAFT-1', 'draft', JSON.stringify([{ stock: { P: 0 } }]), 0,
     ]);
-    await db.query('INSERT INTO orders VALUES ($1,$2,$3)', [protectedOrder, 'DH-2026-000019', 'approved']);
+    await db.query("INSERT INTO orders(id,order_number,status,payment_status) VALUES ($1,$2,'pagamento_aprovado','approved')",
+        [protectedOrder, 'DH-2026-000019']);
     await db.query('INSERT INTO order_items VALUES ($1,$2,$3,$4)', [randomUUID(), protectedOrder, protectedProduct, 'HIST-1']);
     const protectedBefore = (await db.query('SELECT row_to_json(o) AS value FROM orders o WHERE id=$1', [protectedOrder])).rows[0].value;
     const transaction = async callback => {
@@ -52,7 +68,33 @@ try {
     assert.equal(Number((await db.query("SELECT count(*) AS n FROM audit_logs WHERE entity_id=$1 AND action='product.delete'", [discardable])).rows[0].n), 1);
     assert.deepEqual((await db.query('SELECT row_to_json(o) AS value FROM orders o WHERE id=$1', [protectedOrder])).rows[0].value, protectedBefore);
     assert.equal(Number((await db.query('SELECT count(*) AS n FROM order_items WHERE order_id=$1', [protectedOrder])).rows[0].n), 1);
-    console.log('PostgreSQL 17 cleanup rehearsal passed: linked product blocked, empty draft deleted, audit written, paid order intact');
+    const candidate = randomUUID();
+    const candidateItem = randomUUID();
+    const candidateEvent = randomUUID();
+    const held = randomUUID();
+    await db.query("INSERT INTO settings VALUES ('maintenance','{\"maintenance_mode\":true}')");
+    await db.query("INSERT INTO orders(id,order_number,status,payment_status) VALUES ($1,'DH-2026-000001','recebido','pending')", [candidate]);
+    await db.query("INSERT INTO orders(id,order_number,status,payment_status,payment_attempt_started_at) VALUES ($1,'DH-2026-000018','recebido','pending',now())", [held]);
+    await db.query('INSERT INTO order_items(id,order_id,product_id,product_sku) VALUES ($1,$2,$3,$4)',
+        [candidateItem, candidate, protectedProduct, 'HIST-1']);
+    await db.query("INSERT INTO order_events VALUES ($1,$2,'order_created')", [candidateEvent, candidate]);
+    await db.query("INSERT INTO audit_logs(action,entity_type,entity_id) VALUES ('order.create','order',$1)", [candidate]);
+    const manifest = { orders: [{ id: candidate, number: 'DH-2026-000001' }],
+        itemIds: [candidateItem], eventIds: [candidateEvent], protectedNumbers: ['DH-2026-000019', 'DH-2026-000018'] };
+    const dryRun = await cleanUnpaidTestOrders(db, manifest);
+    assert.deepEqual(dryRun, { applied: false, orders: 1, items: 1, events: 1, auditPreserved: 1 });
+    assert.equal(Number((await db.query('SELECT count(*) AS n FROM orders WHERE id=$1', [candidate])).rows[0].n), 1);
+    await assert.rejects(cleanUnpaidTestOrders(db, { ...manifest, itemIds: [randomUUID()] }, { apply: true }),
+        /itens ou eventos mudaram/);
+    await assert.rejects(cleanUnpaidTestOrders(db, { ...manifest,
+        orders: [{ id: held, number: 'DH-2026-000018' }], itemIds: [], eventIds: [],
+        protectedNumbers: ['DH-2026-000019'] }, { apply: true }), /vínculo financeiro/);
+    const applied = await cleanUnpaidTestOrders(db, manifest, { apply: true });
+    assert.deepEqual(applied, { applied: true, orders: 1, items: 1, events: 1, auditPreserved: 1 });
+    assert.equal(Number((await db.query('SELECT count(*) AS n FROM orders WHERE id=$1', [candidate])).rows[0].n), 0);
+    assert.equal(Number((await db.query('SELECT count(*) AS n FROM audit_logs WHERE entity_id=$1', [candidate])).rows[0].n), 1);
+    assert.deepEqual((await db.query('SELECT row_to_json(o) AS value FROM orders o WHERE id=$1', [protectedOrder])).rows[0].value, protectedBefore);
+    console.log('PostgreSQL 17 cleanup rehearsal passed: product guards and transactional order cleanup preserve paid/attempted orders and audit');
 } finally {
     await db.end().catch(() => {});
     await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);

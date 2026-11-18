@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Search, SlidersHorizontal, X, Copy, ChevronDown, ChevronLeft, ChevronRight, Eye, User, Check, ShoppingCart } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL, ORDER_STATUS, PAYMENT_LABELS, SHIPPING_LABELS } from "@/data/products";
+import { adminOrderSummary } from "@/lib/adminOrderSummary";
 
 const PAGE_SIZE = 20;
 const normalize = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -102,7 +103,7 @@ export default function AdminOrders() {
     }, []);
 
     const filtered = useMemo(() => {
-        let result = [...orders];
+        let result = orders.map(adminOrderSummary);
 
         // Search
         if (debouncedSearch.trim()) {
@@ -299,7 +300,7 @@ export default function AdminOrders() {
                                             </div>
                                         </td>
                                         <td className="py-3 px-4 text-muted-foreground whitespace-nowrap font-numeric">{new Date(o.created_date).toLocaleDateString("pt-BR")}</td>
-                                        <td className="py-3 px-4 text-center text-muted-foreground font-numeric">{(o.items || []).length}</td>
+                                        <td className="py-3 px-4 text-center text-muted-foreground font-numeric">{o.item_count}</td>
                                         <td className="py-3 px-4 font-medium font-numeric">{formatBRL(o.total)}</td>
                                         <td className="py-3 px-4 text-muted-foreground">{PAYMENT_LABELS[o.payment_method] || o.payment_method || "—"}</td>
                                         <td className="py-3 px-4 text-muted-foreground">{SHIPPING_LABELS[o.shipping_method] || o.shipping_method || "—"}</td>
@@ -333,7 +334,7 @@ export default function AdminOrders() {
                                 <p className="text-[11px] text-muted-foreground">{o.customer_email} · {o.customer_phone}</p>
                                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
                                     <div className="text-[11px] text-muted-foreground">
-                                        {new Date(o.created_date).toLocaleDateString("pt-BR")} · {(o.items || []).length} {((o.items || []).length) === 1 ? "item" : "itens"}
+                                        {new Date(o.created_date).toLocaleDateString("pt-BR")} · {o.item_count} {o.item_count === 1 ? "item" : "itens"}
                                     </div>
                                     <span className="font-medium text-sm">{formatBRL(o.total)}</span>
                                 </div>
