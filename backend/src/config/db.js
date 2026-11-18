@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { logSafeError } from '../lib/safeErrorLog.js';
 
 const { Pool } = pg;
 
@@ -16,7 +17,15 @@ if (isProduction && !process.env.DATABASE_URL) {
 const dbUrl = process.env.DATABASE_URL || FALLBACK_URL;
 const isSupabase = dbUrl.includes('supabase');
 
-let _pool = new Pool({
+export function createPool(options, PoolType = Pool) {
+    const instance = new PoolType(options);
+    // PostgreSQL can terminate an idle client after a transient network failure.
+    // pg removes it from the pool; the listener keeps the process alive for new connections.
+    instance.on('error', error => logSafeError('db_idle_client_error', error));
+    return instance;
+}
+
+let _pool = createPool({
     connectionString: dbUrl,
     ssl: isSupabase ? { rejectUnauthorized: false } : false,
     connectionTimeoutMillis: 5000,
@@ -36,7 +45,7 @@ async function ensurePool() {
         }
         if (isSupabase) {
             console.warn(`[DB] Supabase unreachable, falling back to local PostgreSQL (dev only)`);
-            _pool = new Pool({ connectionString: FALLBACK_URL });
+            _pool = createPool({ connectionString: FALLBACK_URL });
             await _pool.query('SELECT 1');
             console.log('[DB] Connected to local PostgreSQL (fallback)');
         } else {
