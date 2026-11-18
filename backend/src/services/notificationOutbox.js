@@ -7,6 +7,7 @@ import { logSafeError } from '../lib/safeErrorLog.js';
 const permanent = new Set(['EMAIL_IDEMPOTENCY_EXPIRED', 'EMAIL_PAYLOAD_CONFLICT']);
 export function transactionalEmailCutover(env = process.env) {
     if (env.TRANSACTIONAL_EMAIL_ENABLED !== 'true') return null;
+    if (!validEmail(env.TRANSACTIONAL_EMAIL_ADMIN_RECIPIENT)) return null;
     const value = env.TRANSACTIONAL_EMAIL_START_AT;
     if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)) return null;
     const time = Date.parse(value);
@@ -48,14 +49,7 @@ export async function queueOrderEmails(orderId = null, event = null, { db = pool
         const recipients = new Set();
         const customerEmail = validEmail(order.checkout_email) ? order.checkout_email : order.user_email;
         if (settings.emails?.customer_enabled !== false && validEmail(customerEmail)) recipients.add(customerEmail.toLowerCase());
-        const administrativeRecipient = env.TRANSACTIONAL_EMAIL_ADMIN_RECIPIENT;
-        if (administrativeRecipient) {
-            if (!validEmail(administrativeRecipient)) throw Object.assign(new Error('Destinatário administrativo inválido.'), { code: 'EMAIL_CONFIG_INVALID' });
-            if (settings.notifications?.email_enabled !== false) recipients.add(administrativeRecipient.toLowerCase());
-        } else for (const r of settings.notifications?.recipients || []) {
-            if (r.active && validEmail(r.email) && (r.events || ['order_created','payment_approved']).includes(name)
-                && settings.notifications?.email_enabled !== false) recipients.add(r.email.toLowerCase());
-        }
+        if (settings.notifications?.email_enabled !== false) recipients.add(env.TRANSACTIONAL_EMAIL_ADMIN_RECIPIENT.toLowerCase());
         const client=await db.connect();
         try {
         await client.query('BEGIN');

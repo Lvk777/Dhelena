@@ -38,7 +38,8 @@ export function orderEmailConfig(settings = {}, env = process.env) {
 export function orderEmailReadiness(settings = {}, env = process.env) {
     let senderReady = false;
     try { orderEmailConfig(settings, env); senderReady = true; } catch { /* Unconfigured, never expose values. */ }
-    return { api_key_configured: !!env.RESEND_API_KEY, sender_and_reply_to_ready: senderReady, domain_verification: 'external_gate' };
+    return { api_key_configured: !!env.RESEND_API_KEY, sender_and_reply_to_ready: senderReady,
+        admin_recipient_ready: validEmail(env.TRANSACTIONAL_EMAIL_ADMIN_RECIPIENT), domain_verification: 'external_gate' };
 }
 
 export function escapeEmailHtml(value) {

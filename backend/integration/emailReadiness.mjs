@@ -38,6 +38,7 @@ try {
 
     const env = { TRANSACTIONAL_EMAIL_ENABLED: 'true', TRANSACTIONAL_EMAIL_ENVIRONMENT: 'production',
         TRANSACTIONAL_EMAIL_START_AT: new Date(Date.now() - 60_000).toISOString(), RESEND_API_KEY: 'synthetic',
+        TRANSACTIONAL_EMAIL_ADMIN_RECIPIENT: 'admin@example.test',
         EMAIL_FROM: 'Boutique <sender@example.test>', EMAIL_REPLY_TO: 'support@example.test' };
     await db.query("INSERT INTO settings(key,value) VALUES('emails',$1),('general','{}'),('notifications',$2)", [
         JSON.stringify({ customer_enabled: true }), JSON.stringify({ recipients: [{ active: true, email: 'admin@example.test' }] })]);

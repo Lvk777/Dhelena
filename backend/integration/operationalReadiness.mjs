@@ -41,6 +41,7 @@ try {
     pass('migration 015 rolls back cleanly, adds columns/index and preserves legacy records');
     const env={TRANSACTIONAL_EMAIL_ENABLED:'true',TRANSACTIONAL_EMAIL_ENVIRONMENT:'production',
         TRANSACTIONAL_EMAIL_START_AT:new Date(Date.now()-60_000).toISOString(),
+        TRANSACTIONAL_EMAIL_ADMIN_RECIPIENT:'admin@example.test',
         RESEND_API_KEY:'synthetic',EMAIL_FROM:'Boutique <sender@example.test>',EMAIL_REPLY_TO:'support@example.test'};
     await db.query(`INSERT INTO settings(key,value) VALUES('emails',$1),('general','{}'),('notifications',$2)`,
         [JSON.stringify({customer_enabled:true,sender_email:'sender@example.test',reply_to:'support@example.test'}),JSON.stringify({recipients:[{active:true,email:'admin@example.test'}]})]);

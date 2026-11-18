@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createNotificationWorker,queueOrderEmails,transactionalEmailCutover} from '../src/services/notificationOutbox.js';
 import {buildOrderEmail} from '../src/services/orderEmail.js';
+const adminEnv={TRANSACTIONAL_EMAIL_ADMIN_RECIPIENT:'admin@example.test'};
 
 test('installed Resend SDK carries the stable idempotency key and cancellation signal to mocked HTTP',async t=>{
     const previous=global.fetch;t.after(()=>{global.fetch=previous;});let requests=0;
@@ -20,12 +21,12 @@ test('installed Resend SDK carries the stable idempotency key and cancellation s
         throw Error('Unexpected synthetic query');
     };
     const db={query,connect:async()=>({query,release(){}})};
-    const worker=createNotificationWorker({db,env:{TRANSACTIONAL_EMAIL_ENABLED:'true',TRANSACTIONAL_EMAIL_START_AT:new Date(Date.now()-60_000).toISOString(),RESEND_API_KEY:'synthetic-only'}});
+    const worker=createNotificationWorker({db,env:{...adminEnv,TRANSACTIONAL_EMAIL_ENABLED:'true',TRANSACTIONAL_EMAIL_START_AT:new Date(Date.now()-60_000).toISOString(),RESEND_API_KEY:'synthetic-only'}});
     assert.equal(await worker.processOne(),true);assert.equal(await worker.processOne(),false);assert.equal(requests,1);
 });
 test('outbox with missing migration fails closed before order or delivery mutation',async()=>{
     let queries=0;const db={query:async()=>{queries++;return {rows:[{count:0}]};}};
-    const env={TRANSACTIONAL_EMAIL_ENABLED:'true',TRANSACTIONAL_EMAIL_START_AT:new Date(Date.now()-60_000).toISOString(),RESEND_API_KEY:'synthetic'};
+    const env={...adminEnv,TRANSACTIONAL_EMAIL_ENABLED:'true',TRANSACTIONAL_EMAIL_START_AT:new Date(Date.now()-60_000).toISOString(),RESEND_API_KEY:'synthetic'};
     assert.equal(await queueOrderEmails(null,null,{db,env}),0);
     assert.equal(await createNotificationWorker({db,env}).processOne(),false);
     assert.equal(queries,2);
@@ -34,7 +35,14 @@ test('enabled email remains inert without a valid activation cutover',async()=>{
     let queries=0;
     const db={query:async()=>{queries++;throw Error('must remain inert');}};
     for(const value of [undefined,'2026-02-30','2026-02-30T12:00:00Z','yesterday']){
-        const env={TRANSACTIONAL_EMAIL_ENABLED:'true',TRANSACTIONAL_EMAIL_START_AT:value,RESEND_API_KEY:'synthetic'};
+        const env={...adminEnv,TRANSACTIONAL_EMAIL_ENABLED:'true',TRANSACTIONAL_EMAIL_START_AT:value,RESEND_API_KEY:'synthetic'};
+        assert.equal(transactionalEmailCutover(env),null);
+        assert.equal(await queueOrderEmails(null,null,{db,env}),0);
+        assert.equal(await createNotificationWorker({db,env}).processOne(),false);
+    }
+    for(const recipient of [undefined,'not-an-email']){
+        const env={TRANSACTIONAL_EMAIL_ENABLED:'true',TRANSACTIONAL_EMAIL_START_AT:new Date(Date.now()-60_000).toISOString(),
+            TRANSACTIONAL_EMAIL_ADMIN_RECIPIENT:recipient,RESEND_API_KEY:'synthetic'};
         assert.equal(transactionalEmailCutover(env),null);
         assert.equal(await queueOrderEmails(null,null,{db,env}),0);
         assert.equal(await createNotificationWorker({db,env}).processOne(),false);
@@ -51,6 +59,9 @@ test('cutover excludes historic events and queues distinct buyer and institution
         {source_event_id:'historic',notification_event:'order_created',created_at:'2026-10-28T12:00:00Z'},
         {source_event_id:'created',notification_event:'order_created',created_at:'2026-10-29T12:01:00Z'},
         {source_event_id:'approved',notification_event:'payment_approved',created_at:'2026-10-29T12:02:00Z'},
+        {source_event_id:'cancelled',notification_event:'order_cancelled',created_at:'2026-10-29T12:03:00Z'},
+        {source_event_id:'shipped',notification_event:'order_shipped',created_at:'2026-10-29T12:04:00Z'},
+        {source_event_id:'delivered',notification_event:'order_delivered',created_at:'2026-10-29T12:05:00Z'},
     ].map(row=>({id:'synthetic-order',order_number:'SYNTHETIC-1',status:row.notification_event==='payment_approved'?'pagamento_aprovado':'recebido',
         user_email:'conta@example.test',checkout_email:'compradora@example.test',user_name:'Compradora',total:20,subtotal:20,shipping_cost:0,discount:0,
         snapshot:{items:[]},...row}));
@@ -92,6 +103,13 @@ test('cutover excludes historic events and queues distinct buyer and institution
     assert.equal(await queueOrderEmails(null,'payment_approved',{db,env}),2);
     assert.equal(sent.size,4);
     assert.equal([...sent.values()].filter(payload=>/Pagamento aprovado/.test(payload.subject)).length,2);
+    for(const [event,title] of [['order_cancelled','Pedido cancelado'],['order_shipped','Pedido enviado'],['order_delivered','Pedido entregue']]){
+        assert.equal(await queueOrderEmails(null,event,{db,env}),2);
+        assert.equal(await queueOrderEmails(null,event,{db,env}),0);
+        assert.equal([...sent.values()].filter(payload=>payload.subject.startsWith(title)).length,2);
+    }
+    assert.equal(sent.size,10);
+    assert.ok([...sent.values()].every(payload=>['compradora@example.test','pedidos@dhelenas.com'].includes(payload.to)));
     assert.equal(queuedEvents.has('historic'),false);
 });
 test('a failed delivery retries its frozen payload with the same provider key',async()=>{
@@ -114,7 +132,7 @@ test('a failed delivery retries its frozen payload with the same provider key',a
         throw Error('Unexpected synthetic query');
     };
     const db={query,connect:async()=>({query,release(){}})};
-    const env={TRANSACTIONAL_EMAIL_ENABLED:'true',TRANSACTIONAL_EMAIL_START_AT:new Date(now-60_000).toISOString(),RESEND_API_KEY:'synthetic'};
+    const env={...adminEnv,TRANSACTIONAL_EMAIL_ENABLED:'true',TRANSACTIONAL_EMAIL_START_AT:new Date(now-60_000).toISOString(),RESEND_API_KEY:'synthetic'};
     let calls=0;
     const worker=createNotificationWorker({db,env,now:()=>now,send:async(payload,key)=>{
         keys.push(key);calls++;assert.equal(payload.to,'compradora@example.test');

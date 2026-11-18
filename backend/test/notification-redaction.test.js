@@ -5,7 +5,7 @@ import { sendOrderNotifications } from '../src/services.js';
 
 test('communication disabled is inert; queue failures never log recipients, tokens or raw errors', async () => {
     const query=pool.query,logger=console.error,flag=process.env.TRANSACTIONAL_EMAIL_ENABLED,
-        cutover=process.env.TRANSACTIONAL_EMAIL_START_AT;
+        cutover=process.env.TRANSACTIONAL_EMAIL_START_AT, adminRecipient=process.env.TRANSACTIONAL_EMAIL_ADMIN_RECIPIENT;
     const records=[];let called=false;
     console.error=(...args)=>records.push(args.join(' '));
     pool.query=async()=>{called=true;throw new Error('payer@example.invalid Bearer fixture-secret');};
@@ -15,10 +15,12 @@ test('communication disabled is inert; queue failures never log recipients, toke
         assert.equal(called,false);
         process.env.TRANSACTIONAL_EMAIL_ENABLED='true';
         process.env.TRANSACTIONAL_EMAIL_START_AT=new Date(Date.now()-60_000).toISOString();
+        process.env.TRANSACTIONAL_EMAIL_ADMIN_RECIPIENT='admin@example.test';
         await sendOrderNotifications('fixture-order','payment_approved');
         assert.ok(records.some(r=>JSON.parse(r).event==='notifications_dispatch_failed'));
         assert.equal(/payer@|fixture-secret|Bearer/.test(records.join(' ')),false);
     }finally{pool.query=query;console.error=logger;
         if(flag===undefined)delete process.env.TRANSACTIONAL_EMAIL_ENABLED;else process.env.TRANSACTIONAL_EMAIL_ENABLED=flag;
-        if(cutover===undefined)delete process.env.TRANSACTIONAL_EMAIL_START_AT;else process.env.TRANSACTIONAL_EMAIL_START_AT=cutover;}
+        if(cutover===undefined)delete process.env.TRANSACTIONAL_EMAIL_START_AT;else process.env.TRANSACTIONAL_EMAIL_START_AT=cutover;
+        if(adminRecipient===undefined)delete process.env.TRANSACTIONAL_EMAIL_ADMIN_RECIPIENT;else process.env.TRANSACTIONAL_EMAIL_ADMIN_RECIPIENT=adminRecipient;}
 });

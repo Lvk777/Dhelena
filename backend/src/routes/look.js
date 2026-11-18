@@ -444,7 +444,7 @@ router.get('/integrations/status', auth, requireAdmin, async (req, res, next) =>
         {
             key: 'email',
             name: 'E-mail Transacional (Resend)',
-            status: check(mailReadiness.api_key_configured && mailReadiness.sender_and_reply_to_ready),
+            status: check(mailReadiness.api_key_configured && mailReadiness.sender_and_reply_to_ready && mailReadiness.admin_recipient_ready),
             environment: process.env.RESEND_API_KEY ? 'Produção' : '—',
             readiness: mailReadiness,
             hint: 'Resend: domínio verificado, API key e remetente autorizado. Configure Reply-To em E-mails.',

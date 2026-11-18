@@ -151,13 +151,16 @@ test('Email has no fictional fallback, header injection or unauthorized sender',
 });
 
 test('Email readiness reports only safe flags and never presumes domain verification', () => {
-    const ready = orderEmailReadiness(emailSettings, { ...emailEnv, RESEND_API_KEY: 'private-fixture-key' });
+    const ready = orderEmailReadiness(emailSettings, { ...emailEnv, RESEND_API_KEY: 'private-fixture-key',
+        TRANSACTIONAL_EMAIL_ADMIN_RECIPIENT: 'admin@example.test' });
     assert.equal(ready.api_key_configured, true);
     assert.equal(ready.sender_and_reply_to_ready, true);
+    assert.equal(ready.admin_recipient_ready, true);
     assert.equal(ready.domain_verification, 'external_gate');
     assert.equal(JSON.stringify(ready).includes('private-fixture-key'), false);
     assert.equal(JSON.stringify(ready).includes('@'), false);
     assert.equal(orderEmailReadiness({}, {}).sender_and_reply_to_ready, false);
+    assert.equal(orderEmailReadiness(emailSettings, emailEnv).admin_recipient_ready, false);
 });
 
 test('Every supported transactional event has an event-specific escaped template', () => {
