@@ -60,18 +60,13 @@ export default function AdminProducts() {
 
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [deleting, setDeleting] = useState(false);
-    const [deleteError, setDeleteError] = useState("");
 
     const confirmDelete = async () => {
         setDeleting(true);
-        setDeleteError("");
         try {
             await base44.entities.Product.delete(deleteTarget.id);
-            await logAdminAction("product_delete", "Product", deleteTarget.id, deleteTarget.name, "Produto excluído");
             setDeleteTarget(null);
             load();
-        } catch {
-            setDeleteError("Não foi possível excluir — este produto pode ter pedidos vinculados. Considere arquivar.");
         } finally {
             setDeleting(false);
         }
@@ -148,7 +143,7 @@ export default function AdminProducts() {
                                             {p.status !== "archived" ? (
                                                 <button onClick={() => archive(p)} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Arquivar"><Archive className="w-4 h-4" strokeWidth={1.25} /></button>
                                             ) : null}
-                                            <button onClick={() => { setDeleteTarget(p); setDeleteError(""); }} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded text-rose-ink" title="Excluir"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
+                                            <button onClick={() => setDeleteTarget(p)} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded text-rose-ink" title="Excluir"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
                                         </div>
                                     </td>
                                 </tr>
@@ -159,12 +154,13 @@ export default function AdminProducts() {
             )}
             <AdminConfirmDialog
                 open={!!deleteTarget}
-                onClose={() => { setDeleteTarget(null); setDeleteError(""); }}
+                onClose={() => setDeleteTarget(null)}
                 onConfirm={confirmDelete}
                 title="Excluir produto"
-                message={deleteError || "Você está prestes a excluir:"}
+                message="Tem certeza de que deseja excluir permanentemente este produto? Esta ação não poderá ser desfeita."
                 itemName={deleteTarget?.name}
-                confirmLabel="Excluir"
+                confirmLabel="Sim, excluir"
+                cancelLabel="Não, cancelar"
                 requireTyping
                 loading={deleting}
             />

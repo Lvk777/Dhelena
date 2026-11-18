@@ -7,6 +7,8 @@ import { publicSetting, validateSettingValue } from '../lib/publicSettings.js';
 import { safeNavigation } from '../lib/navigation.js';
 import { effectiveSizes, stockForSize } from '../lib/variantStock.js';
 import { assertCorreiosPackage } from '../lib/shipping.js';
+import { deleteProductPermanently } from '../services/productDeletion.js';
+import { assertHistoricalProductCanPublish } from '../lib/historicalProductPublication.js';
 
 const router = Router();
 
@@ -267,11 +269,12 @@ router.patch('/products/:id', auth, requireAdmin, async (req, res, next) => {
     try {
         const { expected_updated_date: expectedUpdatedDate, ...changes } = req.body;
         const product = await withTransaction(async client => {
-            const { rows: existing } = await client.query('SELECT status, price, sale_price, sizes, colors, weight, package_height, package_width, package_length, updated_date FROM products WHERE id = $1 FOR UPDATE', [req.params.id]);
+            const { rows: existing } = await client.query('SELECT id, status, sold_count, price, sale_price, sizes, colors, weight, package_height, package_width, package_length, updated_date FROM products WHERE id = $1 FOR UPDATE', [req.params.id]);
             if (!existing.length) return null;
             if (expectedUpdatedDate && new Date(existing[0].updated_date).getTime() !== new Date(expectedUpdatedDate).getTime()) {
                 throw Object.assign(new Error('O produto mudou desde a abertura do formulário. Recarregue antes de salvar.'), { status: 409 });
             }
+            await assertHistoricalProductCanPublish(client, existing[0], changes.status);
             validateProductForPublication({ ...existing[0], ...changes });
             return updateRow('products', req.params.id, changes, 'updated_date', client);
         });
@@ -283,9 +286,9 @@ router.patch('/products/:id', auth, requireAdmin, async (req, res, next) => {
 
 router.delete('/products/:id', auth, requireAdmin, async (req, res, next) => {
     try {
-        await pool.query("UPDATE products SET status = 'archived', updated_date = now() WHERE id = $1", [req.params.id]);
-        await logAudit(req.user.id, 'product.archive', 'product', req.params.id, null, req.ip);
-        res.json({ id: req.params.id });
+        const deleted = await deleteProductPermanently(req.params.id, req.user.id, req.ip);
+        if (!deleted) return res.status(404).json({ error: 'Produto não encontrado' });
+        res.json({ id: deleted.id });
     } catch (err) { next(err); }
 });
 
