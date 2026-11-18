@@ -6,6 +6,7 @@ import { formatBRL, totalStock } from "@/data/products";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
 import { logAdminAction } from "@/lib/audit";
 import { loadProductPages } from "@/lib/catalogPaging";
+import { canDuplicateProduct, productDuplicateDraft } from "@/lib/productDuplicate";
 
 const STATUS = {
     draft: { label: "Rascunho", color: "text-muted-foreground bg-[hsl(var(--bone))]" },
@@ -38,16 +39,7 @@ export default function AdminProducts() {
     });
 
     const duplicate = async (p) => {
-        const copyFields = [
-            'category', 'subcategory', 'collection', 'description',
-            'short_description', 'details', 'price', 'sale_price', 'cost_price',
-            'installments', 'images', 'colors', 'sizes', 'badges', 'composition',
-            'modeling', 'length', 'lining', 'transparency', 'elasticity', 'care',
-            'measurements', 'weight', 'package_height', 'package_width',
-            'package_length', 'size_guide_id', 'custom_measurements',
-        ];
-        const data = Object.fromEntries(copyFields.filter(field => p[field] !== undefined).map(field => [field, p[field]]));
-        const newProduct = await base44.entities.Product.create({ ...data, name: `${p.name} (cópia)`, sku: "", status: "draft" });
+        const newProduct = await base44.entities.Product.create(productDuplicateDraft(p));
         await logAdminAction("product_create", "Product", newProduct.id, `${p.name} (cópia)`, `Produto duplicado de "${p.name}"`);
         load();
     };
@@ -139,7 +131,7 @@ export default function AdminProducts() {
                                         <div className="flex items-center justify-end gap-1">
                                             {p.status === 'published' && <Link to={`/produto/${p.id}`} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Visualizar"><Eye className="w-4 h-4" strokeWidth={1.25} /></Link>}
                                             <Link to={`/admin/produtos/${p.id}`} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Editar"><Pencil className="w-4 h-4" strokeWidth={1.25} /></Link>
-                                            <button onClick={() => duplicate(p)} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Duplicar"><Copy className="w-4 h-4" strokeWidth={1.25} /></button>
+                                            {canDuplicateProduct(p) && <button onClick={() => duplicate(p)} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Duplicar"><Copy className="w-4 h-4" strokeWidth={1.25} /></button>}
                                             {p.status !== "archived" ? (
                                                 <button onClick={() => archive(p)} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Arquivar"><Archive className="w-4 h-4" strokeWidth={1.25} /></button>
                                             ) : null}
