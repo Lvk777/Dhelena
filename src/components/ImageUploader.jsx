@@ -139,32 +139,35 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
                         <div key={idx} className="relative group aspect-[3/4] bg-bone overflow-hidden rounded border border-border">
                             <img src={url} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex flex-col justify-between p-1.5">
-                                <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex justify-end gap-1">
                                     <button
                                         type="button"
                                         onClick={(e) => { e.stopPropagation(); removeImage(idx); }}
-                                        className="w-6 h-6 rounded-full bg-white/90 text-charcoal flex items-center justify-center hover:bg-white"
+                                        aria-label={`Remover foto ${idx + 1}`}
+                                        className="w-11 h-11 rounded-full bg-white/90 text-charcoal flex items-center justify-center hover:bg-white"
                                     >
-                                        <X className="w-3.5 h-3.5" strokeWidth={1.5} />
+                                        <X className="w-4 h-4" strokeWidth={1.5} />
                                     </button>
                                 </div>
-                                <div className="flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex items-center justify-between">
                                     <div className="flex gap-0.5">
                                         <button
                                             type="button"
                                             onClick={(e) => { e.stopPropagation(); moveImage(idx, -1); }}
                                             disabled={idx === 0}
-                                            className="w-6 h-6 rounded bg-white/90 text-charcoal flex items-center justify-center hover:bg-white disabled:opacity-30"
+                                            aria-label={`Mover foto ${idx + 1} para antes`}
+                                            className="w-11 h-11 rounded bg-white/90 text-charcoal flex items-center justify-center hover:bg-white disabled:opacity-30"
                                         >
-                                            <GripVertical className="w-3 h-3 rotate-180" strokeWidth={1.5} />
+                                            <GripVertical className="w-4 h-4 rotate-180" strokeWidth={1.5} />
                                         </button>
                                         <button
                                             type="button"
                                             onClick={(e) => { e.stopPropagation(); moveImage(idx, 1); }}
                                             disabled={idx === images.length - 1}
-                                            className="w-6 h-6 rounded bg-white/90 text-charcoal flex items-center justify-center hover:bg-white disabled:opacity-30"
+                                            aria-label={`Mover foto ${idx + 1} para depois`}
+                                            className="w-11 h-11 rounded bg-white/90 text-charcoal flex items-center justify-center hover:bg-white disabled:opacity-30"
                                         >
-                                            <GripVertical className="w-3 h-3" strokeWidth={1.5} />
+                                            <GripVertical className="w-4 h-4" strokeWidth={1.5} />
                                         </button>
                                     </div>
                                 </div>
@@ -193,7 +196,7 @@ export default function ImageUploader({ images = [], onChange, max = 10 }) {
             )}
 
             <p className="text-[11px] text-muted-foreground mt-3">
-                A primeira foto e a principal. Arraste para reordenar. Recomendamos: {RECOMMENDATIONS.join(" · ")}.
+                A primeira foto é a principal. Use as setas para reordenar. Recomendamos: {RECOMMENDATIONS.join(" · ")}.
             </p>
 
             {/* Cropper modal for multi-image upload */}

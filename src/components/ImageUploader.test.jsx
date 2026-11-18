@@ -48,3 +48,26 @@ test('canceling a sequence preserves already confirmed and existing photos', asy
     expect(screen.getByTestId('images').textContent).toBe('https://example.test/existing.webp|https://example.test/first.png');
     expect(upload).toHaveBeenCalledTimes(1);
 });
+
+test('photo controls stay visible and usable on touch layouts', () => {
+    const { container } = render(<Harness />);
+    const remove = screen.getByRole('button', { name: 'Remover foto 1' });
+    const moveBefore = screen.getByRole('button', { name: 'Mover foto 1 para antes' });
+    const moveAfter = screen.getByRole('button', { name: 'Mover foto 1 para depois' });
+    expect(remove.className).toContain('w-11 h-11');
+    expect(moveBefore.className).toContain('w-11 h-11');
+    expect(moveAfter.className).toContain('w-11 h-11');
+    expect(remove.parentElement.className).not.toContain('opacity-0');
+    expect(moveAfter.parentElement.parentElement.className).not.toContain('opacity-0');
+    expect(moveBefore.disabled).toBe(true);
+    expect(moveAfter.disabled).toBe(true);
+
+    selectFiles(container);
+    fireEvent.click(screen.getByRole('button', { name: 'Usar imagem' }));
+    return waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Mover foto 1 para depois' }).disabled).toBe(false);
+    }).then(() => {
+        fireEvent.click(screen.getByRole('button', { name: 'Mover foto 1 para depois' }));
+        expect(screen.getByTestId('images').textContent).toBe('https://example.test/first.png|https://example.test/existing.webp');
+    });
+});
