@@ -151,7 +151,8 @@ export default function AdminOrderDetail() {
                         </div>
                     </div>
 
-                    <PaymentReconciliationPreview key={order.id} order={order} />
+                    {snapshot.payment_context?.mode === 'test' &&
+                        <PaymentReconciliationPreview key={order.id} order={order} />}
 
                     <AdminAfterSales order={order} onChanged={load} />
                     <OperationalRefund key={order.id} order={order} onChanged={load} />
