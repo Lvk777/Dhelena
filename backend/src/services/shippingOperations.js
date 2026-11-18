@@ -82,6 +82,7 @@ export function createShippingOperations({ db = pool, provider = melhorEnvio, en
                 const values = Object.fromEntries(settings.rows.map(r => [r.key, r.value]));
                 let invoiceKey = input.invoice_key;
                 if (mode === 'production') {
+                    if (env.FISCAL_XML_IMPORT_ENABLED !== 'true') throw error('Importação fiscal ainda indisponível; nenhuma preparação de envio foi iniciada.', 503);
                     const fiscal = await client.query("SELECT access_key FROM fiscal_documents WHERE order_id=$1 AND status='verified'", [orderId]);
                     if (!fiscal.rows[0]) throw error('Importe e confira a NF-e com o pedido e a fonte oficial antes de preparar o envio.', 422);
                     invoiceKey = fiscal.rows[0].access_key.trim();

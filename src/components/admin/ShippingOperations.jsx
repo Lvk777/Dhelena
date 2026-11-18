@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { formatBRL } from '@/data/products';
 import { safeShippingPrintUrl } from '../../../backend/src/lib/shipping.js';
+import { fiscalXmlImportEnabled } from '@/lib/fiscalFeature';
 
 export default function ShippingOperations({ order, fiscalDocument, onChanged }) {
     const [ready, setReady] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -43,12 +44,14 @@ export default function ShippingOperations({ order, fiscalDocument, onChanged })
                 {ready.fiscal_model && <p>Documento informado: modelo {ready.fiscal_model}, chave terminada em {ready.fiscal_key_last4}. Confira a correspondência com a venda.</p>}
                 {ready.rejection_fields?.length > 0 && <p role="alert" className="text-error-ink">Rejeição anterior: confira {ready.rejection_fields.join(', ')}. O envio permanece bloqueado até conciliação.</p>}
                 {!order.melhor_envio_shipment_id && <>
-                    {ready.environment === 'production' ? <p>Chave fiscal: {fiscalDocument?.status === 'verified' ? fiscalDocument.access_key : 'importe e confira a NF-e acima antes de preparar o envio'}.</p> :
+                    {ready.environment === 'production' ? <p>{fiscalXmlImportEnabled ?
+                        `Chave fiscal: ${fiscalDocument?.status === 'verified' ? fiscalDocument.access_key : 'importe e confira a NF-e acima antes de preparar o envio'}.` :
+                        'Importação fiscal indisponível até homologação. Preparação de envios comerciais bloqueada.'}</p> :
                         <label className="block">Chave da NF-e modelo 55 (opcional em Sandbox)
                             <input aria-label="Chave da NF-e modelo 55" value={invoice} onChange={e=>setInvoice(e.target.value.replace(/\D/g,'').slice(0,44))}
                                 className="block w-full admin-field p-3 mt-1" inputMode="numeric" />
                         </label>}
-                    <button className="btn-outline text-xs" disabled={busy || ['cart_inflight','cart_uncertain'].includes(state) || ready.environment === 'production' && fiscalDocument?.status !== 'verified'} onClick={()=>run('prepare')}>Preparar envio (sem compra)</button>
+                    <button className="btn-outline text-xs" disabled={busy || ['cart_inflight','cart_uncertain'].includes(state) || ready.environment === 'production' && (!fiscalXmlImportEnabled || fiscalDocument?.status !== 'verified')} onClick={()=>run('prepare')}>Preparar envio (sem compra)</button>
                 </>}
                 {state === 'cart_created' && <>
                     <p>Envio no carrinho; etiqueta ainda não comprada. Custo: {ready.price == null ? 'consulte novamente' : formatBRL(Number(ready.price))}. Frete cobrado da cliente: {formatBRL(Number(ready.customer_shipping_cost || 0))}.</p>

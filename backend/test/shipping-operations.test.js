@@ -37,7 +37,7 @@ function fixture(){
         checkoutShipments:async(ids,mode)=>calls.push(['checkout',mode]),generateShipments:async(ids,mode)=>calls.push(['generate',mode]),
         printShipments:async(ids,mode)=>{calls.push(['print',mode]);return {print_url:'https://sandbox.melhorenvio.com.br/imprimir/fixture'};},
         getTracking:async(id,mode)=>{calls.push(['tracking',mode]);return {status:'released',tracking_code:'MOCK'};}};
-    const db={query,connect:async()=>({query,release(){}})},env={SHIPPING_LABEL_PURCHASE_ENABLED:'true'};
+    const db={query,connect:async()=>({query,release(){}})},env={SHIPPING_LABEL_PURCHASE_ENABLED:'true',FISCAL_XML_IMPORT_ENABLED:'true'};
     return {operate:createShippingOperations({db,provider,env}),provider,env,calls,setFiscal(value){fiscalKeyValue=value;},get order(){return order;}};
 }
 test('preparation and retries never buy a label; destination complement is preserved',async()=>{
@@ -110,6 +110,13 @@ test('production preparation uses only the verified imported key and keeps uncer
     const g=fixture();g.order.snapshot.shipping_environment='production';g.order.shipping_status='cart_inflight';g.setFiscal(fiscalKey('55'));
     await assert.rejects(g.operate('fixture','prepare'),/resultado incerto/);
     assert.equal(g.calls.length,0);
+});
+test('production preparation is disabled safely while fiscal migration is deferred',async()=>{
+    const f=fixture();f.order.snapshot.shipping_environment='production';
+    f.env.FISCAL_XML_IMPORT_ENABLED='false';f.setFiscal(fiscalKey('55'));
+    await assert.rejects(f.operate('fixture','prepare'),/Importação fiscal ainda indisponível/);
+    assert.equal(f.order.shipping_status,undefined);
+    assert.equal(f.calls.length,0);
 });
 test('SEDEX validates actual closed package in cm and kg before contacting provider',()=>{
     const order=structuredClone(orderFixture);order.shipping_quote_id='2';

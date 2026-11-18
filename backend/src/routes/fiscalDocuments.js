@@ -14,7 +14,12 @@ const publicDocument = row => row && ({ id: row.id, order_id: row.order_id, acce
     official_source: row.official_source, official_checked_at: row.official_checked_at,
     created_at: row.created_at });
 const orderPath = '/orders/:id/fiscal';
-router.use(orderPath, auth, requireSupabaseAdmin);
+export const fiscalXmlImportEnabled = (env = process.env) => env.FISCAL_XML_IMPORT_ENABLED === 'true';
+export function requireFiscalXmlImport(req, res, next, env = process.env) {
+    if (!fiscalXmlImportEnabled(env)) return res.status(503).json({ error: 'Importação de NF-e indisponível até a homologação fiscal.' });
+    next();
+}
+router.use(orderPath, auth, requireSupabaseAdmin, requireFiscalXmlImport);
 
 router.get(orderPath, async (req, res, next) => {
     try {

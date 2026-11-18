@@ -11,6 +11,7 @@ import AdminAfterSales from "@/components/admin/AdminAfterSales";
 import PaymentReconciliationPreview from "@/components/admin/PaymentReconciliationPreview";
 import CardFinancingSummary from '@/components/checkout/CardFinancingSummary';
 import { orderDeliveryEstimateLabel } from '@/lib/deliveryEstimate';
+import { fiscalXmlImportEnabled } from '@/lib/fiscalFeature';
 
 const STATUS_OPTIONS = Object.entries(ORDER_STATUS)
     .filter(([key]) => ['em_separacao', 'enviado', 'em_transporte', 'saiu_entrega', 'entregue'].includes(key))
@@ -37,8 +38,10 @@ export default function AdminOrderDetail() {
         try {
             const o = await base44.entities.Order.get(id);
             setOrder(o);
-            try { setFiscalDocument(await base44.functions.invoke('getFiscalDocument', { orderId: id })); setFiscalLoadError(''); }
-            catch { setFiscalDocument(null); setFiscalLoadError('Não foi possível consultar a nota fiscal deste pedido. Tente atualizar a página.'); }
+            if (fiscalXmlImportEnabled) {
+                try { setFiscalDocument(await base44.functions.invoke('getFiscalDocument', { orderId: id })); setFiscalLoadError(''); }
+                catch { setFiscalDocument(null); setFiscalLoadError('Não foi possível consultar a nota fiscal deste pedido. Tente atualizar a página.'); }
+            } else { setFiscalDocument(null); setFiscalLoadError(''); }
             // Load timeline events
             try {
                 const evs = await base44.functions.invoke("getOrderEvents", { orderId: id });
@@ -153,7 +156,7 @@ export default function AdminOrderDetail() {
                     <AdminAfterSales order={order} onChanged={load} />
                     <OperationalRefund key={order.id} order={order} onChanged={load} />
 
-                    <FiscalDocumentPanel order={order} document={fiscalDocument} loadError={fiscalLoadError} onChanged={setFiscalDocument} />
+                    {fiscalXmlImportEnabled && <FiscalDocumentPanel order={order} document={fiscalDocument} loadError={fiscalLoadError} onChanged={setFiscalDocument} />}
 
                     {/* Delivery / Shipping */}
                     <div className="bg-background text-foreground p-5">

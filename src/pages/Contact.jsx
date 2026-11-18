@@ -70,7 +70,8 @@ export default function Contact() {
                         {phone && <ContactRow icon={Phone} label="Telefone" value={phone} link={`tel:${phone.replace(/[^+\d]/g, '')}`} />}
                         {email && <ContactRow icon={Mail} label="E-mail" value={email} link={`mailto:${encodeURIComponent(email)}`} />}
                         {instagram && <ContactRow icon={Instagram} label="Instagram" value="Instagram da boutique" link={instagram} />}
-                        {general.public_address && <ContactRow icon={MapPin} label="Endereço do fornecedor" value={general.public_address} />}
+                        {settings.shipping?.pickup_enabled === true && general.public_address &&
+                            <ContactRow icon={MapPin} label="Endereço do fornecedor" value={general.public_address} />}
                     </div>
                     {general.business_hours && <div className="mt-10 p-6 border border-border bg-[hsl(var(--bone))]">
                         <p className="text-[11px] uppercase tracking-[0.22em] text-foreground mb-2">Horário de atendimento</p>

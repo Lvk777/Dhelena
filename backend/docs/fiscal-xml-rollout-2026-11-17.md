@@ -6,9 +6,10 @@ Estado observado em 2026-11-17, sem escrita em produção:
 - Supabase PostgreSQL 17.6: `stock_reservations` (018) e colunas da fila (015) presentes; `admin_email_credentials` (021) e `fiscal_documents` (022) ausentes. O histórico de migrations do painel está vazio porque as migrations anteriores foram aplicadas fora do Supabase CLI. Confirmar cada mudança pelo esquema, nunca apenas pelo histórico do painel.
 - `maintenance_mode=true`, Data API desativada e `TRANSACTIONAL_EMAIL_ENABLED=false` observados. Não alterar essas proteções durante a implantação.
 - O plano Free informa que não oferece backups do projeto. **Não aplicar 022 até existir cópia íntegra restaurada e conferida em banco descartável.** Pode ser backup manual; não é necessário contratar plano para isso.
+- O responsável adiou a decisão de backup. Nesta etapa, 022 permanece pendente e a importação fiscal fica desativada por padrão: `FISCAL_XML_IMPORT_ENABLED` no backend e `VITE_FISCAL_XML_IMPORT_ENABLED` no build do frontend só podem passar a `true` após a migration, conferência de esquema e autorização específica. Sem as flags, as rotas fiscais respondem 503 sem consultar a tabela e a preparação comercial não inicia. A interface oculta a importação.
 - O pedido `DH-2026-000019` permanece `approved`, R$ 30,00 de mercadorias, R$ 9,98 de frete, `cart_inflight` e `melhor_envio_shipment_id=NULL`. Não preparar nem comprar etiqueta enquanto não houver conciliação oficial da tentativa anterior. A nota apresentada com R$ 39,98 em mercadorias e frete zero é divergente e deve permanecer bloqueada.
 
-## Antes da migration
+## Em etapa futura, antes da migration
 
 1. Identificar a instância PostgreSQL efetivamente usada por `resourceful-joy`, sem divulgar a conexão. Confirmar espaço, versão, privilégios e que `public.fiscal_documents` não existe. Confirmar integridade de `orders`, `profiles` e `audit_logs` e ausência de transações DDL concorrentes.
 2. Obter backup completo com ferramenta oficial PostgreSQL e restaurá-lo em banco PostgreSQL 17 descartável. Comparar contagens e esquemas das tabelas críticas e executar uma consulta de leitura no banco restaurado. Guardar backup e evidência de restauração em armazenamento privado, com acesso restrito. O painel Free, sozinho, não fornece essa garantia.

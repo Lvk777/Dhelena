@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAuthorizedNfe, reconcileNfe, validNfeKey } from '../src/lib/fiscalXml.js';
+import { fiscalXmlImportEnabled, requireFiscalXmlImport } from '../src/routes/fiscalDocuments.js';
 
 function accessKey() {
     const prefix = '3526116173880100014355026161110001394826583';
@@ -29,4 +30,17 @@ test('rejects unsafe, malformed, inconsistent or non-authorized XML', () => {
         '<!DOCTYPE a [<!ENTITY x "unsafe">]>' + xml(), '<nfeProc><NFe></nfeProc>']) {
         assert.throws(() => parseAuthorizedNfe(Buffer.from(input)));
     }
+});
+
+test('fiscal routes fail closed before a missing production table can be queried', () => {
+    assert.equal(fiscalXmlImportEnabled({}), false);
+    assert.equal(fiscalXmlImportEnabled({ FISCAL_XML_IMPORT_ENABLED: 'false' }), false);
+    let status, body, nextCalled = false;
+    const res = { status(code) { status = code; return this; }, json(value) { body = value; return this; } };
+    requireFiscalXmlImport({}, res, () => { nextCalled = true; }, {});
+    assert.equal(status, 503);
+    assert.match(body.error, /indisponível/);
+    assert.equal(nextCalled, false);
+    requireFiscalXmlImport({}, res, () => { nextCalled = true; }, { FISCAL_XML_IMPORT_ENABLED: 'true' });
+    assert.equal(nextCalled, true);
 });
