@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAuthorizedNfe, reconcileNfe, validNfeKey } from '../src/lib/fiscalXml.js';
-import { fiscalXmlImportEnabled, requireFiscalXmlImport } from '../src/routes/fiscalDocuments.js';
+import { fiscalXmlImportEnabled, requireFiscalXmlImport, validateFiscalVerification } from '../src/routes/fiscalDocuments.js';
 
 function accessKey() {
     const prefix = '3526116173880100014355026161110001394826583';
@@ -49,4 +49,13 @@ test('fiscal routes fail closed before a missing production table can be queried
     assert.equal(nextCalled, false);
     requireFiscalXmlImport({}, res, () => { nextCalled = true; }, { FISCAL_XML_IMPORT_ENABLED: 'true' });
     assert.equal(nextCalled, true);
+});
+
+test('official verification requires separate authorization and full-content attestations', () => {
+    const input = { access_key: key, protocol: '235260655386875', source: 'national',
+        confirmed_authorized: true, confirmed_document_matches: true };
+    assert.deepEqual(validateFiscalVerification(input), { key, protocol: input.protocol, source: input.source });
+    assert.throws(() => validateFiscalVerification({ ...input, confirmed_authorized: false }), /correspondência/);
+    assert.throws(() => validateFiscalVerification({ ...input, confirmed_document_matches: false }), /correspondência/);
+    assert.throws(() => validateFiscalVerification({ ...input, source: 'untrusted' }), /portal oficial/);
 });

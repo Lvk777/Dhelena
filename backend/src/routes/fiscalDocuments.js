@@ -15,6 +15,14 @@ const publicDocument = row => row && ({ id: row.id, order_id: row.order_id, acce
     created_at: row.created_at });
 const orderPath = '/orders/:id/fiscal';
 export const fiscalXmlImportEnabled = (env = process.env) => env.FISCAL_XML_IMPORT_ENABLED === 'true';
+export function validateFiscalVerification(input = {}) {
+    const { access_key: key, protocol, confirmed_authorized: confirmed,
+        confirmed_document_matches: matches, source } = input;
+    if (confirmed !== true || matches !== true || !['national', 'svrs'].includes(source)) {
+        throw fail('Confirme no portal oficial a autorização e a correspondência dos dados completos da NF-e.');
+    }
+    return { key, protocol, source };
+}
 export function requireFiscalXmlImport(req, res, next, env = process.env) {
     if (!fiscalXmlImportEnabled(env)) return res.status(503).json({ error: 'Importação de NF-e indisponível até a homologação fiscal.' });
     next();
@@ -65,8 +73,7 @@ router.post(orderPath, uploadLimiter, (req, res, next) => xmlUpload.single('file
 router.post(`${orderPath}/verify`, async (req, res, next) => {
     let client;
     try {
-        const { access_key: key, protocol, confirmed_authorized: confirmed, source } = req.body || {};
-        if (confirmed !== true || !['national', 'svrs'].includes(source)) throw fail('Confirme a autorização no portal oficial antes de liberar a nota.');
+        const { key, protocol, source } = validateFiscalVerification(req.body);
         client = await pool.connect(); await client.query('BEGIN');
         const { rows } = await client.query('SELECT * FROM fiscal_documents WHERE order_id=$1 FOR UPDATE', [req.params.id]);
         const row = rows[0];
@@ -78,7 +85,8 @@ router.post(`${orderPath}/verify`, async (req, res, next) => {
         const result = await client.query(`UPDATE fiscal_documents SET status='verified',official_source=$2,official_checked_at=now(),verified_by=$3,updated_at=now()
             WHERE id=$1 RETURNING id,order_id,access_key,parsed_data,differences,status,official_source,official_checked_at,created_at`, [row.id, officialSource, req.user.id]);
         await client.query(`INSERT INTO audit_logs(admin_id,action,entity_type,entity_id,changes) VALUES($1,'fiscal.official_check_attested','order',$2,$3)`,
-            [req.user.id, req.params.id, JSON.stringify({ document_id: row.id, source: officialSource, key_last4: key.slice(-4) })]);
+            [req.user.id, req.params.id, JSON.stringify({ document_id: row.id, source: officialSource,
+                key_last4: key.slice(-4), authorization_attested: true, full_content_match_attested: true })]);
         await client.query('COMMIT'); res.json(publicDocument(result.rows[0]));
     } catch (error) { if (client) await client.query('ROLLBACK').catch(() => {}); next(error); }
     finally { client?.release(); }

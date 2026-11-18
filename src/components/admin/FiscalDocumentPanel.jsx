@@ -16,6 +16,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
     const [protocol, setProtocol] = useState('');
     const [source, setSource] = useState('national');
     const [confirmed, setConfirmed] = useState(false);
+    const [contentMatched, setContentMatched] = useState(false);
 
     const importFile = async event => {
         const file = event.target.files?.[0];
@@ -31,8 +32,9 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
         setBusy(true); setError('');
         try {
             onChanged(await base44.functions.invoke('verifyFiscalDocument', { orderId: order.id,
-                verification: { access_key: key.trim(), protocol: protocol.trim(), source, confirmed_authorized: confirmed } }));
-            setKey(''); setProtocol(''); setConfirmed(false);
+                verification: { access_key: key.trim(), protocol: protocol.trim(), source,
+                    confirmed_authorized: confirmed, confirmed_document_matches: contentMatched } }));
+            setKey(''); setProtocol(''); setConfirmed(false); setContentMatched(false);
         } catch (cause) { setError(cause.message || 'Não foi possível confirmar a consulta oficial.'); }
         finally { setBusy(false); }
     };
@@ -73,7 +75,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
             </div> : document.status === 'verified' ? <p role="status" className="text-sm">Conferência manual em fonte oficial registrada em {new Date(document.official_checked_at).toLocaleString('pt-BR')}. Chave liberada para a preparação do envio, sujeita às demais proteções.</p>
                 : <p role="status" className="text-sm">XML e pedido conferem. Falta confirmar a situação atual da NF-e no portal oficial.</p>}
             {document.status === 'pending_official' && <div className="border border-border p-3 space-y-3 text-sm">
-                <p>Abra o portal oficial, consulte a chave e confirme autorização, protocolo e ausência de cancelamento. O XML por si só não comprova a situação fiscal atual.</p>
+                <p>Abra o portal oficial e compare a chave, o protocolo, o emitente, o destinatário, os produtos, as quantidades, os valores e o frete com esta nota. Confirme a autorização atual e a ausência de cancelamento. O XML por si só não comprova autenticidade ou situação fiscal.</p>
                 <label className="block">Portal consultado
                     <select className="admin-field block w-full p-2 mt-1" value={source} onChange={event => setSource(event.target.value)}>
                         <option value="national">Portal Nacional da NF-e</option><option value="svrs">Portal SVRS</option>
@@ -83,7 +85,8 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
                 <label className="block">Chave vista no portal<input className="admin-field block w-full p-2 mt-1" value={key} onChange={event => setKey(event.target.value.replace(/\D/g, '').slice(0, 44))} inputMode="numeric" /></label>
                 <label className="block">Protocolo visto no portal<input className="admin-field block w-full p-2 mt-1" value={protocol} onChange={event => setProtocol(event.target.value.replace(/\D/g, '').slice(0, 15))} inputMode="numeric" /></label>
                 <label className="flex gap-2 items-start"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} className="mt-1" />Confirmo que a consulta oficial mostra esta NF-e autorizada, sem evento de cancelamento.</label>
-                <button type="button" className="btn-outline min-h-11 text-xs" disabled={busy || !confirmed || key.length !== 44 || protocol.length !== 15} onClick={verify}>Registrar conferência oficial</button>
+                <label className="flex gap-2 items-start"><input type="checkbox" checked={contentMatched} onChange={event => setContentMatched(event.target.checked)} className="mt-1" />Comparei no documento oficial emitente, destinatário, produtos, quantidades, mercadorias, frete e total; todos correspondem aos dados exibidos e ao pedido.</label>
+                <button type="button" className="btn-outline min-h-11 text-xs" disabled={busy || !confirmed || !contentMatched || key.length !== 44 || protocol.length !== 15} onClick={verify}>Registrar conferência oficial</button>
             </div>}
             {document.status === 'verified' && <button type="button" className="btn-outline text-xs inline-flex items-center gap-2 min-h-11" disabled={busy} onClick={download}><Download className="w-4 h-4" /> Baixar XML autorizado</button>}
         </>}
