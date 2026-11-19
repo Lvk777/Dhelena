@@ -91,8 +91,11 @@ export function parseAuthorizedNfe(buffer) {
     const proc = parsed.nfeProc;
     const nfe = proc?.NFe?.infNFe;
     const prot = proc?.protNFe?.infProt;
+    if (!proc || !nfe || !prot) {
+        throw new Error('O arquivo não é o XML fiscal autorizado da NF-e. Solicite o XML original no emissor/NFF ou à contabilidade. Converter um DANFE em PDF para XML não funciona.');
+    }
     const key = text(nfe?.['@_Id']).replace(/^NFe/, '');
-    if (!proc || !nfe || !prot || !validNfeKey(key) || text(prot.chNFe) !== key
+    if (!validNfeKey(key) || text(prot.chNFe) !== key
         || text(prot.cStat) !== '100' || !/^\d{15}$/.test(text(prot.nProt))
         || text(nfe.ide?.mod) !== '55' || text(nfe.ide?.tpAmb) !== '1'
         || text(nfe.ide?.nNF) !== String(Number(key.slice(25, 34)))

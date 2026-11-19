@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAuthorizedNfe, parseManualNfe, reconcileNfe, validNfeKey } from '../src/lib/fiscalXml.js';
-import { fiscalXmlImportEnabled, requireFiscalXmlImport, validateFiscalVerification } from '../src/routes/fiscalDocuments.js';
+import { fiscalXmlImportEnabled, parseFiscalXmlUpload, requireFiscalXmlImport, validateFiscalVerification } from '../src/routes/fiscalDocuments.js';
 
 function accessKey() {
     const prefix = '3526116173880100014355026161110001394826583';
@@ -66,6 +66,16 @@ test('rejects unsafe, malformed, inconsistent or non-authorized XML', () => {
         '<!DOCTYPE a [<!ENTITY x "unsafe">]>' + xml(), '<nfeProc><NFe></nfeProc>']) {
         assert.throws(() => parseAuthorizedNfe(Buffer.from(input)));
     }
+});
+
+test('PDF-converted XML is rejected with 422 rather than internal server error', () => {
+    const convertedPdfXml = '<?xml version="1.0"?><document><page><text>DANFE</text></page></document>';
+    assert.throws(() => parseFiscalXmlUpload(Buffer.from(convertedPdfXml)), error =>
+        error.status === 422 && /XML fiscal autorizado/.test(error.message)
+            && /PDF/.test(error.message));
+    assert.throws(() => parseFiscalXmlUpload(Buffer.from('<nfeProc><NFe></nfeProc>')), error =>
+        error.status === 422 && /Estrutura XML inválida/.test(error.message));
+    assert.equal(parseFiscalXmlUpload(Buffer.from(xml())).key, key);
 });
 
 test('fiscal routes fail closed before a missing production table can be queried', () => {

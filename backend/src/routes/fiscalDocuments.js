@@ -9,6 +9,10 @@ import { parseAuthorizedNfe, parseManualNfe, reconcileNfe, validNfeKey } from '.
 const router = Router();
 const xmlUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1024 * 1024, files: 1 } });
 const fail = (message, status = 422) => Object.assign(new Error(message), { status });
+export function parseFiscalXmlUpload(buffer) {
+    try { return parseAuthorizedNfe(buffer); }
+    catch (error) { throw fail(error?.message || 'Arquivo XML fiscal inválido.'); }
+}
 const fields = 'id,order_id,access_key,origin,parsed_data,differences,status,official_source,official_checked_at,imported_by,verified_by,created_at';
 const publicDocument = row => row && ({ id: row.id, order_id: row.order_id, access_key: row.access_key.trim(),
     origin: row.origin, imported_by: row.imported_by, verified_by: row.verified_by,
@@ -129,7 +133,7 @@ router.post(orderPath, uploadLimiter, (req, res, next) => xmlUpload.single('file
 }), async (req, res, next) => {
     if (!req.file || !/\.xml$/i.test(req.file.originalname)) return next(fail('Selecione um arquivo .xml da NF-e.'));
     try {
-        const data = parseAuthorizedNfe(req.file.buffer);
+        const data = parseFiscalXmlUpload(req.file.buffer);
         const sha = createHash('sha256').update(req.file.buffer).digest('hex');
         res.status(201).json(await storeDocument(req, data, 'xml', req.file.buffer, sha));
     } catch (error) { next(error); }

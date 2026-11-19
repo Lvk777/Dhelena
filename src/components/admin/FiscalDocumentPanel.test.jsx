@@ -7,7 +7,7 @@ import { base44 } from '@/api/base44Client';
 
 vi.mock('@/api/base44Client', () => ({ base44: { functions: { invoke: vi.fn() } } }));
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 test('a failed document lookup shows the error without offering an unsafe second import', () => {
     render(<FiscalDocumentPanel order={{ id: 'order-1' }} document={null}
@@ -18,40 +18,42 @@ test('a failed document lookup shows the error without offering an unsafe second
     expect(screen.queryByRole('button', { name: 'Informar chave da NF-e' })).toBeNull();
 });
 
-test('manual form records data for review without verification or issuing a document', async () => {
+test('new fiscal registration exposes only XML upload, not key or manual entry', async () => {
     const onChanged = vi.fn();
-    base44.functions.invoke.mockResolvedValueOnce({ id: 'document-1', origin: 'manual', status: 'pending_official' });
+    const document = { id: 'document-1', origin: 'xml', status: 'pending_official' };
+    base44.functions.invoke.mockResolvedValueOnce(document);
     render(<FiscalDocumentPanel order={{ id: 'order-1' }} document={null} onChanged={onChanged} />);
     expect(screen.getByRole('button', { name: 'Importar XML' })).toBeTruthy();
-    fireEvent.click(screen.getByText('Cadastro manual avançado'));
-    fireEvent.click(screen.getByRole('button', { name: 'Preencher dados completos' }));
-    const values = [
-        ['Chave de acesso (44 dígitos)', '1'.repeat(44)], ['Número da NF-e', '19'], ['Série', '1'],
-        ['Data e hora de emissão', '2026-11-18T12:00'], ['Protocolo de autorização (15 dígitos)', '2'.repeat(15)],
-        ['CNPJ do emitente', '12345678000199'], ['Nome do emitente', 'Emitente'],
-        ['CPF ou CNPJ do destinatário', '12345678909'], ['Nome do destinatário', 'Cliente'],
-        ['Descrição', 'Peça'], ['Valor total do item (R$)', '30.00'],
-        ['Valor das mercadorias (R$)', '30.00'], ['Frete (R$)', '9.98'], ['Total da NF-e (R$)', '39.98'],
-    ];
-    for (const [label, value] of values) fireEvent.change(screen.getByLabelText(label), { target: { value } });
-    fireEvent.click(screen.getByRole('button', { name: 'Cadastrar dados para conferência' }));
-    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
-    expect(base44.functions.invoke).toHaveBeenCalledWith('recordManualFiscalDocument', expect.objectContaining({ orderId: 'order-1' }));
+    expect(screen.queryByRole('button', { name: 'Informar chave da NF-e' })).toBeNull();
+    expect(screen.queryByText('Cadastro manual avançado')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Preencher dados completos' })).toBeNull();
+    fireEvent.change(screen.getByLabelText('Arquivo XML da NF-e'), {
+        target: { files: [new File(['<nfeProc/>'], 'nfe.xml', { type: 'text/xml' })] },
+    });
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith(document));
+    expect(base44.functions.invoke).toHaveBeenCalledWith('importFiscalXml', expect.objectContaining({ orderId: 'order-1' }));
     expect(base44.functions.invoke).toHaveBeenCalledTimes(1);
 });
 
-test('key-only entry stays pending and cannot expose an official verification action', async () => {
+test('invalid converted PDF XML shows explanatory validation error without changing order', async () => {
     const onChanged = vi.fn();
-    base44.functions.invoke.mockResolvedValueOnce({ id: 'pending-1', origin: 'key_only', status: 'pending_key', access_key: '1'.repeat(44) });
-    const { rerender } = render(<FiscalDocumentPanel order={{ id: 'order-1' }} document={null} onChanged={onChanged} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Informar chave da NF-e' }));
-    fireEvent.change(screen.getByLabelText('Chave de acesso (44 dígitos)'), { target: { value: '1'.repeat(44) } });
-    fireEvent.click(screen.getByRole('button', { name: 'Registrar chave pendente' }));
-    await waitFor(() => expect(base44.functions.invoke).toHaveBeenCalledWith('recordPendingFiscalKey', { orderId: 'order-1', accessKey: '1'.repeat(44) }));
-    const pending = { id: 'pending-1', origin: 'key_only', status: 'pending_key', access_key: '1'.repeat(44), created_at: '2026-11-19T12:00:00Z' };
-    rerender(<FiscalDocumentPanel order={{ id: 'order-1' }} document={pending} onChanged={onChanged} />);
+    base44.functions.invoke.mockRejectedValueOnce(new Error('O arquivo não é o XML fiscal autorizado da NF-e.'));
+    render(<FiscalDocumentPanel order={{ id: 'order-1' }} document={null} onChanged={onChanged} />);
+    fireEvent.change(screen.getByLabelText('Arquivo XML da NF-e'), {
+        target: { files: [new File(['<document><page/></document>'], 'danfe.xml', { type: 'text/xml' })] },
+    });
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('não é o XML fiscal autorizado'));
+    expect(onChanged).not.toHaveBeenCalled();
+});
+
+test('historical pending key can be replaced by XML without exposing key registration', () => {
+    const pending = { id: 'pending-1', origin: 'key_only', status: 'pending_key',
+        access_key: '1'.repeat(44), created_at: '2026-11-19T12:00:00Z' };
+    render(<FiscalDocumentPanel order={{ id: 'order-1' }} document={pending} onChanged={vi.fn()} />);
     expect(screen.getByRole('status').textContent).toContain('não pode ser usada no Melhor Envio');
     expect(screen.getByRole('button', { name: 'Importar XML' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Remover chave pendente' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Informar chave da NF-e' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Registrar conferência oficial' })).toBeNull();
 });
 
