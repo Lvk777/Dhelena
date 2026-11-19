@@ -75,6 +75,10 @@ try {
         await client.query('ROLLBACK');
     }
 
+    // The backend smoke test uses the current product query against this older
+    // production-shaped fixture. Add the new non-destructive scope column here.
+    await client.query(fs.readFileSync(path.join(backend, 'migrations', '024_product_operational_scope.sql'), 'utf8'));
+
     const portProbe = net.createServer();
     await new Promise(resolve => portProbe.listen(0, '127.0.0.1', resolve));
     env.PORT = String(portProbe.address().port);
