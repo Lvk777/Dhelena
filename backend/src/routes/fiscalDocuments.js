@@ -18,11 +18,34 @@ export const fiscalContextHash = (order, items, senderDocument) => createHash('s
         product_name: item.product_name, product_sku: item.product_sku, color_name: item.color_name,
         size: item.size, quantity: item.quantity, subtotal: String(item.subtotal) })).sort((a, b) => String(a.id).localeCompare(String(b.id))),
 })).digest('hex');
+const reviewAuditSql = `SELECT a.changes,a.created_at,COALESCE(p.full_name,p.email) AS reviewed_by
+    FROM audit_logs a LEFT JOIN profiles p ON p.id=a.admin_id
+    WHERE a.action='fiscal.equivalence_confirmed' AND a.entity_id=$1 AND a.changes->>'document_id'=$2
+    ORDER BY a.created_at,a.id`;
+export function reviewFromAudit(rows, xmlHash, contextHash) {
+    const review = { recipientConfirmed: false, productConfirmed: false };
+    const records = [];
+    let stale = false;
+    for (const row of rows) {
+        const entry = row.changes || {};
+        if (entry.xml_sha256 !== xmlHash || entry.comparison_sha256 !== contextHash) { stale = true; continue; }
+        const fields = Array.isArray(entry.fields_compared) ? entry.fields_compared : [];
+        if (fields.includes('recipient_name')) review.recipientConfirmed = true;
+        if (fields.includes('product_code')) {
+            review.productConfirmed = true;
+            review.orderItemId = entry.order_item_id;
+            review.fiscalIndex = entry.fiscal_index;
+        }
+        records.push({ created_at: row.created_at, reviewed_by: row.reviewed_by || 'administrador',
+            fields_compared: fields, reason: entry.reason, evidence: entry.evidence });
+    }
+    return { review, records, stale };
+}
 export function parseFiscalXmlUpload(buffer) {
     try { return parseAuthorizedNfe(buffer); }
     catch (error) { throw fail(error?.message || 'Arquivo XML fiscal inválido.'); }
 }
-const fields = 'id,order_id,access_key,origin,parsed_data,differences,status,official_source,official_checked_at,imported_by,verified_by,created_at';
+const fields = 'id,order_id,access_key,origin,xml_sha256,parsed_data,differences,status,official_source,official_checked_at,imported_by,verified_by,created_at';
 const publicDocument = row => row && ({ id: row.id, order_id: row.order_id, access_key: row.access_key.trim(),
     origin: row.origin, imported_by: row.imported_by, verified_by: row.verified_by,
     data: row.parsed_data, differences: row.differences, status: row.status,
@@ -44,7 +67,7 @@ export function validateFiscalEquivalence(input = {}) {
     const reason = String(input.reason ?? '').trim(), evidence = String(input.evidence ?? '').trim();
     if (!/^[0-9a-f-]{36}$/i.test(String(input.document_id || '')) || reason.length < 20 || reason.length > 1000
         || evidence.length < 20 || evidence.length > 1000
-        || (input.confirmed_recipient !== true && input.confirmed_product_code !== true)
+        || (input.confirmed_recipient === true) === (input.confirmed_product_code === true)
         || (input.confirmed_product_code === true) !== (input.confirmed_product_variant === true)
         || (input.confirmed_product_code === true && (!/^[0-9a-f-]{36}$/i.test(String(input.order_item_id || ''))
             || !Number.isInteger(input.fiscal_index) || input.fiscal_index < 0))) {
@@ -66,17 +89,17 @@ router.get(orderPath, async (req, res, next) => {
         const { rows } = await pool.query(`SELECT ${fields} FROM fiscal_documents WHERE order_id=$1 AND unlinked_at IS NULL`, [req.params.id]);
         if (rows[0]) {
             const result = publicDocument(rows[0]);
-            if (rows[0].status === 'needs_review') {
-                const { rows: orders } = await pool.query('SELECT * FROM orders WHERE id=$1', [req.params.id]);
-                const { rows: items } = await pool.query('SELECT * FROM order_items WHERE order_id=$1', [req.params.id]);
-                const { rows: sender } = await pool.query("SELECT value FROM settings WHERE key='shipping_sender'");
-                result.analysis = assessNfe(rows[0].parsed_data, orders[0], items, sender[0]?.value?.document);
-            } else {
-                const { rows: reviews } = await pool.query(`SELECT created_at FROM audit_logs
-                    WHERE action='fiscal.equivalence_confirmed' AND entity_id=$1 AND changes->>'document_id'=$2
-                    ORDER BY created_at DESC LIMIT 1`, [req.params.id, rows[0].id]);
-                if (reviews[0]) result.equivalence_reviewed_at = reviews[0].created_at;
-            }
+            const { rows: orders } = await pool.query('SELECT * FROM orders WHERE id=$1', [req.params.id]);
+            const { rows: items } = await pool.query('SELECT * FROM order_items WHERE order_id=$1', [req.params.id]);
+            const { rows: sender } = await pool.query("SELECT value FROM settings WHERE key='shipping_sender'");
+            const { rows: auditRows } = await pool.query(reviewAuditSql, [req.params.id, rows[0].id]);
+            const reviewed = reviewFromAudit(auditRows, rows[0].xml_sha256,
+                fiscalContextHash(orders[0], items, sender[0]?.value?.document));
+            result.analysis = assessNfe(rows[0].parsed_data, orders[0], items,
+                sender[0]?.value?.document, reviewed.review);
+            result.differences = result.analysis.issues.map(issue => issue.message);
+            result.equivalence_reviews = reviewed.records;
+            if (reviewed.stale) result.review_stale = true;
             return res.json(result);
         }
         const pending = await pool.query('SELECT id,order_id,access_key,entered_by,created_at FROM pending_fiscal_keys WHERE order_id=$1', [req.params.id]);
@@ -101,39 +124,51 @@ export async function confirmFiscalEquivalence(orderId, actorId, input, db = poo
             throw fail('A nota fiscal ou sua situação mudou. Atualize o pedido antes de conferir novamente.', 409);
         const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id=$1', [orderId]);
         const { rows: sender } = await client.query("SELECT value FROM settings WHERE key='shipping_sender'");
-        const before = assessNfe(document.parsed_data, orders[0], items, sender[0]?.value?.document);
+        const contextHash = fiscalContextHash(orders[0], items, sender[0]?.value?.document);
+        const { rows: auditRows } = await client.query(reviewAuditSql, [orderId, document.id]);
+        const reviewed = reviewFromAudit(auditRows, document.xml_sha256, contextHash);
+        if (reviewed.stale) throw fail('O pedido mudou desde a conferência anterior. Solicite uma nova análise fiscal.', 409);
+        const before = assessNfe(document.parsed_data, orders[0], items,
+            sender[0]?.value?.document, reviewed.review);
         const hasNameIssue = before.issues.some(issue => issue.code === 'recipient_name');
         const hasProductIssue = before.issues.some(issue => issue.code === 'product_identity');
-        if (hasNameIssue !== review.recipientConfirmed || hasProductIssue !== review.productConfirmed
-            || (hasNameIssue && !before.abbreviatedName)
-            || (hasProductIssue && (!before.productCandidate
+        if ((review.recipientConfirmed && (!hasNameIssue || !before.abbreviatedName))
+            || (review.productConfirmed && (!hasProductIssue || !before.productCandidate
                 || before.productCandidate.orderItemId !== review.orderItemId
-                || before.productCandidate.fiscalIndex !== review.fiscalIndex))
-            || before.issues.some(issue => !['recipient_name', 'product_identity'].includes(issue.code))) {
+                || before.productCandidate.fiscalIndex !== review.fiscalIndex))) {
             throw fail('Há outras divergências ou a correspondência mudou. Confira o pedido e o XML; a expedição permanece bloqueada.', 409);
         }
         const after = assessNfe(document.parsed_data, orders[0], items, sender[0]?.value?.document,
-            { recipientConfirmed: review.recipientConfirmed, productConfirmed: review.productConfirmed,
-                orderItemId: review.orderItemId, fiscalIndex: review.fiscalIndex });
-        if (after.issues.length) throw fail('As divergências permanecem. A nota não foi liberada.', 409);
-        const updated = await client.query(`UPDATE fiscal_documents SET differences='[]'::jsonb,
-            status='pending_official',updated_at=now() WHERE id=$1 AND status='needs_review' RETURNING ${fields}`, [document.id]);
+            { ...reviewed.review, recipientConfirmed: reviewed.review.recipientConfirmed || review.recipientConfirmed,
+                productConfirmed: reviewed.review.productConfirmed || review.productConfirmed,
+                orderItemId: review.productConfirmed ? review.orderItemId : reviewed.review.orderItemId,
+                fiscalIndex: review.productConfirmed ? review.fiscalIndex : reviewed.review.fiscalIndex });
+        const remaining = after.issues.map(issue => issue.message);
+        const status = remaining.length ? 'needs_review' : 'pending_official';
+        const updated = await client.query(`UPDATE fiscal_documents SET differences=$2::jsonb,
+            status=$3,updated_at=now() WHERE id=$1 AND status='needs_review' RETURNING ${fields}`,
+        [document.id, JSON.stringify(remaining), status]);
         if (updated.rowCount !== 1) throw fail('A nota fiscal mudou durante a conferência. Atualize o pedido.', 409);
         await client.query(`INSERT INTO audit_logs(admin_id,action,entity_type,entity_id,changes)
             VALUES($1,'fiscal.equivalence_confirmed','order',$2,$3)`, [actorId, orderId,
             JSON.stringify({ document_id: document.id, xml_sha256: document.xml_sha256,
-                comparison_sha256: fiscalContextHash(orders[0], items, sender[0]?.value?.document),
+                comparison_sha256: contextHash,
                 fields_compared: [
                     ...(review.recipientConfirmed ? ['recipient_name','recipient_document'] : []),
-                    ...(review.productConfirmed ? ['product_code','product_color','product_size','quantity','item_value'] : []),
+                    ...(review.productConfirmed ? ['product_description','product_code','product_color','product_size','quantity','item_value'] : []),
                 ],
                 order_item_id: review.orderItemId, fiscal_index: review.fiscalIndex,
                 fiscal_code: before.productCandidate?.fiscalCode, order_sku: before.productCandidate?.orderSku,
                 order_color: before.productCandidate?.orderColor, fiscal_color: before.productCandidate?.fiscalColor,
+                order_product_name: before.productCandidate?.productName,
+                fiscal_product_name: before.productCandidate?.fiscalName,
+                product_size: before.productCandidate?.size,
+                product_quantity: before.productCandidate?.quantity,
+                product_value_cents: before.productCandidate?.productCents,
                 reason: review.reason, evidence: review.evidence, official_status_verified: false,
                 shipping_released: false })]);
         await client.query('COMMIT');
-        return { ...publicDocument(updated.rows[0]), equivalence_reviewed: true };
+        return { ...publicDocument(updated.rows[0]), analysis: after, equivalence_reviewed: true };
     } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         throw error.code === '55P03' ? fail('Outra operação está atualizando este pedido. Aguarde e tente novamente.', 409) : error;
@@ -275,17 +310,12 @@ router.post(`${orderPath}/verify`, async (req, res, next) => {
         if (row.differences.length) throw fail('Há divergências com o pedido. Consulte a administração e a contabilidade.', 409);
         const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id=$1', [req.params.id]);
         const { rows: sender } = await client.query("SELECT value FROM settings WHERE key='shipping_sender'");
-        const { rows: reviews } = await client.query(`SELECT changes FROM audit_logs
-            WHERE action='fiscal.equivalence_confirmed' AND entity_id=$1 AND changes->>'document_id'=$2
-            ORDER BY created_at DESC LIMIT 1`, [req.params.id, row.id]);
-        const savedReview = reviews[0]?.changes;
-        if (savedReview && (savedReview.xml_sha256 !== row.xml_sha256
-            || savedReview.comparison_sha256 !== fiscalContextHash(order.rows[0], items, sender[0]?.value?.document)))
+        const { rows: reviews } = await client.query(reviewAuditSql, [req.params.id, row.id]);
+        const reviewed = reviewFromAudit(reviews, row.xml_sha256,
+            fiscalContextHash(order.rows[0], items, sender[0]?.value?.document));
+        if (reviewed.stale)
             throw fail('O XML ou o pedido mudou desde a conferência de equivalência. Solicite revisão.', 409);
-        const review = savedReview ? { recipientConfirmed: savedReview.fields_compared.includes('recipient_name'),
-            productConfirmed: savedReview.fields_compared.includes('product_code'),
-            orderItemId: savedReview.order_item_id, fiscalIndex: savedReview.fiscal_index } : {};
-        if (reconcileNfe(row.parsed_data, order.rows[0], items, sender[0]?.value?.document, review).length)
+        if (reconcileNfe(row.parsed_data, order.rows[0], items, sender[0]?.value?.document, reviewed.review).length)
             throw fail('O pedido ou a nota mudou desde a conciliação. Confira novamente antes de registrar a situação oficial.', 409);
         if (key !== row.access_key.trim() || protocol !== row.parsed_data.protocol) throw fail('Chave ou protocolo não conferem com a NF-e cadastrada.');
         const officialSource = source === 'svrs' ? 'https://dfe-portal.svrs.rs.gov.br/Nfe/da' : 'https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx';

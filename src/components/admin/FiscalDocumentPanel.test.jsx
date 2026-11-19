@@ -143,13 +143,15 @@ test('manual discrepancy blocks attestation and a verified manual record never o
     expect(screen.queryByRole('button', { name: 'Baixar XML autorizado' })).toBeNull();
 });
 
-test('a specific name, code and color equivalence requires evidence and does not start shipping', async () => {
+test('product correspondence is separate, shows both records and keeps name and shipping pending', async () => {
     const document = { id: '11111111-1111-4111-8111-111111111111', origin: 'xml',
         access_key: '1'.repeat(44), status: 'needs_review',
         differences: ['Nome do destinatário', 'Identificação dos produtos', 'Produtos do pedido'],
         analysis: { abbreviatedName: true, productCandidate: {
             orderItemId: '22222222-2222-4222-8222-222222222222', fiscalIndex: 0,
             fiscalCode: '127', orderSku: '2026@', orderColor: 'Bege', fiscalColor: 'marfim',
+            productName: 'Shorts Angel', fiscalName: 'Shorts Angel Marfim P', size: 'P',
+            quantity: 1, productCents: 3000,
         }, issues: [{ code: 'recipient_name', message: 'Nome da cliente: pedido abreviado; confira a identidade.' },
             { code: 'product_identity', message: 'Produto: pedido Bege, nota Marfim, código 127; confira a variante.' }] },
         data: { number: '19', series: '1', issuedAt: '2026-11-18T12:00:00Z', protocol: '2'.repeat(15),
@@ -157,23 +159,57 @@ test('a specific name, code and color equivalence requires evidence and does not
             recipientDocument: '12345678909', productCents: 3000, shippingCents: 998,
             totalCents: 3998, items: [{ name: 'Shorts Angel Marfim P', quantity: 1, productCents: 3000 }] } };
     const onChanged = vi.fn();
-    base44.functions.invoke.mockImplementation(async name => name === 'confirmFiscalEquivalence'
-        ? { ...document, differences: [], status: 'pending_official', analysis: undefined } : []);
-    render(<FiscalDocumentPanel order={{ id: 'order-1', shipping_status: 'cart_inflight' }} document={document} onChanged={onChanged} />);
+    const partial = { ...document, differences: ['Nome da cliente'],
+        analysis: { ...document.analysis, issues: [document.analysis.issues[0]] } };
+    base44.functions.invoke.mockImplementation(async name => name === 'confirmFiscalEquivalence' || name === 'getFiscalDocument'
+        ? partial : []);
+    const order = { id: 'order-1', shipping_status: 'cart_inflight' };
+    const { rerender } = render(<FiscalDocumentPanel order={order} document={document} onChanged={onChanged} />);
     expect(screen.getByText(/pedido Bege, nota Marfim/)).toBeTruthy();
-    const button = screen.getByRole('button', { name: 'Registrar equivalência' });
+    expect(screen.getByLabelText('Produto do pedido').textContent).toContain('SKU: 2026@');
+    expect(screen.getByLabelText('Produto da NF-e').textContent).toContain('Código fiscal: 127');
+    const button = screen.getByRole('button', { name: 'Confirmar correspondência do produto' });
     expect(button.disabled).toBe(true);
-    fireEvent.click(screen.getByLabelText(/nome abreviado e o nome completo/));
-    fireEvent.click(screen.getByLabelText(/código da nota corresponde/));
-    fireEvent.click(screen.getByLabelText(/equivalência entre as cores/));
-    fireEvent.change(screen.getByLabelText('Motivo da equivalência'), { target: { value: 'Abreviação e variante revisadas' } });
-    fireEvent.change(screen.getByLabelText('Evidência consultada'), { target: { value: 'Cadastro da variante e documento da cliente' } });
+    fireEvent.click(screen.getByLabelText(/dois registros representam a mesma mercadoria/));
+    fireEvent.click(screen.getByLabelText(/descrição e a variante/));
+    fireEvent.change(screen.getByLabelText('Justificativa da correspondência'), { target: { value: 'Variante comercial revisada no cadastro' } });
+    fireEvent.change(screen.getByLabelText('Evidência da correspondência'), { target: { value: 'Ficha de cadastro da peça e variante' } });
     expect(button.disabled).toBe(false);
     fireEvent.click(button);
-    await waitFor(() => expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ status: 'pending_official' })));
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ status: 'needs_review', differences: ['Nome da cliente'] })));
     expect(base44.functions.invoke).toHaveBeenCalledWith('confirmFiscalEquivalence', expect.objectContaining({
-        review: expect.objectContaining({ confirmed_recipient: true, confirmed_product_code: true,
+        review: expect.objectContaining({ confirmed_recipient: false, confirmed_product_code: true,
             confirmed_product_variant: true, order_item_id: document.analysis.productCandidate.orderItemId }),
     }));
+    rerender(<FiscalDocumentPanel order={order} document={partial} onChanged={onChanged} />);
+    expect(screen.queryByRole('button', { name: 'Confirmar correspondência do produto' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Confirmar identidade da cliente' }).disabled).toBe(true);
     expect(base44.functions.invoke.mock.calls.every(([name]) => name !== 'generateShippingLabel')).toBe(true);
+});
+
+test('a rejected correspondence keeps the product discrepancy and entered evidence', async () => {
+    const document = { id: '11111111-1111-4111-8111-111111111111', origin: 'xml',
+        access_key: '1'.repeat(44), status: 'needs_review', differences: ['Produto'],
+        analysis: { abbreviatedName: false, issues: [{ code: 'product_identity', message: 'Produto divergente.' }],
+            productCandidate: { orderItemId: '22222222-2222-4222-8222-222222222222', fiscalIndex: 0,
+                productName: 'Shorts Angel', fiscalName: 'Outra descrição P', orderColor: 'Bege',
+                fiscalColor: '', orderSku: '2026@', fiscalCode: '127', size: 'P', quantity: 1, productCents: 3000 } },
+        data: { number: '19', series: '1', issuedAt: '2026-11-18T12:00:00Z', protocol: '2'.repeat(15),
+            issuerName: 'Emitente', issuerCnpj: '12345678000199', recipientName: 'Cliente',
+            recipientDocument: '12345678909', productCents: 3000, shippingCents: 998,
+            totalCents: 3998, items: [{ name: 'Outra descrição P', quantity: 1, productCents: 3000 }] } };
+    const onChanged = vi.fn();
+    base44.functions.invoke.mockImplementation(async name => {
+        if (name === 'confirmFiscalEquivalence') throw Object.assign(new Error('Correspondência não comprovada.'), { status: 409 });
+        return [];
+    });
+    render(<FiscalDocumentPanel order={{ id: 'order-1' }} document={document} onChanged={onChanged} />);
+    fireEvent.click(screen.getByLabelText(/dois registros representam a mesma mercadoria/));
+    fireEvent.click(screen.getByLabelText(/descrição e a variante/));
+    fireEvent.change(screen.getByLabelText('Justificativa da correspondência'), { target: { value: 'Conferência sintética rejeitada pelo servidor' } });
+    fireEvent.change(screen.getByLabelText('Evidência da correspondência'), { target: { value: 'Documento sintético da variante consultado' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar correspondência do produto' }));
+    await waitFor(() => expect(screen.getAllByRole('alert').some(node => node.textContent.includes('Correspondência não comprovada'))).toBe(true));
+    expect(screen.getByLabelText('Justificativa da correspondência').value).toContain('Conferência sintética');
+    expect(onChanged).not.toHaveBeenCalled();
 });

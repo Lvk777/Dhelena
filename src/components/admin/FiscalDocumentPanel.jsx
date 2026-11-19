@@ -22,16 +22,17 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
     const [history, setHistory] = useState([]);
     const [historyError, setHistoryError] = useState('');
     const [unlinkOpen, setUnlinkOpen] = useState(false);
-    const [equivalenceReason, setEquivalenceReason] = useState('');
-    const [equivalenceEvidence, setEquivalenceEvidence] = useState('');
+    const [nameReason, setNameReason] = useState('');
+    const [nameEvidence, setNameEvidence] = useState('');
+    const [productReason, setProductReason] = useState('');
+    const [productEvidence, setProductEvidence] = useState('');
     const [recipientChecked, setRecipientChecked] = useState(false);
     const [codeChecked, setCodeChecked] = useState(false);
     const [variantChecked, setVariantChecked] = useState(false);
     const reviewIssues = document?.analysis?.issues || [];
     const nameReviewNeeded = reviewIssues.some(issue => issue.code === 'recipient_name') && document?.analysis?.abbreviatedName;
     const productReviewNeeded = reviewIssues.some(issue => issue.code === 'product_identity') && !!document?.analysis?.productCandidate;
-    const canReview = document?.status === 'needs_review' && (nameReviewNeeded || productReviewNeeded)
-        && reviewIssues.every(issue => ['recipient_name', 'product_identity'].includes(issue.code));
+    const canReview = document?.status === 'needs_review' && (nameReviewNeeded || productReviewNeeded);
     const refreshHistory = async () => {
         try {
             const result = await base44.functions.invoke('getFiscalDocumentHistory', { orderId: order.id });
@@ -67,20 +68,26 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
         } catch (cause) { setError(userFacingError(cause, '/fiscal/verify')); }
         finally { setBusy(false); }
     };
-    const confirmEquivalence = async () => {
+    const confirmEquivalence = async kind => {
         const candidate = document?.analysis?.productCandidate;
-        if (!canReview || busy) return;
+        if (!canReview || busy || (kind === 'product' && !productReviewNeeded)
+            || (kind === 'name' && !nameReviewNeeded)) return;
         setBusy(true); setError('');
         try {
             const result = await base44.functions.invoke('confirmFiscalEquivalence', { orderId: order.id, review: {
-                document_id: document.id, order_item_id: productReviewNeeded ? candidate.orderItemId : undefined,
-                fiscal_index: productReviewNeeded ? candidate.fiscalIndex : undefined,
-                confirmed_recipient: recipientChecked, confirmed_product_code: codeChecked,
-                confirmed_product_variant: variantChecked, reason: equivalenceReason.trim(),
-                evidence: equivalenceEvidence.trim(),
+                document_id: document.id, order_item_id: kind === 'product' ? candidate.orderItemId : undefined,
+                fiscal_index: kind === 'product' ? candidate.fiscalIndex : undefined,
+                confirmed_recipient: kind === 'name' && recipientChecked,
+                confirmed_product_code: kind === 'product' && codeChecked,
+                confirmed_product_variant: kind === 'product' && variantChecked,
+                reason: (kind === 'product' ? productReason : nameReason).trim(),
+                evidence: (kind === 'product' ? productEvidence : nameEvidence).trim(),
             } });
             onChanged(result);
-            setEquivalenceReason(''); setEquivalenceEvidence('');
+            try { onChanged(await base44.functions.invoke('getFiscalDocument', { orderId: order.id })); }
+            catch { /* The confirmed response remains visible if refreshing the audit view fails. */ }
+            if (kind === 'product') { setProductReason(''); setProductEvidence(''); }
+            else { setNameReason(''); setNameEvidence(''); }
             setRecipientChecked(false); setCodeChecked(false); setVariantChecked(false);
         } catch (cause) { setError(userFacingError(cause, '/fiscal/equivalence')); }
         finally { setBusy(false); }
@@ -143,21 +150,60 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
                     .map((message, index) => <li key={index}>{message}</li>)}</ul>
             </div> : document.status === 'verified' ? <p role="status" className="text-sm">Conferência manual em fonte oficial registrada em {new Date(document.official_checked_at).toLocaleString('pt-BR')}. Chave liberada para a preparação do envio, sujeita às demais proteções.</p>
                 : <p role="status" className="text-sm">Dados cadastrados e pedido conferem. Falta confirmar a situação atual da NF-e no portal oficial.</p>}
-            {document.equivalence_reviewed_at && <p role="status" className="text-sm border border-border p-3">Equivalência documental registrada em {new Date(document.equivalence_reviewed_at).toLocaleString('pt-BR')}. A autorização fiscal ainda exige conferência separada em fonte oficial.</p>}
-            {canReview && <div className="border border-border p-3 space-y-3 text-sm" aria-label="Conferência de equivalência fiscal">
-                    <h3 className="font-medium">Conferir equivalência documental</h3>
-                    <p>Confirme somente os campos indicados com documentação de apoio. Este registro não altera o XML, não consulta a SEFAZ e não libera a expedição.</p>
-                    {nameReviewNeeded && <label className="flex gap-2 items-start"><input type="checkbox" checked={recipientChecked} onChange={event => setRecipientChecked(event.target.checked)} />Conferi que o nome abreviado e o nome completo pertencem à mesma cliente.</label>}
-                    {productReviewNeeded && <>
-                        <label className="flex gap-2 items-start"><input type="checkbox" checked={codeChecked} onChange={event => setCodeChecked(event.target.checked)} />Conferi que o código da nota corresponde ao produto vendido.</label>
-                        <label className="flex gap-2 items-start"><input type="checkbox" checked={variantChecked} onChange={event => setVariantChecked(event.target.checked)} />Conferi documentalmente a equivalência entre as cores da nota e do pedido.</label>
-                    </>}
-                    <label className="block">Motivo da equivalência<input className="admin-field block w-full p-2 mt-1" value={equivalenceReason} onChange={event => setEquivalenceReason(event.target.value)} maxLength={1000} /></label>
-                    <label className="block">Evidência consultada<input className="admin-field block w-full p-2 mt-1" value={equivalenceEvidence} onChange={event => setEquivalenceEvidence(event.target.value)} maxLength={1000} placeholder="Ex.: referência do cadastro da variante e documento de identificação conferido" /></label>
-                    <button type="button" className="btn-outline min-h-11 text-xs" disabled={busy || (nameReviewNeeded && !recipientChecked)
-                        || (productReviewNeeded && (!codeChecked || !variantChecked))
-                        || equivalenceReason.trim().length < 20 || equivalenceEvidence.trim().length < 20} onClick={confirmEquivalence}>Registrar equivalência</button>
+            {Array.isArray(document.equivalence_reviews) && document.equivalence_reviews.length > 0 &&
+                <div className="border border-border p-3 space-y-2 text-sm" aria-label="Conferências de equivalência registradas">
+                    <h3 className="font-medium">Correspondências registradas</h3>
+                    {document.equivalence_reviews.map((review, index) => <div key={index} className="border-t border-border pt-2">
+                        <p>{review.fields_compared?.includes('product_code') ? 'Produto' : 'Nome da cliente'} · {new Date(review.created_at).toLocaleString('pt-BR')} · {review.reviewed_by}</p>
+                        <p>Motivo: {review.reason}</p><p>Evidência: {review.evidence}</p>
+                    </div>)}
+                    <p className="text-xs text-muted-foreground">O XML original permanece intacto. A autorização fiscal requer consulta separada em fonte oficial.</p>
                 </div>}
+            {document.review_stale && <p role="alert" className="border border-amber-500/50 p-3 text-sm">O pedido mudou desde uma conferência anterior. Solicite nova análise fiscal; a expedição permanece bloqueada.</p>}
+            {canReview && <div className="space-y-3 text-sm" aria-label="Conferência de equivalência fiscal">
+                {productReviewNeeded && <div className="border border-border p-3 space-y-3" aria-label="Correspondência do produto">
+                    <h3 className="font-medium">Conferir correspondência do produto</h3>
+                    <div className="grid gap-3 sm:grid-cols-2 min-w-0">
+                        <div className="border border-border p-3 min-w-0 break-words" aria-label="Produto do pedido">
+                            <p className="text-xs uppercase tracking-widest mb-2">No pedido</p>
+                            <p>{document.analysis.productCandidate.productName}</p>
+                            <p>Cor: {document.analysis.productCandidate.orderColor}</p>
+                            <p>Tamanho: {document.analysis.productCandidate.size}</p>
+                            <p>SKU: {document.analysis.productCandidate.orderSku || 'não informado'}</p>
+                            <p>Quantidade: {document.analysis.productCandidate.quantity}</p>
+                            <p>Valor: {formatBRL(document.analysis.productCandidate.productCents / 100)}</p>
+                        </div>
+                        <div className="border border-border p-3 min-w-0 break-words" aria-label="Produto da NF-e">
+                            <p className="text-xs uppercase tracking-widest mb-2">Na NF-e</p>
+                            <p>{document.analysis.productCandidate.fiscalName}</p>
+                            <p>Cor na descrição: {document.analysis.productCandidate.fiscalColor || 'conferir descrição completa'}</p>
+                            <p>Tamanho: {document.analysis.productCandidate.size}</p>
+                            <p>Código fiscal: {document.analysis.productCandidate.fiscalCode || 'não informado'}</p>
+                            <p>Quantidade: {document.analysis.productCandidate.quantity}</p>
+                            <p>Valor: {formatBRL(document.analysis.productCandidate.productCents / 100)}</p>
+                        </div>
+                    </div>
+                    <p>Confirme somente se a documentação comprovar que são a mesma mercadoria e variante. Códigos internos diferentes podem ser relacionados mediante conferência; o XML não será alterado.</p>
+                    <label className="flex gap-2 items-start"><input type="checkbox" checked={codeChecked} onChange={event => setCodeChecked(event.target.checked)} />Confirmo que os dois registros representam a mesma mercadoria e que o código fiscal corresponde ao produto vendido.</label>
+                    <label className="flex gap-2 items-start"><input type="checkbox" checked={variantChecked} onChange={event => setVariantChecked(event.target.checked)} />Conferi documentalmente a descrição e a variante, inclusive a diferença de cor quando existir.</label>
+                    <label className="block">Justificativa da correspondência<input className="admin-field block w-full p-2 mt-1" value={productReason} onChange={event => setProductReason(event.target.value)} maxLength={1000} /></label>
+                    <label className="block">Evidência da correspondência<input className="admin-field block w-full p-2 mt-1" value={productEvidence} onChange={event => setProductEvidence(event.target.value)} maxLength={1000} /></label>
+                    <button type="button" className="btn-outline min-h-11 text-xs" disabled={busy || !codeChecked || !variantChecked
+                        || productReason.trim().length < 20 || productEvidence.trim().length < 20}
+                        onClick={() => confirmEquivalence('product')}>Confirmar correspondência do produto</button>
+                </div>}
+                {nameReviewNeeded && <div className="border border-border p-3 space-y-3" aria-label="Correspondência da cliente">
+                    <h3 className="font-medium">Conferir nome da cliente</h3>
+                    <p>O documento coincide, mas o nome do pedido está abreviado. Confira a identidade antes de confirmar.</p>
+                    <label className="flex gap-2 items-start"><input type="checkbox" checked={recipientChecked} onChange={event => setRecipientChecked(event.target.checked)} />Conferi que o nome abreviado e o nome completo pertencem à mesma cliente.</label>
+                    <label className="block">Justificativa do nome<input className="admin-field block w-full p-2 mt-1" value={nameReason} onChange={event => setNameReason(event.target.value)} maxLength={1000} /></label>
+                    <label className="block">Evidência da identidade<input className="admin-field block w-full p-2 mt-1" value={nameEvidence} onChange={event => setNameEvidence(event.target.value)} maxLength={1000} /></label>
+                    <button type="button" className="btn-outline min-h-11 text-xs" disabled={busy || !recipientChecked
+                        || nameReason.trim().length < 20 || nameEvidence.trim().length < 20}
+                        onClick={() => confirmEquivalence('name')}>Confirmar identidade da cliente</button>
+                </div>}
+                <p className="text-xs text-muted-foreground">Cada confirmação resolve somente o campo indicado. Outras pendências e o envio aguardando confirmação continuam bloqueados.</p>
+            </div>}
             {document.status === 'pending_official' && <div className="border border-border p-3 space-y-3 text-sm">
                 <p>Abra o portal oficial e compare a chave, o protocolo, o emitente, o destinatário, os produtos, as quantidades, os valores e o frete com esta nota. Confirme a autorização atual e a ausência de cancelamento. Importar XML não comprova autenticidade ou situação fiscal.</p>
                 <label className="block">Portal consultado

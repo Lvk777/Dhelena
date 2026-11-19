@@ -189,13 +189,14 @@ export function assessNfe(nfe, order, orderItems, senderDocument, review = {}) {
         const { item, fiscalIndex } = unmatched[0], row = remaining[0];
         const fiscalWords = words(item.name), base = productBaseWords(row), size = words(row.size);
         const sameBase = startsWithWords(fiscalWords, base);
-        const sameSize = !size.length || fiscalWords.slice(-size.length).join(' ') === size.join(' ');
-        const fiscalColor = fiscalWords.slice(base.length, size.length ? -size.length : undefined).join(' ');
-        if (sameBase && sameSize && !!fiscalColor && !!row.color_name && Number(row.quantity) === item.quantity
+        const sameSize = size.length > 0 && fiscalWords.slice(-size.length).join(' ') === size.join(' ');
+        const fiscalColor = sameBase ? fiscalWords.slice(base.length, -size.length).join(' ') : '';
+        if (sameSize && !!row.color_name && Number(row.quantity) === item.quantity
             && sameMoney(item.productCents, row.subtotal) && row.id) {
             productCandidate = { orderItemId: row.id, fiscalIndex, fiscalCode: item.code,
                 orderSku: row.product_sku || '', orderColor: row.color_name || '', fiscalColor,
-                productName: row.product_name, size: row.size || '' };
+                productName: row.product_name, fiscalName: item.name, size: row.size || '',
+                quantity: item.quantity, productCents: item.productCents, sameBase };
         }
     }
     if (unmatched.length || remaining.length) {
@@ -204,7 +205,7 @@ export function assessNfe(nfe, order, orderItems, senderDocument, review = {}) {
             && review.fiscalIndex === productCandidate.fiscalIndex) {
             // A specific, audited administrator decision can only resolve this one candidate.
         } else if (productCandidate) {
-            add('product_identity', `Produto “${text(productCandidate.productName)}”, tamanho ${text(productCandidate.size) || 'não informado'}: o pedido registra cor ${text(productCandidate.orderColor) || 'não informada'} e SKU ${text(productCandidate.orderSku) || 'não informado'}; a nota registra cor ${text(productCandidate.fiscalColor) || 'não identificada'} e código ${text(productCandidate.fiscalCode) || 'não informado'}. Confira a variante e a correspondência do código antes de confirmar; a expedição permanece bloqueada.`);
+            add('product_identity', `Produto “${text(productCandidate.productName)}”, tamanho ${text(productCandidate.size)}: o pedido registra cor ${text(productCandidate.orderColor)} e SKU ${text(productCandidate.orderSku) || 'não informado'}; a nota descreve “${text(productCandidate.fiscalName)}” com código ${text(productCandidate.fiscalCode) || 'não informado'}. Confira se são a mesma mercadoria e variante; a expedição permanece bloqueada.`);
         } else add('product_identity', 'Produto da nota sem correspondência segura no pedido. Confira nome, código, variante, tamanho, quantidade e valor; a expedição permanece bloqueada.');
     }
     if (!sameMoney(nfe.productCents, order.subtotal)) add('subtotal', `Mercadorias: pedido ${moneyBR(Number(order.subtotal) * 100)}, nota ${moneyBR(nfe.productCents)}. Confira os valores; a expedição permanece bloqueada.`);

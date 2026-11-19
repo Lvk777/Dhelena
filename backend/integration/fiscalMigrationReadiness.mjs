@@ -165,22 +165,31 @@ try {
     [reviewOrder.id, reviewData.key, Buffer.from('<synthetic-equivalence/>'), 'c'.repeat(64),
         JSON.stringify(reviewData), JSON.stringify(['Nome do destinatário','Identificação dos produtos']), profiles[0].id])).rows[0];
     const reviewInput = { document_id: reviewDoc.id, order_item_id: reviewItem.id, fiscal_index: 0,
-        confirmed_recipient: true, confirmed_product_code: true, confirmed_product_variant: true,
-        reason: 'Nome e variante sintéticos conferidos', evidence: 'Ficha sintética da variante e identificação' };
+        confirmed_recipient: false, confirmed_product_code: true, confirmed_product_variant: true,
+        reason: 'Variante sintética conferida', evidence: 'Ficha sintética da variante comercial' };
     const reviewDb = { connect: async () => ({ query: client.query.bind(client), release() {} }) };
     const reviewResult = await confirmFiscalEquivalence(reviewOrder.id, profiles[0].id, reviewInput, reviewDb);
-    assert.equal(reviewResult.status, 'pending_official');
+    assert.equal(reviewResult.status, 'needs_review');
+    assert.equal(reviewResult.differences.length, 1);
+    assert.match(reviewResult.differences[0], /Nome da cliente/);
+    await assert.rejects(confirmFiscalEquivalence(reviewOrder.id, profiles[0].id, reviewInput, reviewDb), { status: 409 });
+    const nameResult = await confirmFiscalEquivalence(reviewOrder.id, profiles[0].id, {
+        document_id: reviewDoc.id, confirmed_recipient: true,
+        confirmed_product_code: false, confirmed_product_variant: false,
+        reason: 'Nome abreviado sintético conferido', evidence: 'Documento sintético da cliente conferido',
+    }, reviewDb);
+    assert.equal(nameResult.status, 'pending_official');
     const reviewed = (await client.query(`SELECT fd.xml_bytes,fd.differences,fd.status,o.payment_status,o.shipping_status
         FROM fiscal_documents fd JOIN orders o ON o.id=fd.order_id WHERE fd.id=$1`, [reviewDoc.id])).rows[0];
     assert.deepEqual(reviewed.xml_bytes, Buffer.from('<synthetic-equivalence/>'));
     assert.deepEqual(reviewed.differences, []);
     assert.equal(reviewed.payment_status, 'approved');
     assert.equal(reviewed.shipping_status, 'cart_inflight');
-    const reviewAudit = (await client.query(`SELECT admin_id,changes FROM audit_logs
-        WHERE action='fiscal.equivalence_confirmed' AND entity_id=$1`, [reviewOrder.id])).rows[0];
-    assert.equal(reviewAudit.admin_id, profiles[0].id);
-    assert.equal(reviewAudit.changes.shipping_released, false);
-    assert.equal(reviewAudit.changes.official_status_verified, false);
-    await assert.rejects(confirmFiscalEquivalence(reviewOrder.id, profiles[0].id, reviewInput, reviewDb), { status: 409 });
+    const reviewAudits = (await client.query(`SELECT admin_id,changes FROM audit_logs
+        WHERE action='fiscal.equivalence_confirmed' AND entity_id=$1 ORDER BY created_at,id`, [reviewOrder.id])).rows;
+    assert.equal(reviewAudits.length, 2);
+    assert.ok(reviewAudits.every(entry => entry.admin_id === profiles[0].id && entry.changes.shipping_released === false
+        && entry.changes.official_status_verified === false));
+    assert.deepEqual(reviewAudits.map(entry => entry.changes.fields_compared.includes('product_code')), [true, false]);
     console.log('PASS: fiscal document migration is idempotent, private and references orders/profiles');
 } finally { await client.end(); }

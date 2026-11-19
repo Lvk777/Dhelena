@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assessNfe, parseAuthorizedNfe, parseManualNfe, reconcileNfe, validNfeKey } from '../src/lib/fiscalXml.js';
-import { confirmFiscalEquivalence, fiscalContextHash, fiscalXmlImportEnabled, parseFiscalXmlUpload, requireFiscalXmlImport, validateFiscalEquivalence, validateFiscalVerification } from '../src/routes/fiscalDocuments.js';
+import { confirmFiscalEquivalence, fiscalContextHash, fiscalXmlImportEnabled, parseFiscalXmlUpload, requireFiscalXmlImport, reviewFromAudit, validateFiscalEquivalence, validateFiscalVerification } from '../src/routes/fiscalDocuments.js';
 
 function accessKey() {
     const prefix = '3526116173880100014355026161110001394826583';
@@ -106,19 +106,46 @@ test('formatting only is accepted; distinct SKU and color need a specific admini
     assert.equal(assessNfe(wrongSize, order, [row], '61738801000143').productCandidate, null);
     const wrongQuantity = { ...data, items: [{ ...data.items[0], quantity: 2 }] };
     assert.equal(assessNfe(wrongQuantity, order, [row], '61738801000143').productCandidate, null);
+    const differentDescription = { ...data, items: [{ ...data.items[0], name: 'Bermuda Clara P' }] };
+    const described = assessNfe(differentDescription, order, [row], '61738801000143');
+    assert.equal(described.productCandidate.sameBase, false);
+    assert.ok(described.issues.some(issue => issue.code === 'product_identity'));
+    const wrongValue = { ...data, items: [{ ...data.items[0], productCents: 2500 }] };
+    assert.equal(assessNfe(wrongValue, order, [row], '61738801000143').productCandidate, null);
 });
 
 test('equivalence submission requires separate confirmations, reason, evidence and exact identifiers', () => {
     const valid = { document_id: '11111111-1111-4111-8111-111111111111',
         order_item_id: '22222222-2222-4222-8222-222222222222', fiscal_index: 0,
-        confirmed_recipient: true, confirmed_product_code: true, confirmed_product_variant: true,
-        reason: 'Nome abreviado e variante conferidos', evidence: 'Cadastro original da peça e documento da cliente' };
+        confirmed_recipient: false, confirmed_product_code: true, confirmed_product_variant: true,
+        reason: 'Variante sintética conferida no cadastro', evidence: 'Cadastro original da peça e variante' };
     assert.equal(validateFiscalEquivalence(valid).productConfirmed, true);
-    for (const changed of [{ confirmed_recipient: false, confirmed_product_code: false },
+    assert.equal(validateFiscalEquivalence({ ...valid, confirmed_recipient: true,
+        confirmed_product_code: false, confirmed_product_variant: false }).recipientConfirmed, true);
+    for (const changed of [{ confirmed_product_code: false }, { confirmed_recipient: true },
         { confirmed_product_variant: false }, { reason: 'curto' }, { evidence: '' },
         { document_id: 'outro' }, { fiscal_index: -1 }]) {
         assert.throws(() => validateFiscalEquivalence({ ...valid, ...changed }));
     }
+});
+
+test('audit replay combines only current, specific product and name decisions', () => {
+    const context = 'b'.repeat(64), xmlHash = 'a'.repeat(64);
+    const product = { changes: { xml_sha256: xmlHash, comparison_sha256: context,
+        fields_compared: ['product_code','product_color'], order_item_id: 'item-1', fiscal_index: 0,
+        reason: 'Produto conferido', evidence: 'Ficha de cadastro' }, created_at: '2026-11-19T12:00:00Z' };
+    const name = { changes: { xml_sha256: xmlHash, comparison_sha256: context,
+        fields_compared: ['recipient_name'], reason: 'Nome conferido', evidence: 'Documento consultado' },
+    created_at: '2026-11-19T12:01:00Z' };
+    const partial = reviewFromAudit([product], xmlHash, context);
+    assert.equal(partial.review.productConfirmed, true);
+    assert.equal(partial.review.recipientConfirmed, false);
+    assert.equal(partial.records.length, 1);
+    const complete = reviewFromAudit([product, name], xmlHash, context);
+    assert.equal(complete.review.productConfirmed, true);
+    assert.equal(complete.review.recipientConfirmed, true);
+    assert.equal(complete.records.length, 2);
+    assert.equal(reviewFromAudit([product], xmlHash, 'changed').stale, true);
 });
 
 test('a reviewed comparison is bound to the exact customer, item, variant and amounts', () => {
@@ -146,23 +173,29 @@ test('equivalence is atomic, audited and leaves XML, payment, stock and shipping
         xml_sha256: 'a'.repeat(64), xml_bytes: Buffer.from('<original/>'), parsed_data: data,
         status: 'needs_review', differences: ['old'] };
     const input = { document_id: document.id, order_item_id: item.id, fiscal_index: 0,
-        confirmed_recipient: true, confirmed_product_code: true, confirmed_product_variant: true,
+        confirmed_recipient: false, confirmed_product_code: true, confirmed_product_variant: true,
         reason: 'Cadastro da cor comercial foi conferido', evidence: 'Ficha da variante e documento de identificação' };
-    const calls = [];
+    const calls = [], audits = [];
     const db = { async connect() { return { release() {}, async query(sql, params) {
         calls.push({ sql, params });
         if (sql.includes('FROM orders')) return { rows: [order] };
         if (sql.includes('FROM fiscal_documents')) return { rows: [document] };
         if (sql.includes('FROM order_items')) return { rows: [item] };
         if (sql.includes('FROM settings')) return { rows: [{ value: { document: '61738801000143' } }] };
-        if (sql.startsWith('UPDATE fiscal_documents')) return { rowCount: 1, rows: [{ ...document, differences: [], status: 'pending_official' }] };
+        if (sql.includes('FROM audit_logs')) return { rows: audits };
+        if (sql.startsWith('UPDATE fiscal_documents')) {
+            document.differences = JSON.parse(params[1]); document.status = params[2];
+            return { rowCount: 1, rows: [document] };
+        }
+        if (sql.includes("'fiscal.equivalence_confirmed'")) audits.push({ changes: JSON.parse(params[2]), created_at: new Date().toISOString() });
         return { rows: [] };
     } }; } };
     const result = await confirmFiscalEquivalence(order.id, '55555555-5555-4555-8555-555555555555', input, db);
-    assert.equal(result.status, 'pending_official');
-    assert.deepEqual(result.differences, []);
+    assert.equal(result.status, 'needs_review');
+    assert.deepEqual(result.analysis.issues.map(issue => issue.code), ['recipient_name']);
+    assert.equal(result.differences.length, 1);
     assert.equal(calls.at(-1).sql, 'COMMIT');
-    const audit = calls.find(call => call.sql.includes("'fiscal.equivalence_confirmed'"));
+    const audit = calls.find(call => call.sql.startsWith('INSERT INTO audit_logs'));
     assert.ok(audit);
     assert.equal(JSON.parse(audit.params[2]).official_status_verified, false);
     assert.equal(JSON.parse(audit.params[2]).shipping_released, false);
@@ -171,8 +204,21 @@ test('equivalence is atomic, audited and leaves XML, payment, stock and shipping
     assert.equal(order.shipping_status, 'cart_inflight');
     assert.equal(calls.some(call => /UPDATE orders|UPDATE products|INSERT INTO stock|shipping_operations/i.test(call.sql)), false);
     await assert.rejects(confirmFiscalEquivalence(order.id, '55555555-5555-4555-8555-555555555555',
-        { ...input, order_item_id: '66666666-6666-4666-8666-666666666666' }, db), { status: 409 });
+        input, db), { status: 409 });
     assert.equal(calls.at(-1).sql, 'ROLLBACK');
+    const nameResult = await confirmFiscalEquivalence(order.id, '55555555-5555-4555-8555-555555555555',
+        { ...input, order_item_id: undefined, fiscal_index: undefined,
+            confirmed_recipient: true, confirmed_product_code: false, confirmed_product_variant: false,
+            reason: 'Nome abreviado conferido com documento', evidence: 'Documento sintético de identificação' }, db);
+    assert.equal(nameResult.status, 'pending_official');
+    assert.deepEqual(nameResult.differences, []);
+    assert.equal(audits.length, 2);
+    document.status = 'needs_review'; audits.length = 0;
+    data.items[0].quantity = 2;
+    await assert.rejects(confirmFiscalEquivalence(order.id, '55555555-5555-4555-8555-555555555555', input, db), { status: 409 });
+    data.items[0].quantity = 1; data.items[0].productCents = 2500;
+    await assert.rejects(confirmFiscalEquivalence(order.id, '55555555-5555-4555-8555-555555555555', input, db), { status: 409 });
+    assert.equal(audits.length, 0);
     const busyDb = { async connect() { return { release() {}, async query(sql) {
         if (sql.includes('FROM orders')) throw Object.assign(new Error('busy'), { code: '55P03' });
         return {};
