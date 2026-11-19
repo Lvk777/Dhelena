@@ -11,7 +11,8 @@ try {
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon NOLOGIN; END IF;
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
     END $$`);
-    for (const name of ['001_init.sql', '002_profiles_rename.sql', '022_fiscal_documents.sql', '022_fiscal_documents.sql']) {
+    for (const name of ['001_init.sql', '002_profiles_rename.sql', '008_payments_shipping.sql',
+        '022_fiscal_documents.sql', '022_fiscal_documents.sql']) {
         await client.query(await fs.readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8'));
     }
     const { rows } = await client.query(`SELECT c.relrowsecurity AS rls,
