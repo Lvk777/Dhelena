@@ -12,6 +12,8 @@ import PaymentReconciliationPreview from "@/components/admin/PaymentReconciliati
 import CardFinancingSummary from '@/components/checkout/CardFinancingSummary';
 import { orderDeliveryEstimateLabel } from '@/lib/deliveryEstimate';
 import { fiscalXmlImportEnabled } from '@/lib/fiscalFeature';
+import { shippingStatusLabel } from '@/lib/shippingStatusLabel';
+import { userFacingError } from '@/lib/userFacingError';
 
 const STATUS_OPTIONS = Object.entries(ORDER_STATUS)
     .filter(([key]) => ['em_separacao', 'enviado', 'em_transporte', 'saiu_entrega', 'entregue'].includes(key))
@@ -32,6 +34,7 @@ export default function AdminOrderDetail() {
     const [trackingLoading, setTrackingLoading] = useState(false);
     const [fiscalDocument, setFiscalDocument] = useState(null);
     const [fiscalLoadError, setFiscalLoadError] = useState('');
+    const [statusError, setStatusError] = useState('');
 
     const load = async () => {
         setLoading(true);
@@ -54,12 +57,12 @@ export default function AdminOrderDetail() {
     useEffect(() => { load(); }, [id]);
 
     const changeStatus = async (newStatus) => {
-        setSaving(true);
+        setSaving(true); setStatusError('');
         try {
             await base44.functions.invoke("updateOrderStatus", { orderId: id, status: newStatus });
             load();
         } catch (e) {
-            console.error("Erro ao atualizar status:", e.response?.data?.error || e.message || "");
+            setStatusError(userFacingError(e, '/orders/status'));
         } finally { setSaving(false); }
     };
 
@@ -113,11 +116,12 @@ export default function AdminOrderDetail() {
             </div>
 
             <div className="space-y-2 mb-5" aria-label="Pendências críticas do pedido">
+                {statusError && <p role="alert" className="border border-red-500/60 bg-red-500/10 p-3 text-sm">{statusError}</p>}
                 {uncertainPayment && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Pagamento com tentativa inconclusiva. Concilie no Mercado Pago antes de liberar reserva, cancelar ou repetir a cobrança.</p>}
-                {uncertainShipping && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Expedição com resultado externo pendente ({order.shipping_status}). Confira o Melhor Envio antes de preparar ou comprar outra etiqueta.</p>}
+                {uncertainShipping && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">{shippingStatusLabel(order.shipping_status)}. O Melhor Envio ainda não confirmou o resultado. Confira o histórico no provedor antes de uma nova tentativa, que pode gerar duplicidade.</p>}
                 {fiscalDifferences && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Divergência fiscal: {fiscalDocument.differences.join(', ')}. Chave bloqueada para o Melhor Envio.</p>}
                 {fiscalXmlImportEnabled && isPaid && order.shipping_method === 'melhor_envio' && !fiscalDocument && !fiscalLoadError &&
-                    <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">NF-e ainda não cadastrada. Importe o XML ou informe a chave pendente; somente dados fiscais completos, conciliados e conferidos na fonte oficial podem liberar a chave.</p>}
+                    <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">NF-e ainda não cadastrada. Importe o XML fiscal original; somente dados conciliados com o pedido e conferidos na fonte oficial podem liberar a chave.</p>}
                 {fiscalDocument?.status === 'pending_key' && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Chave fiscal pendente de XML, conciliação com o pedido e conferência oficial. Expedição bloqueada.</p>}
                 {fiscalDocument?.status === 'pending_official' && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">NF-e ainda sem conferência administrativa em fonte oficial. Chave fiscal bloqueada.</p>}
                 {fiscalLoadError && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Não foi possível consultar a situação fiscal. A preparação do envio permanece bloqueada.</p>}
@@ -189,7 +193,7 @@ export default function AdminOrderDetail() {
                             <InfoRow label="Serviço" value={order.shipping_service_name || snapshot.shipping_service_name || SHIPPING_LABELS[order.shipping_method] || "—"} />
                             <InfoRow label="Prazo" value={orderDeliveryEstimateLabel(order)} />
                             <InfoRow label="Código rastreio" value={order.tracking_code || "—"} />
-                            <InfoRow label="Status envio" value={order.shipping_status || "—"} />
+                            <InfoRow label="Situação do envio" value={order.shipping_status ? shippingStatusLabel(order.shipping_status) : "—"} />
                             <InfoRow label="ID Melhor Envio" value={order.melhor_envio_shipment_id || "—"} />
                         </div>
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useId } from "react";
+import { userFacingError } from '@/lib/userFacingError';
 import { Loader2, CreditCard, AlertCircle, Check } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL } from "@/data/products";
@@ -92,7 +93,7 @@ export default function CardPaymentBrick({ order, publicKey, amount, maxInstallm
                 } catch (cause) {
                     if (cause.response?.data?.attempt_started === false) { submitted.current = false; offers.current = []; guard?.refresh(); }
                     else { setResult({ payment_status: 'unknown' }); callbacks.current.onAttempt?.(); }
-                    setError(cause.message || 'Não foi possível confirmar o pagamento. Consulte o pedido antes de tentar novamente.');
+                    setError(userFacingError(cause, '/payment/card'));
                     throw cause;
                 } finally { setProcessing(false); }
             },

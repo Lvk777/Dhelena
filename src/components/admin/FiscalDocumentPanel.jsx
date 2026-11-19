@@ -1,7 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FileText, Upload, Download, ExternalLink } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { formatBRL } from '@/data/products';
+import { userFacingError } from '@/lib/userFacingError';
+import FiscalUnlinkDialog from './FiscalUnlinkDialog';
 
 const OFFICIAL_PORTALS = {
     national: 'https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx',
@@ -17,6 +19,23 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
     const [source, setSource] = useState('national');
     const [confirmed, setConfirmed] = useState(false);
     const [contentMatched, setContentMatched] = useState(false);
+    const [history, setHistory] = useState([]);
+    const [historyError, setHistoryError] = useState('');
+    const [unlinkOpen, setUnlinkOpen] = useState(false);
+    const refreshHistory = async () => {
+        try {
+            const result = await base44.functions.invoke('getFiscalDocumentHistory', { orderId: order.id });
+            setHistory(Array.isArray(result) ? result : []); setHistoryError('');
+        } catch { setHistoryError('Não foi possível consultar o histórico fiscal. Atualize a página antes de trocar a nota.'); }
+    };
+    useEffect(() => { refreshHistory(); }, [order.id]);
+    const unlinkBlocked = !!order.melhor_envio_shipment_id || ['cart_created', 'purchase_inflight', 'purchase_uncertain',
+        'purchased', 'generating', 'generated', 'posted', 'in_transit', 'out_for_delivery', 'delivered'].includes(order.shipping_status);
+    const unlink = async review => {
+        await base44.functions.invoke('unlinkFiscalDocument', { orderId: order.id, review });
+        onChanged(null);
+        await refreshHistory();
+    };
 
     const importFile = async event => {
         const file = event.target.files?.[0];
@@ -24,8 +43,8 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
         if (!file) return;
         if (!/\.xml$/i.test(file.name) || file.size > 1024 * 1024) { setError('Selecione um XML de até 1 MB.'); return; }
         setBusy(true); setError('');
-        try { onChanged(await base44.functions.invoke('importFiscalXml', { orderId: order.id, file })); }
-        catch (cause) { setError(cause.message || 'Não foi possível importar a NF-e.'); }
+        try { onChanged(await base44.functions.invoke('importFiscalXml', { orderId: order.id, file })); await refreshHistory(); }
+        catch (cause) { setError(userFacingError(cause, '/fiscal/import')); }
         finally { setBusy(false); }
     };
     const verify = async () => {
@@ -35,7 +54,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
                 verification: { access_key: key.trim(), protocol: protocol.trim(), source,
                     confirmed_authorized: confirmed, confirmed_document_matches: contentMatched } }));
             setKey(''); setProtocol(''); setConfirmed(false); setContentMatched(false);
-        } catch (cause) { setError(cause.message || 'Não foi possível confirmar a consulta oficial.'); }
+        } catch (cause) { setError(userFacingError(cause, '/fiscal/verify')); }
         finally { setBusy(false); }
     };
     const removeKey = async () => {
@@ -44,7 +63,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
         try {
             await base44.functions.invoke('removePendingFiscalKey', { orderId: order.id });
             onChanged(null);
-        } catch (cause) { setError(cause.message || 'Não foi possível remover a chave pendente.'); }
+        } catch (cause) { setError(userFacingError(cause, '/fiscal/key')); }
         finally { setBusy(false); }
     };
     const download = async () => {
@@ -56,7 +75,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
             const link = window.document.createElement('a');
             link.href = url; link.download = result.filename; link.click();
             setTimeout(() => URL.revokeObjectURL(url), 1000);
-        } catch (cause) { setError(cause.message || 'Não foi possível baixar o XML.'); }
+        } catch (cause) { setError(userFacingError(cause, '/fiscal/download')); }
         finally { setBusy(false); }
     };
 
@@ -95,7 +114,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
             </div> : document.status === 'verified' ? <p role="status" className="text-sm">Conferência manual em fonte oficial registrada em {new Date(document.official_checked_at).toLocaleString('pt-BR')}. Chave liberada para a preparação do envio, sujeita às demais proteções.</p>
                 : <p role="status" className="text-sm">Dados cadastrados e pedido conferem. Falta confirmar a situação atual da NF-e no portal oficial.</p>}
             {document.status === 'pending_official' && <div className="border border-border p-3 space-y-3 text-sm">
-                <p>Abra o portal oficial e compare a chave, o protocolo, o emitente, o destinatário, os produtos, as quantidades, os valores e o frete com esta nota. Confirme a autorização atual e a ausência de cancelamento. O cadastro por XML ou manual não comprova autenticidade ou situação fiscal.</p>
+                <p>Abra o portal oficial e compare a chave, o protocolo, o emitente, o destinatário, os produtos, as quantidades, os valores e o frete com esta nota. Confirme a autorização atual e a ausência de cancelamento. Importar XML não comprova autenticidade ou situação fiscal.</p>
                 <label className="block">Portal consultado
                     <select className="admin-field block w-full p-2 mt-1" value={source} onChange={event => setSource(event.target.value)}>
                         <option value="national">Portal Nacional da NF-e</option><option value="svrs">Portal SVRS</option>
@@ -109,6 +128,22 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
                 <button type="button" className="btn-outline min-h-11 text-xs" disabled={busy || !confirmed || !contentMatched || key.length !== 44 || protocol.length !== 15} onClick={verify}>Registrar conferência oficial</button>
             </div>}
             {document.status === 'verified' && document.origin !== 'manual' && <button type="button" className="btn-outline text-xs inline-flex items-center gap-2 min-h-11" disabled={busy} onClick={download}><Download className="w-4 h-4" /> Baixar XML autorizado</button>}
+            {document.origin === 'xml' && <div className="space-y-2">
+                <button type="button" className="btn-outline text-xs min-h-11" disabled={busy || unlinkBlocked || !!historyError} onClick={() => setUnlinkOpen(true)}>Desvincular XML</button>
+                {unlinkBlocked && <p role="status" className="text-xs text-muted-foreground">Este envio já foi identificado ou avançou no Melhor Envio. Solicite análise administrativa específica antes de substituir a nota.</p>}
+            </div>}
         </>}
+        {historyError && <p role="alert" className="text-sm text-error-ink">{historyError}</p>}
+        {history.length > 0 && <div className="border-t border-border pt-4 space-y-2" aria-label="Histórico de documentos fiscais">
+            <h3 className="text-xs uppercase tracking-widest">Histórico de documentos anteriores</h3>
+            <ul className="space-y-3">{history.map(item => <li key={item.id} className="border border-border p-3 text-xs break-words">
+                <p className="font-medium">NF-e {item.number || '—'} · série {item.series || '—'} · chave terminada em {item.access_key_last4}</p>
+                <p>Desvinculada em {new Date(item.unlinked_at).toLocaleString('pt-BR')} · situação anterior: {item.prior_official_status === 'authorized' ? 'autorizada' : 'cancelada'}</p>
+                <p>Conferência registrada por {item.reviewed_by || 'administrador'} · {item.unlink_official_source === 'svrs' ? 'Portal SVRS' : 'Portal Nacional da NF-e'}</p>
+                <p>Motivo: {item.unlink_reason}</p>
+                <p>XML preservado em armazenamento privado. A desvinculação não altera a situação fiscal oficial.</p>
+            </li>)}</ul>
+        </div>}
+        <FiscalUnlinkDialog open={unlinkOpen} onClose={() => setUnlinkOpen(false)} onConfirm={unlink} documentId={document?.id} />
     </section>;
 }

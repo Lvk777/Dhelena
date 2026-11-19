@@ -3,6 +3,8 @@ import { base44 } from '@/api/base44Client';
 import { formatBRL } from '@/data/products';
 import { safeShippingPrintUrl } from '../../../backend/src/lib/shipping.js';
 import { fiscalXmlImportEnabled } from '@/lib/fiscalFeature';
+import { shippingStatusLabel } from '@/lib/shippingStatusLabel';
+import { userFacingError } from '@/lib/userFacingError';
 
 export default function ShippingOperations({ order, fiscalDocument, onChanged }) {
     const [ready, setReady] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -18,7 +20,7 @@ export default function ShippingOperations({ order, fiscalDocument, onChanged })
                 expected_price_cents: ready?.price != null ? Math.round(Number(ready.price) * 100) : undefined });
             if (result.print_url) setPrintUrl(result.print_url);
             setConfirm(false); await reload(); if(action !== 'print') onChanged?.();
-        } catch (e) { setError(e.message || 'Operação de envio indisponível.'); }
+        } catch (e) { setError(userFacingError(e, '/shipping/label')); }
         finally { setBusy(false); }
     };
     if (order.shipping_method !== 'melhor_envio') return null;
@@ -35,14 +37,14 @@ export default function ShippingOperations({ order, fiscalDocument, onChanged })
         {!eligible ? <p>Expedição disponível após a confirmação do pagamento.</p> : !ready?.environment ?
             <p>O ambiente deste envio precisa de análise antes de preparar ou comprar etiquetas.</p> : <>
                 <p>Ambiente do envio: {ready.environment === 'production' ? 'Produção' : 'Sandbox'}. Preparar a etiqueta não compra frete.</p>
-                <p>Modalidade: {ready.carrier || 'Transportadora'} · {ready.service || 'Serviço selecionado'}. Status: {state || 'não preparado'}.</p>
+                <p>Modalidade: {ready.carrier || 'Transportadora'} · {ready.service || 'Serviço selecionado'}. Situação: {state ? shippingStatusLabel(state) : 'não preparado'}.</p>
                 <ol className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground" aria-label="Etapas da expedição">
                     {stages.map(([key, label], index) => <li key={key}>{index + 1}. {label}</li>)}
                 </ol>
                 {packageData && <p>Volume da cotação: {packageData.height} × {packageData.width} × {packageData.length} cm; {packageData.weight} kg. Confirme as medidas do pacote fechado antes da emissão.</p>}
                 {ready.shipment_id && <p>ID do envio no Melhor Envio: <span className="font-numeric">{ready.shipment_id}</span></p>}
                 {ready.fiscal_model && <p>Documento informado: modelo {ready.fiscal_model}, chave terminada em {ready.fiscal_key_last4}. Confira a correspondência com a venda.</p>}
-                {ready.rejection_fields?.length > 0 && <p role="alert" className="text-error-ink">Rejeição anterior: confira {ready.rejection_fields.join(', ')}. O envio permanece bloqueado até conciliação.</p>}
+                {ready.rejection_fields?.length > 0 && <p role="alert" className="text-error-ink">O Melhor Envio apontou dados inválidos. Confira remetente, destinatário e pacote com o suporte antes de tentar novamente. O envio permanece bloqueado até a conciliação.</p>}
                 {!order.melhor_envio_shipment_id && <>
                     {ready.environment === 'production' ? <p>{fiscalXmlImportEnabled ?
                         `Chave fiscal: ${fiscalDocument?.status === 'verified' ? fiscalDocument.access_key : 'importe e confira a NF-e acima antes de preparar o envio'}.` :
@@ -64,7 +66,7 @@ export default function ShippingOperations({ order, fiscalDocument, onChanged })
                     <button className="btn-outline text-xs" disabled={busy} onClick={()=>run('refresh')}>Consultar status</button>
                     <button className="btn-outline text-xs" disabled={busy} onClick={()=>run('print')}>Obter impressão</button>
                 </div>}
-                {['cart_inflight','cart_uncertain','purchase_inflight','purchase_uncertain'].includes(state) && <p role="status">Resultado externo ainda não confirmado. Não repita a operação; confira o painel Melhor Envio e solicite análise.</p>}
+                {['cart_inflight','cart_uncertain','purchase_inflight','purchase_uncertain'].includes(state) && <p role="status">O Melhor Envio ainda não confirmou o resultado. Não repita a operação: uma nova tentativa pode gerar duplicidade. Confira o histórico no provedor e solicite análise.</p>}
                 {state === 'generating' && <p role="status">Geração em andamento. Consulte o status antes de imprimir.</p>}
                 {['generated','posted','in_transit','out_for_delivery','delivered'].includes(state) && <p role="status">Consulte o rastreamento e confirme a postagem pelo comprovante da transportadora.</p>}
                 {safeShippingPrintUrl(printUrl) && <a href={safeShippingPrintUrl(printUrl)} target="_blank" rel="noopener noreferrer" className="btn-outline text-xs">Abrir etiqueta (login Melhor Envio)</a>}

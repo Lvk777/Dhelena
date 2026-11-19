@@ -5,6 +5,7 @@ import { pool } from '../config/db.js';
 import { auth, requireSupabaseAdmin } from '../middleware.js';
 import { uploadLimiter } from '../middleware/rateLimiters.js';
 import { parseAuthorizedNfe, parseManualNfe, reconcileNfe, validNfeKey } from '../lib/fiscalXml.js';
+import { unlinkFiscalDocument } from '../services/fiscalUnlink.js';
 
 const router = Router();
 const xmlUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1024 * 1024, files: 1 } });
@@ -37,7 +38,7 @@ router.use(orderPath, auth, requireSupabaseAdmin, requireFiscalXmlImport);
 
 router.get(orderPath, async (req, res, next) => {
     try {
-        const { rows } = await pool.query(`SELECT ${fields} FROM fiscal_documents WHERE order_id=$1`, [req.params.id]);
+        const { rows } = await pool.query(`SELECT ${fields} FROM fiscal_documents WHERE order_id=$1 AND unlinked_at IS NULL`, [req.params.id]);
         if (rows[0]) return res.json(publicDocument(rows[0]));
         const pending = await pool.query('SELECT id,order_id,access_key,entered_by,created_at FROM pending_fiscal_keys WHERE order_id=$1', [req.params.id]);
         const key = pending.rows[0];
@@ -45,6 +46,24 @@ router.get(orderPath, async (req, res, next) => {
             origin: 'key_only', status: 'pending_key', imported_by: key.entered_by,
             created_at: key.created_at, data: null, differences: [] } : null);
     } catch (error) { next(error); }
+});
+
+router.get(`${orderPath}/history`, async (req, res, next) => {
+    try {
+        const { rows } = await pool.query(`SELECT fd.id,fd.access_key,fd.origin,fd.status,fd.created_at,fd.unlinked_at,
+            fd.unlink_reason,fd.unlink_official_source,fd.prior_official_status,
+            COALESCE(p.full_name,p.email) AS reviewed_by,fd.parsed_data->>'number' AS number,
+            fd.parsed_data->>'series' AS series FROM fiscal_documents fd
+            LEFT JOIN profiles p ON p.id=fd.unlinked_by
+            WHERE fd.order_id=$1 AND fd.unlinked_at IS NOT NULL ORDER BY fd.unlinked_at DESC`, [req.params.id]);
+        res.set('Cache-Control', 'no-store');
+        res.json(rows.map(row => ({ ...row, access_key_last4: row.access_key.trim().slice(-4), access_key: undefined })));
+    } catch (error) { next(error); }
+});
+
+router.post(`${orderPath}/unlink`, uploadLimiter, async (req, res, next) => {
+    try { res.json(await unlinkFiscalDocument(req.params.id, req.user.id, req.body)); }
+    catch (error) { next(error); }
 });
 
 router.post(`${orderPath}/key`, uploadLimiter, async (req, res, next) => {
@@ -97,7 +116,8 @@ async function storeDocument(req, data, origin, xmlBytes = null, sha = null) {
         const { rows: orders } = await client.query('SELECT * FROM orders WHERE id=$1 FOR UPDATE', [req.params.id]);
         if (!orders[0]) throw fail('Pedido não encontrado.', 404);
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [data.key]);
-        const { rows: existing } = await client.query('SELECT id FROM fiscal_documents WHERE order_id=$1 OR access_key=$2 OR xml_sha256=$3', [req.params.id, data.key, sha]);
+        const { rows: existing } = await client.query(`SELECT id FROM fiscal_documents
+            WHERE (order_id=$1 AND unlinked_at IS NULL) OR access_key=$2 OR xml_sha256=$3`, [req.params.id, data.key, sha]);
         if (existing.length) throw fail('Já existe uma NF-e para este pedido ou esta chave já foi utilizada. Solicite revisão antes de substituir.', 409);
         const pending = await client.query('SELECT id,access_key FROM pending_fiscal_keys WHERE order_id=$1 FOR UPDATE', [req.params.id]);
         if (pending.rowCount && pending.rows[0].access_key.trim() !== data.key) {
@@ -149,7 +169,9 @@ router.post(`${orderPath}/verify`, async (req, res, next) => {
     try {
         const { key, protocol, source } = validateFiscalVerification(req.body);
         client = await pool.connect(); await client.query('BEGIN');
-        const { rows } = await client.query('SELECT * FROM fiscal_documents WHERE order_id=$1 FOR UPDATE', [req.params.id]);
+        const order = await client.query('SELECT id FROM orders WHERE id=$1 FOR UPDATE', [req.params.id]);
+        if (!order.rowCount) throw fail('Pedido não encontrado.', 404);
+        const { rows } = await client.query('SELECT * FROM fiscal_documents WHERE order_id=$1 AND unlinked_at IS NULL FOR UPDATE', [req.params.id]);
         const row = rows[0];
         if (!row) throw fail('Cadastre a NF-e antes da conferência.', 404);
         if (row.status === 'verified') throw fail('Esta NF-e já foi conferida. Nenhum dado foi alterado.', 409);
@@ -169,7 +191,7 @@ router.post(`${orderPath}/verify`, async (req, res, next) => {
 
 router.get(`${orderPath}/download`, async (req, res, next) => {
     try {
-        const { rows } = await pool.query('SELECT access_key,origin,xml_bytes,status FROM fiscal_documents WHERE order_id=$1', [req.params.id]);
+        const { rows } = await pool.query('SELECT access_key,origin,xml_bytes,status FROM fiscal_documents WHERE order_id=$1 AND unlinked_at IS NULL', [req.params.id]);
         if (!rows[0]) throw fail('Documento não encontrado.', 404);
         if (rows[0].origin !== 'xml' || !rows[0].xml_bytes) throw fail('Cadastro manual não possui XML para download.', 409);
         if (rows[0].status !== 'verified') throw fail('O documento ainda não foi conferido na fonte oficial.', 409);

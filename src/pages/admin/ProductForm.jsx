@@ -6,6 +6,7 @@ import { useCatalog } from "@/context/CatalogContext";
 import { COLOR_SWATCHES, SIZES_LIST } from "@/data/products";
 import ImageUploader from "@/components/ImageUploader";
 import AdminWizard from "@/components/admin/AdminWizard";
+import { userFacingError } from '@/lib/userFacingError';
 import ProductPreview from "@/components/admin/ProductPreview";
 import { logAdminAction } from "@/lib/audit";
 import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
@@ -211,19 +212,18 @@ export default function ProductForm() {
             await reload();
             navigate("/admin/produtos");
         } catch (e) {
-            console.error("Erro ao salvar:", e);
-            setSaveError(e.response?.data?.error || e.message || "Não foi possível salvar o produto.");
+            setSaveError(userFacingError(e, '/products'));
         } finally {
             setSaving(false);
         }
     };
 
-    const renderStep = (step) => {
+    const renderStep = (step, { stepErrors } = /** @type {{stepErrors?: Record<string, string>}} */ ({})) => {
         switch (step.id) {
             case "basic":
                 return (
                     <div className="max-w-xl mx-auto space-y-4">
-                        <WizardInput label="Nome do produto" value={form.name} onChange={(v) => set("name", v)} full placeholder="Ex: Vestido Helena Midi" />
+                        <WizardInput label="Nome do produto" value={form.name} onChange={(v) => set("name", v)} full placeholder="Ex: Vestido Helena Midi" required error={stepErrors?.name || (saveError === 'Informe o nome do produto antes de salvar.' ? saveError : '')} />
                         <WizardInput label="SKU" value={form.sku} onChange={(v) => set("sku", v)} placeholder="Ex: DH-VD-001" />
                         <WizardTextarea label="Descrição completa" value={form.description} onChange={(v) => set("description", v)} full rows={4} />
                         <WizardTextarea label="Descrição resumida" value={form.short_description} onChange={(v) => set("short_description", v)} full rows={2} />
@@ -301,8 +301,8 @@ export default function ProductForm() {
             case "price":
                 return (
                     <div className="max-w-xl mx-auto space-y-4">
-                        <WizardInput label="Preço de venda (R$)" value={form.price} onChange={(v) => set("price", v)} type="number" placeholder="299.90" full />
-                        <WizardInput label="Preço promocional (opcional)" value={form.sale_price} onChange={(v) => set("sale_price", v)} type="number" placeholder="249.90" full />
+                        <WizardInput label="Preço de venda (R$)" value={form.price} onChange={(v) => set("price", v)} type="number" placeholder="299.90" full required error={stepErrors?.price} />
+                        <WizardInput label="Preço promocional (opcional)" value={form.sale_price} onChange={(v) => set("sale_price", v)} type="number" placeholder="249.90" full error={stepErrors?.salePrice} />
                         <WizardInput label="Preço de custo (admin)" value={form.cost_price} onChange={(v) => set("cost_price", v)} type="number" placeholder="120.00" full />
                         <div>
                             <label className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Parcelas máximas</label>
@@ -440,12 +440,14 @@ function SummaryRow({ label, value }) {
     );
 }
 
-function WizardInput({ label, value, onChange, type = "text", full = false, placeholder = "", min = undefined, step = undefined }) {
+function WizardInput({ label, value, onChange, type = "text", full = false, placeholder = "", min = undefined, step = undefined, error = '', required = false }) {
     const inputId = React.useId();
     return (
         <div className={full ? "" : ""}>
             <label htmlFor={inputId} className="block text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">{label}</label>
-            <input id={inputId} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} min={min} step={step} className="admin-field" />
+            <input id={inputId} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} min={min} step={step}
+                required={required} aria-invalid={!!error} aria-describedby={error ? `${inputId}-error` : undefined} className={`admin-field ${error ? 'border-rose' : ''}`} />
+            {error && <p id={`${inputId}-error`} className="text-xs text-error-ink mt-1">{error}</p>}
         </div>
     );
 }

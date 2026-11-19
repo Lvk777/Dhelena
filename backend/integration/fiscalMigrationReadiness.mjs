@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import pg from 'pg';
+import { createFiscalUnlink } from '../src/services/fiscalUnlink.js';
 
 if (!process.env.TEST_DATABASE_URL) throw new Error('TEST_DATABASE_URL is required');
 const client = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
@@ -93,6 +94,56 @@ try {
         try {
             await client.query(`SET LOCAL ROLE ${role}`);
             await assert.rejects(client.query('SELECT access_key FROM pending_fiscal_keys'), { code: '42501' });
+        } finally { await client.query('ROLLBACK'); }
+    }
+    for (const name of ['026_fiscal_document_history.sql', '026_fiscal_document_history.sql']) {
+        await client.query(await fs.readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8'));
+    }
+    const firstId = (await client.query('SELECT id FROM fiscal_documents WHERE order_id=$1 AND unlinked_at IS NULL', [orders[0].id])).rows[0].id;
+    const unlink = createFiscalUnlink({ db: { connect: async () => ({ query: client.query.bind(client), release() {} }) } });
+    const concurrentPool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
+    try {
+        await client.query('BEGIN');
+        await client.query('SELECT id FROM orders WHERE id=$1 FOR UPDATE', [orders[0].id]);
+        await assert.rejects(createFiscalUnlink({ db: concurrentPool })(orders[0].id, profiles[0].id, {
+            document_id: firstId, reason: 'Documento fiscal vinculado ao pedido incorreto',
+            official_source: 'national', prior_official_status: 'authorized',
+            confirmed_official_check: true, confirmed_not_cancellation: true,
+        }), { status: 409 });
+    } finally { await client.query('ROLLBACK'); await concurrentPool.end(); }
+    await assert.rejects(unlink(orders[0].id, profiles[0].id, {
+        document_id: firstId, reason: 'Documento fiscal vinculado ao pedido incorreto',
+        official_source: 'national', prior_official_status: 'authorized',
+        confirmed_official_check: false, confirmed_not_cancellation: true,
+    }), { status: 422 });
+    assert.equal((await client.query('SELECT unlinked_at FROM fiscal_documents WHERE id=$1', [firstId])).rows[0].unlinked_at, null);
+    await unlink(orders[0].id, profiles[0].id, {
+        document_id: firstId, reason: 'Documento fiscal vinculado ao pedido incorreto',
+        official_source: 'national', prior_official_status: 'authorized',
+        confirmed_official_check: true, confirmed_not_cancellation: true,
+    });
+    const prior = (await client.query('SELECT xml_bytes,access_key,unlinked_at,unlink_reason FROM fiscal_documents WHERE id=$1', [firstId])).rows[0];
+    assert.deepEqual(prior.xml_bytes, Buffer.from('<synthetic/>'));
+    assert.equal(prior.access_key.trim(), '1'.repeat(44));
+    assert.ok(prior.unlinked_at);
+    assert.match(prior.unlink_reason, /Documento fiscal/);
+    await assert.rejects(unlink(orders[0].id, profiles[0].id, {
+        document_id: firstId, reason: 'Tentar desvincular duas vezes', official_source: 'national',
+        prior_official_status: 'authorized', confirmed_official_check: true, confirmed_not_cancellation: true,
+    }), { status: 409 });
+    await client.query(`INSERT INTO fiscal_documents(order_id,access_key,origin,xml_bytes,xml_sha256,parsed_data,status,imported_by)
+        VALUES($1,$2,'xml',$3,$4,'{}','pending_official',$5)`,
+    [orders[0].id, '6'.repeat(44), Buffer.from('<replacement/>'), 'b'.repeat(64), profiles[0].id]);
+    assert.equal((await client.query('SELECT count(*)::int AS n FROM fiscal_documents WHERE order_id=$1 AND unlinked_at IS NULL', [orders[0].id])).rows[0].n, 1);
+    assert.equal((await client.query('SELECT count(*)::int AS n FROM fiscal_documents WHERE order_id=$1', [orders[0].id])).rows[0].n, 2);
+    await assert.rejects(client.query(`INSERT INTO fiscal_documents(order_id,access_key,origin,xml_bytes,xml_sha256,parsed_data,status,imported_by)
+        VALUES($1,$2,'xml',$3,$4,'{}','pending_official',$5)`,
+    [invalidOrder[0].id, '1'.repeat(44), Buffer.from('<synthetic/>'), 'a'.repeat(64), profiles[0].id]), { code: '23505' });
+    for (const role of ['anon', 'authenticated']) {
+        await client.query('BEGIN');
+        try {
+            await client.query(`SET LOCAL ROLE ${role}`);
+            await assert.rejects(client.query('SELECT xml_bytes FROM fiscal_documents'), { code: '42501' });
         } finally { await client.query('ROLLBACK'); }
     }
     console.log('PASS: fiscal document migration is idempotent, private and references orders/profiles');

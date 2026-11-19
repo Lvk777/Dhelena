@@ -9,6 +9,7 @@ import { createSessionFence } from '../lib/sessionFence.js';
 import { buildPlaceOrderRequest } from './orderRequest.js';
 import { resolveApiBase, apiUrl } from './apiBase.js';
 import { fetchPublicSettingsRecords } from './publicSettingsRequest.js';
+import { userFacingErrorMessage } from '../lib/userFacingError.js';
 
 const API_BASE = resolveApiBase(import.meta.env.VITE_API_URL, import.meta.env.PROD);
 const TOKEN_KEY = 'dhelena_access_token';
@@ -43,7 +44,12 @@ async function apiFetch(path, options = {}) {
     const headers = { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...options.headers };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const res = await fetch(apiUrl(API_BASE, path), { ...options, headers });
+    let res;
+    try { res = await fetch(apiUrl(API_BASE, path), { ...options, headers }); }
+    catch (cause) {
+        if (cause?.name === 'AbortError') throw cause;
+        throw createApiError(userFacingErrorMessage(0, path), 0);
+    }
     sessionFence.assert(startedBy);
     if (supabase && identity) {
         const { data } = await supabase.auth.getSession();
@@ -53,12 +59,13 @@ async function apiFetch(path, options = {}) {
     if (res.status === 401) {
         setToken(null);
         setStoredUser(null);
-        throw createApiError('Não autenticado', 401);
+        throw createApiError(userFacingErrorMessage(401, path), 401);
     }
 
     if (!res.ok) {
-        const error = await res.json().catch(() => ({ error: res.statusText }));
-        throw createApiError(error.error || error.message || 'Request failed', res.status, error);
+        const response = await res.json().catch(() => ({}));
+        const message = userFacingErrorMessage(res.status, path, response.error || response.message);
+        throw createApiError(message, res.status, { ...response, error: message });
     }
 
     return res.json();
@@ -372,6 +379,8 @@ const functions = {
                 return apiFetch(`/orders/${args.orderId}/shipping/readiness`);
             case 'getFiscalDocument':
                 return apiFetch(`/orders/${args.orderId}/fiscal`);
+            case 'getFiscalDocumentHistory':
+                return apiFetch(`/orders/${args.orderId}/fiscal/history`);
             case 'importFiscalXml': {
                 const form = new FormData();
                 form.append('file', args.file);
@@ -385,6 +394,8 @@ const functions = {
                 return apiFetch(`/orders/${args.orderId}/fiscal/key`, { method: 'DELETE' });
             case 'verifyFiscalDocument':
                 return apiFetch(`/orders/${args.orderId}/fiscal/verify`, { method: 'POST', body: JSON.stringify(args.verification) });
+            case 'unlinkFiscalDocument':
+                return apiFetch(`/orders/${args.orderId}/fiscal/unlink`, { method: 'POST', body: JSON.stringify(args.review) });
             case 'downloadFiscalXml':
                 return apiFetch(`/orders/${args.orderId}/fiscal/download`);
             case 'getTrackingInfo':

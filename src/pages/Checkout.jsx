@@ -18,6 +18,7 @@ import PaymentMethodChange from '@/components/checkout/PaymentMethodChange';
 import { selectedDelivery, selectedDeliveryCost, shippingContextKey } from "@/lib/shippingSelection";
 import { deliveryEstimateLabel, DELIVERY_BUSINESS_DAYS_NOTE } from '@/lib/deliveryEstimate';
 import { reconcileCart } from '@/lib/cartReconciliation';
+import { userFacingError } from '@/lib/userFacingError';
 
 const STEPS = ["Identificação", "Endereço", "Entrega", "Pagamento"];
 
@@ -217,7 +218,7 @@ export default function Checkout() {
                 setPaymentScreen("card");
             }
         } catch (e) {
-            setOrderError(e.response?.data?.error || e.message || "Erro ao finalizar pedido");
+            setOrderError(userFacingError(e, '/checkout/orders'));
             setPricingRetry(value => value + 1);
         } finally {
             placingRef.current = false;

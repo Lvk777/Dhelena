@@ -10,6 +10,12 @@ const RETURN_NEXT = {
     aguardando_postagem: ['em_transito_retorno', 'cancelada'],
     em_transito_retorno: ['recebida'],
 };
+const returnLabels = { solicitada: 'Solicitada', autorizada: 'Autorizada', recusada: 'Recusada',
+    cancelada: 'Cancelada', aguardando_postagem: 'Aguardando postagem',
+    em_transito_retorno: 'Em transporte de volta', recebida: 'Recebida', encerrada: 'Encerrada' };
+const refundLabels = { processing: 'Em processamento', reconciliation_required: 'Conferência necessária',
+    processed: 'Confirmado', failed: 'Falhou', pending: 'Pendente' };
+const statusLabel = (labels, status) => labels[status] || 'Situação pendente de conferência';
 const showDate = value => value ? new Date(value).toLocaleString('pt-BR') : '—';
 
 export default function AdminAfterSales({ order, onChanged, view = 'all' }) {
@@ -139,14 +145,14 @@ export default function AdminAfterSales({ order, onChanged, view = 'all' }) {
                 {view !== 'refunds' && <div className="border-t border-border pt-4">
                     <h3 className="font-medium mb-2">Devoluções físicas</h3>
                     {(data.returns || []).map(entry => <div key={entry.id} className="border border-border p-3 mb-2 space-y-2">
-                        <p><span className="font-medium">{entry.status.replaceAll('_', ' ')}</span> · {entry.reason}</p>
+                        <p><span className="font-medium">{statusLabel(returnLabels, entry.status)}</span> · {entry.reason}</p>
                         <p className="text-xs text-muted-foreground">Solicitada: {showDate(entry.created_at)} · autorizada: {showDate(entry.authorized_at)} · aguardando postagem: {showDate(entry.awaiting_post_at)} · postada/em trânsito: {showDate(entry.in_transit_at)} · recebida: {showDate(entry.received_at)} · encerrada: {showDate(entry.closed_at)}</p>
                         {entry.posting_instructions && <p className="text-xs">Instruções: {entry.posting_instructions}</p>}
                         <p className="text-xs">Código de postagem: {entry.reverse_posting_code || 'não informado'} · rastreio reverso: {entry.reverse_tracking_code || 'não informado'} · envio ME: {entry.reverse_shipment_id || 'não vinculado'}</p>
                         {entry.items.map(item => <p key={item.return_item_id} className="text-xs">
                             {item.quantity}x {order.items?.find(row => row.id === item.order_item_id)?.product_name || 'Item'} · condição: {item.condition_note || 'pendente'} · revendável: {item.restockable === null ? 'pendente' : item.restockable ? 'sim' : 'não'} · estoque restaurado: {item.stock_restored ? 'sim' : 'não'}
                         </p>)}
-                        <p className="text-xs">Reembolso relacionado: {entry.related_refunds?.length ? entry.related_refunds.map(refund => `${formatBRL(Number(refund.amount))} (${refund.status})`).join(', ') : 'nenhum'}</p>
+                        <p className="text-xs">Reembolso relacionado: {entry.related_refunds?.length ? entry.related_refunds.map(refund => `${formatBRL(Number(refund.amount))} (${statusLabel(refundLabels, refund.status)})`).join(', ') : 'nenhum'}</p>
                         {entry.status === 'autorizada' && <div className="space-y-2">
                             <label className="block text-xs">Instruções de postagem para a cliente
                                 <textarea className="block w-full admin-field p-2 mt-1" maxLength={2000} value={postingInstructions[entry.id] || ''}
@@ -173,7 +179,7 @@ export default function AdminAfterSales({ order, onChanged, view = 'all' }) {
                                 onChange={event => setConditionNotes(previous => ({ ...previous, [item.return_item_id]: event.target.value }))} />
                         </label>)}
                         <div className="flex flex-wrap gap-2">{(RETURN_NEXT[entry.status] || []).map(status => <button key={status} className="btn-outline text-xs min-h-11" disabled={busy || !data.physical_schema_ready || (status === 'aguardando_postagem' && (postingInstructions[entry.id]?.trim().length || 0) < 10) || (status === 'recebida' && entry.items.some(item => restockable[item.return_item_id] === undefined || (conditionNotes[item.return_item_id]?.trim().length || 0) < 3))}
-                            onClick={() => advance(entry, status)}>{status.replaceAll('_', ' ')}</button>)}</div>
+                            onClick={() => advance(entry, status)}>{statusLabel(returnLabels, status)}</button>)}</div>
                     </div>)}
                     {!data.returns?.length && <p className="text-xs text-muted-foreground">Nenhuma devolução solicitada.</p>}
                 </div>}
@@ -232,7 +238,7 @@ export default function AdminAfterSales({ order, onChanged, view = 'all' }) {
                 {view !== 'returns' && <div className="border-t border-border pt-4">
                     <h3 className="font-medium mb-2">Reembolsos</h3>
                     {(data.refunds || []).map(entry => <div key={entry.id} className="text-xs py-2 border-b border-border">
-                        {entry.kind === 'full' ? 'Total' : entry.kind === 'remaining' ? 'Saldo restante' : 'Parcial'} · {formatBRL(Number(entry.amount))} · {entry.status}
+                        {entry.kind === 'full' ? 'Total' : entry.kind === 'remaining' ? 'Saldo restante' : 'Parcial'} · {formatBRL(Number(entry.amount))} · {statusLabel(refundLabels, entry.status)}
                         {entry.provider_refund_id && <span> · MP {entry.provider_refund_id}</span>}
                         {['processing', 'reconciliation_required'].includes(entry.status) && <button className="btn-outline text-xs ml-2" disabled={busy}
                             onClick={() => run(() => base44.functions.invoke(order.snapshot?.payment_context ? 'operationalRefundReconcile' : 'reconcileRefund', { orderId: order.id, refundId: entry.id }))}>Consultar MP</button>}

@@ -21,7 +21,7 @@ test('a failed document lookup shows the error without offering an unsafe second
 test('new fiscal registration exposes only XML upload, not key or manual entry', async () => {
     const onChanged = vi.fn();
     const document = { id: 'document-1', origin: 'xml', status: 'pending_official' };
-    base44.functions.invoke.mockResolvedValueOnce(document);
+    base44.functions.invoke.mockImplementation(async name => name === 'importFiscalXml' ? document : []);
     render(<FiscalDocumentPanel order={{ id: 'order-1' }} document={null} onChanged={onChanged} />);
     expect(screen.getByRole('button', { name: 'Importar XML' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Informar chave da NF-e' })).toBeNull();
@@ -32,18 +32,73 @@ test('new fiscal registration exposes only XML upload, not key or manual entry',
     });
     await waitFor(() => expect(onChanged).toHaveBeenCalledWith(document));
     expect(base44.functions.invoke).toHaveBeenCalledWith('importFiscalXml', expect.objectContaining({ orderId: 'order-1' }));
-    expect(base44.functions.invoke).toHaveBeenCalledTimes(1);
+    expect(base44.functions.invoke.mock.calls.filter(([name]) => name === 'importFiscalXml')).toHaveLength(1);
 });
 
 test('invalid converted PDF XML shows explanatory validation error without changing order', async () => {
     const onChanged = vi.fn();
-    base44.functions.invoke.mockRejectedValueOnce(new Error('O arquivo não é o XML fiscal autorizado da NF-e.'));
+    base44.functions.invoke.mockImplementation(async name => {
+        if (name === 'importFiscalXml') throw Object.assign(new Error('O arquivo não é o XML fiscal autorizado da NF-e.'), { status: 422 });
+        return [];
+    });
     render(<FiscalDocumentPanel order={{ id: 'order-1' }} document={null} onChanged={onChanged} />);
     fireEvent.change(screen.getByLabelText('Arquivo XML da NF-e'), {
         target: { files: [new File(['<document><page/></document>'], 'danfe.xml', { type: 'text/xml' })] },
     });
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('não é o XML fiscal autorizado'));
     expect(onChanged).not.toHaveBeenCalled();
+});
+
+test('unlink confirmation can be cancelled without a request or changing the fiscal document', async () => {
+    base44.functions.invoke.mockResolvedValue([]);
+    const document = { id: '11111111-1111-4111-8111-111111111111', origin: 'xml',
+        access_key: '1'.repeat(44), status: 'needs_review', differences: ['Frete'],
+        data: { number: '19', series: '1', issuedAt: '2026-11-18T12:00:00Z', protocol: '2'.repeat(15),
+            issuerName: 'Emitente', issuerCnpj: '12345678000199', recipientName: 'Cliente',
+            recipientDocument: '12345678909', productCents: 3000, shippingCents: 0,
+            totalCents: 3000, items: [] } };
+    const onChanged = vi.fn();
+    render(<FiscalDocumentPanel order={{ id: 'order-1', shipping_status: 'cart_inflight' }} document={document} onChanged={onChanged} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Desvincular XML' }));
+    expect(screen.getByText(/O documento anterior será preservado no histórico/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByRole('button', { name: 'Confirmar desvinculação' })).toBeNull();
+    expect(base44.functions.invoke.mock.calls.filter(([name]) => name === 'unlinkFiscalDocument')).toHaveLength(0);
+    expect(onChanged).not.toHaveBeenCalled();
+});
+
+test('reviewed unlink preserves the historical entry and offers XML import again', async () => {
+    const document = { id: '11111111-1111-4111-8111-111111111111', origin: 'xml',
+        access_key: '1'.repeat(44), status: 'needs_review', differences: ['Frete'],
+        data: { number: '19', series: '1', issuedAt: '2026-11-18T12:00:00Z', protocol: '2'.repeat(15),
+            issuerName: 'Emitente', issuerCnpj: '12345678000199', recipientName: 'Cliente',
+            recipientDocument: '12345678909', productCents: 3000, shippingCents: 0,
+            totalCents: 3000, items: [] } };
+    let history = [];
+    base44.functions.invoke.mockImplementation(async name => {
+        if (name === 'unlinkFiscalDocument') { history = [{ id: document.id, number: '19', series: '1',
+            access_key_last4: '1111', unlinked_at: '2026-11-19T12:00:00Z',
+            prior_official_status: 'authorized', unlink_reason: 'Documento fiscal vinculado ao pedido incorreto' }]; return { unlinked: true }; }
+        if (name === 'getFiscalDocumentHistory') return history;
+        return null;
+    });
+    const onChanged = vi.fn();
+    const order = { id: 'order-1', shipping_status: 'cart_inflight' };
+    const { rerender } = render(<FiscalDocumentPanel order={order} document={document} onChanged={onChanged} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Desvincular XML' }));
+    fireEvent.change(screen.getByLabelText(/Motivo da desvinculação/), { target: { value: 'Documento fiscal vinculado ao pedido incorreto' } });
+    fireEvent.change(screen.getByLabelText('Portal oficial consultado'), { target: { value: 'national' } });
+    fireEvent.change(screen.getByLabelText('Situação da nota anterior no portal'), { target: { value: 'authorized' } });
+    fireEvent.click(screen.getByLabelText(/Conferi a situação da nota anterior/));
+    fireEvent.click(screen.getByLabelText(/Entendo que desvincular o XML/));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar desvinculação' }));
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith(null));
+    expect(base44.functions.invoke).toHaveBeenCalledWith('unlinkFiscalDocument', expect.objectContaining({
+        orderId: 'order-1', review: expect.objectContaining({ prior_official_status: 'authorized' }),
+    }));
+    rerender(<FiscalDocumentPanel order={order} document={null} onChanged={onChanged} />);
+    expect(screen.getByRole('button', { name: 'Importar XML' })).toBeTruthy();
+    await waitFor(() => expect(screen.getByLabelText('Histórico de documentos fiscais').textContent).toContain('XML preservado'));
 });
 
 test('historical pending key can be replaced by XML without exposing key registration', () => {

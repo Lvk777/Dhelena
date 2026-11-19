@@ -36,7 +36,8 @@ test('operational sections start collapsed while critical payment, shipping and 
     expect(panels).toHaveLength(5);
     expect(panels.every(panel => !panel.open)).toBe(true);
     expect(screen.getByText(/Pagamento com tentativa inconclusiva/)).toBeTruthy();
-    expect(screen.getByText(/Expedição com resultado externo pendente/)).toBeTruthy();
+    expect(screen.getByText(/Envio aguardando confirmação.*pode gerar duplicidade/)).toBeTruthy();
+    expect(screen.queryByText(/cart_inflight/)).toBeNull();
     expect(screen.getByRole('heading', { name: 'Cliente' })).toBeTruthy();
     expect(screen.getByText('Peça')).toBeTruthy();
     expect(screen.getByText('Pagamento')).toBeTruthy();
