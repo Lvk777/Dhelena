@@ -394,6 +394,8 @@ const functions = {
                 return apiFetch(`/orders/${args.orderId}/fiscal/key`, { method: 'DELETE' });
             case 'verifyFiscalDocument':
                 return apiFetch(`/orders/${args.orderId}/fiscal/verify`, { method: 'POST', body: JSON.stringify(args.verification) });
+            case 'confirmFiscalEquivalence':
+                return apiFetch(`/orders/${args.orderId}/fiscal/equivalence`, { method: 'POST', body: JSON.stringify(args.review) });
             case 'unlinkFiscalDocument':
                 return apiFetch(`/orders/${args.orderId}/fiscal/unlink`, { method: 'POST', body: JSON.stringify(args.review) });
             case 'downloadFiscalXml':

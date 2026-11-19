@@ -4,12 +4,20 @@ import { createHash } from 'node:crypto';
 import { pool } from '../config/db.js';
 import { auth, requireSupabaseAdmin } from '../middleware.js';
 import { uploadLimiter } from '../middleware/rateLimiters.js';
-import { parseAuthorizedNfe, parseManualNfe, reconcileNfe, validNfeKey } from '../lib/fiscalXml.js';
+import { assessNfe, parseAuthorizedNfe, parseManualNfe, reconcileNfe, validNfeKey } from '../lib/fiscalXml.js';
 import { unlinkFiscalDocument } from '../services/fiscalUnlink.js';
 
 const router = Router();
 const xmlUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1024 * 1024, files: 1 } });
 const fail = (message, status = 422) => Object.assign(new Error(message), { status });
+export const fiscalContextHash = (order, items, senderDocument) => createHash('sha256').update(JSON.stringify({
+    customer: { name: order.snapshot?.customer?.name, cpf: order.snapshot?.customer?.cpf,
+        cnpj: order.snapshot?.customer?.cnpj },
+    amounts: [order.subtotal, order.shipping_cost, order.discount, order.total].map(String),
+    senderDocument, items: items.map(item => ({ id: item.id, product_id: item.product_id,
+        product_name: item.product_name, product_sku: item.product_sku, color_name: item.color_name,
+        size: item.size, quantity: item.quantity, subtotal: String(item.subtotal) })).sort((a, b) => String(a.id).localeCompare(String(b.id))),
+})).digest('hex');
 export function parseFiscalXmlUpload(buffer) {
     try { return parseAuthorizedNfe(buffer); }
     catch (error) { throw fail(error?.message || 'Arquivo XML fiscal inválido.'); }
@@ -30,6 +38,22 @@ export function validateFiscalVerification(input = {}) {
     }
     return { key, protocol, source };
 }
+export function validateFiscalEquivalence(input = {}) {
+    if (!input || typeof input !== 'object' || Array.isArray(input))
+        throw fail('Informe os dados da conferência de equivalência.');
+    const reason = String(input.reason ?? '').trim(), evidence = String(input.evidence ?? '').trim();
+    if (!/^[0-9a-f-]{36}$/i.test(String(input.document_id || '')) || reason.length < 20 || reason.length > 1000
+        || evidence.length < 20 || evidence.length > 1000
+        || (input.confirmed_recipient !== true && input.confirmed_product_code !== true)
+        || (input.confirmed_product_code === true) !== (input.confirmed_product_variant === true)
+        || (input.confirmed_product_code === true && (!/^[0-9a-f-]{36}$/i.test(String(input.order_item_id || ''))
+            || !Number.isInteger(input.fiscal_index) || input.fiscal_index < 0))) {
+        throw fail('Confira nome, código, cor e documentos de apoio. Informe motivo e evidência com pelo menos 20 caracteres.');
+    }
+    return { documentId: input.document_id, reason, evidence, orderItemId: input.order_item_id,
+        fiscalIndex: input.fiscal_index, recipientConfirmed: input.confirmed_recipient === true,
+        productConfirmed: input.confirmed_product_code === true && input.confirmed_product_variant === true };
+}
 export function requireFiscalXmlImport(req, res, next, env = process.env) {
     if (!fiscalXmlImportEnabled(env)) return res.status(503).json({ error: 'Importação de NF-e indisponível até a homologação fiscal.' });
     next();
@@ -38,14 +62,87 @@ router.use(orderPath, auth, requireSupabaseAdmin, requireFiscalXmlImport);
 
 router.get(orderPath, async (req, res, next) => {
     try {
+        res.set('Cache-Control', 'no-store');
         const { rows } = await pool.query(`SELECT ${fields} FROM fiscal_documents WHERE order_id=$1 AND unlinked_at IS NULL`, [req.params.id]);
-        if (rows[0]) return res.json(publicDocument(rows[0]));
+        if (rows[0]) {
+            const result = publicDocument(rows[0]);
+            if (rows[0].status === 'needs_review') {
+                const { rows: orders } = await pool.query('SELECT * FROM orders WHERE id=$1', [req.params.id]);
+                const { rows: items } = await pool.query('SELECT * FROM order_items WHERE order_id=$1', [req.params.id]);
+                const { rows: sender } = await pool.query("SELECT value FROM settings WHERE key='shipping_sender'");
+                result.analysis = assessNfe(rows[0].parsed_data, orders[0], items, sender[0]?.value?.document);
+            } else {
+                const { rows: reviews } = await pool.query(`SELECT created_at FROM audit_logs
+                    WHERE action='fiscal.equivalence_confirmed' AND entity_id=$1 AND changes->>'document_id'=$2
+                    ORDER BY created_at DESC LIMIT 1`, [req.params.id, rows[0].id]);
+                if (reviews[0]) result.equivalence_reviewed_at = reviews[0].created_at;
+            }
+            return res.json(result);
+        }
         const pending = await pool.query('SELECT id,order_id,access_key,entered_by,created_at FROM pending_fiscal_keys WHERE order_id=$1', [req.params.id]);
         const key = pending.rows[0];
         res.json(key ? { id: key.id, order_id: key.order_id, access_key: key.access_key.trim(),
             origin: 'key_only', status: 'pending_key', imported_by: key.entered_by,
             created_at: key.created_at, data: null, differences: [] } : null);
     } catch (error) { next(error); }
+});
+
+export async function confirmFiscalEquivalence(orderId, actorId, input, db = pool) {
+    let client;
+    try {
+        const review = validateFiscalEquivalence(input);
+        client = await db.connect(); await client.query('BEGIN');
+        await client.query("SET LOCAL lock_timeout='2000ms'");
+        const { rows: orders } = await client.query('SELECT * FROM orders WHERE id=$1 FOR UPDATE', [orderId]);
+        if (!orders[0]) throw fail('Pedido não encontrado.', 404);
+        const { rows } = await client.query('SELECT * FROM fiscal_documents WHERE order_id=$1 AND unlinked_at IS NULL FOR UPDATE', [orderId]);
+        const document = rows[0];
+        if (!document || document.id !== review.documentId || document.status !== 'needs_review' || document.origin !== 'xml')
+            throw fail('A nota fiscal ou sua situação mudou. Atualize o pedido antes de conferir novamente.', 409);
+        const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id=$1', [orderId]);
+        const { rows: sender } = await client.query("SELECT value FROM settings WHERE key='shipping_sender'");
+        const before = assessNfe(document.parsed_data, orders[0], items, sender[0]?.value?.document);
+        const hasNameIssue = before.issues.some(issue => issue.code === 'recipient_name');
+        const hasProductIssue = before.issues.some(issue => issue.code === 'product_identity');
+        if (hasNameIssue !== review.recipientConfirmed || hasProductIssue !== review.productConfirmed
+            || (hasNameIssue && !before.abbreviatedName)
+            || (hasProductIssue && (!before.productCandidate
+                || before.productCandidate.orderItemId !== review.orderItemId
+                || before.productCandidate.fiscalIndex !== review.fiscalIndex))
+            || before.issues.some(issue => !['recipient_name', 'product_identity'].includes(issue.code))) {
+            throw fail('Há outras divergências ou a correspondência mudou. Confira o pedido e o XML; a expedição permanece bloqueada.', 409);
+        }
+        const after = assessNfe(document.parsed_data, orders[0], items, sender[0]?.value?.document,
+            { recipientConfirmed: review.recipientConfirmed, productConfirmed: review.productConfirmed,
+                orderItemId: review.orderItemId, fiscalIndex: review.fiscalIndex });
+        if (after.issues.length) throw fail('As divergências permanecem. A nota não foi liberada.', 409);
+        const updated = await client.query(`UPDATE fiscal_documents SET differences='[]'::jsonb,
+            status='pending_official',updated_at=now() WHERE id=$1 AND status='needs_review' RETURNING ${fields}`, [document.id]);
+        if (updated.rowCount !== 1) throw fail('A nota fiscal mudou durante a conferência. Atualize o pedido.', 409);
+        await client.query(`INSERT INTO audit_logs(admin_id,action,entity_type,entity_id,changes)
+            VALUES($1,'fiscal.equivalence_confirmed','order',$2,$3)`, [actorId, orderId,
+            JSON.stringify({ document_id: document.id, xml_sha256: document.xml_sha256,
+                comparison_sha256: fiscalContextHash(orders[0], items, sender[0]?.value?.document),
+                fields_compared: [
+                    ...(review.recipientConfirmed ? ['recipient_name','recipient_document'] : []),
+                    ...(review.productConfirmed ? ['product_code','product_color','product_size','quantity','item_value'] : []),
+                ],
+                order_item_id: review.orderItemId, fiscal_index: review.fiscalIndex,
+                fiscal_code: before.productCandidate?.fiscalCode, order_sku: before.productCandidate?.orderSku,
+                order_color: before.productCandidate?.orderColor, fiscal_color: before.productCandidate?.fiscalColor,
+                reason: review.reason, evidence: review.evidence, official_status_verified: false,
+                shipping_released: false })]);
+        await client.query('COMMIT');
+        return { ...publicDocument(updated.rows[0]), equivalence_reviewed: true };
+    } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        throw error.code === '55P03' ? fail('Outra operação está atualizando este pedido. Aguarde e tente novamente.', 409) : error;
+    } finally { client?.release(); }
+}
+
+router.post(`${orderPath}/equivalence`, uploadLimiter, async (req, res, next) => {
+    try { res.json(await confirmFiscalEquivalence(req.params.id, req.user.id, req.body)); }
+    catch (error) { next(error); }
 });
 
 router.get(`${orderPath}/history`, async (req, res, next) => {
@@ -169,13 +266,27 @@ router.post(`${orderPath}/verify`, async (req, res, next) => {
     try {
         const { key, protocol, source } = validateFiscalVerification(req.body);
         client = await pool.connect(); await client.query('BEGIN');
-        const order = await client.query('SELECT id FROM orders WHERE id=$1 FOR UPDATE', [req.params.id]);
+        const order = await client.query('SELECT * FROM orders WHERE id=$1 FOR UPDATE', [req.params.id]);
         if (!order.rowCount) throw fail('Pedido não encontrado.', 404);
         const { rows } = await client.query('SELECT * FROM fiscal_documents WHERE order_id=$1 AND unlinked_at IS NULL FOR UPDATE', [req.params.id]);
         const row = rows[0];
         if (!row) throw fail('Cadastre a NF-e antes da conferência.', 404);
         if (row.status === 'verified') throw fail('Esta NF-e já foi conferida. Nenhum dado foi alterado.', 409);
         if (row.differences.length) throw fail('Há divergências com o pedido. Consulte a administração e a contabilidade.', 409);
+        const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id=$1', [req.params.id]);
+        const { rows: sender } = await client.query("SELECT value FROM settings WHERE key='shipping_sender'");
+        const { rows: reviews } = await client.query(`SELECT changes FROM audit_logs
+            WHERE action='fiscal.equivalence_confirmed' AND entity_id=$1 AND changes->>'document_id'=$2
+            ORDER BY created_at DESC LIMIT 1`, [req.params.id, row.id]);
+        const savedReview = reviews[0]?.changes;
+        if (savedReview && (savedReview.xml_sha256 !== row.xml_sha256
+            || savedReview.comparison_sha256 !== fiscalContextHash(order.rows[0], items, sender[0]?.value?.document)))
+            throw fail('O XML ou o pedido mudou desde a conferência de equivalência. Solicite revisão.', 409);
+        const review = savedReview ? { recipientConfirmed: savedReview.fields_compared.includes('recipient_name'),
+            productConfirmed: savedReview.fields_compared.includes('product_code'),
+            orderItemId: savedReview.order_item_id, fiscalIndex: savedReview.fiscal_index } : {};
+        if (reconcileNfe(row.parsed_data, order.rows[0], items, sender[0]?.value?.document, review).length)
+            throw fail('O pedido ou a nota mudou desde a conciliação. Confira novamente antes de registrar a situação oficial.', 409);
         if (key !== row.access_key.trim() || protocol !== row.parsed_data.protocol) throw fail('Chave ou protocolo não conferem com a NF-e cadastrada.');
         const officialSource = source === 'svrs' ? 'https://dfe-portal.svrs.rs.gov.br/Nfe/da' : 'https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx';
         const result = await client.query(`UPDATE fiscal_documents SET status='verified',official_source=$2,official_checked_at=now(),verified_by=$3,updated_at=now()

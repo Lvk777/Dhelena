@@ -135,33 +135,87 @@ export function parseAuthorizedNfe(buffer) {
     };
 }
 
-export function reconcileNfe(nfe, order, orderItems, senderDocument) {
-    const differences = [];
-    const add = (condition, label) => { if (!condition) differences.push(label); };
-    const normalize = value => text(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
-    add(digits(senderDocument).length === 14 && nfe.issuerCnpj === digits(senderDocument), 'CNPJ emitente');
-    add(nfe.recipientDocument && nfe.recipientDocument === digits(order.snapshot?.customer?.cpf), 'Documento do destinatário');
-    add(normalize(nfe.recipientName) && normalize(nfe.recipientName) === normalize(order.snapshot?.customer?.name), 'Nome do destinatário');
-    add(nfe.items.length === orderItems.length, 'Quantidade de linhas de produto');
-    const remaining = [...orderItems];
-    for (const item of nfe.items) {
-        const index = remaining.findIndex(row => {
-            const orderNames = [row.product_name,
-                [row.product_name, row.color_name].filter(Boolean).join(' '),
-                [row.product_name, row.color_name, row.size].filter(Boolean).join(' ')];
-            return normalize(item.code) && normalize(row.product_sku) === normalize(item.code)
-                || orderNames.some(name => normalize(name) === normalize(item.name));
-        });
-        if (index < 0) { differences.push('Identificação dos produtos'); continue; }
-        const [matched] = remaining.splice(index, 1);
-        add(Number(matched.quantity) === item.quantity, 'Quantidade dos produtos');
-        add(sameMoney(item.productCents, matched.subtotal), 'Valor dos produtos');
+const words = value => text(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+const sameWords = (a, b) => words(a).length > 0 && words(a).join(' ') === words(b).join(' ');
+const startsWithWords = (whole, prefix) => prefix.length > 0 && prefix.every((word, index) => whole[index] === word);
+const productBaseWords = row => {
+    let base = words(row.product_name);
+    for (const suffix of [words(row.size), words(row.color_name)]) {
+        if (suffix.length && base.slice(-suffix.length).join(' ') === suffix.join(' ')) base = base.slice(0, -suffix.length);
     }
-    add(!remaining.length, 'Produtos do pedido');
-    add(sameMoney(nfe.productCents, order.subtotal), 'Subtotal das mercadorias');
-    add(sameMoney(nfe.shippingCents, order.shipping_cost), 'Frete');
-    add(sameMoney(nfe.discountCents, order.discount), 'Desconto');
-    add(sameMoney(nfe.totalCents, order.total), 'Total');
-    add(nfe.insuranceCents === 0 && nfe.otherCents === 0 && nfe.taxesCents === 0, 'Outras despesas, seguro ou tributos adicionais');
-    return [...new Set(differences)];
+    return base;
+};
+const moneyBR = cents => (Number(cents) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+export function assessNfe(nfe, order, orderItems, senderDocument, review = {}) {
+    const issues = [];
+    const add = (code, message) => issues.push({ code, message });
+    const customer = order.snapshot?.customer || {};
+    const sameRecipientDocument = !!nfe.recipientDocument && nfe.recipientDocument === digits(customer.cpf || customer.cnpj);
+    if (digits(senderDocument).length !== 14 || nfe.issuerCnpj !== digits(senderDocument))
+        add('issuer', 'CNPJ do emitente: a nota não corresponde ao CNPJ configurado para a loja. Confira o cadastro fiscal antes de prosseguir.');
+    if (!sameRecipientDocument)
+        add('recipient_document', 'Documento da cliente: o CPF ou CNPJ da nota difere do pedido. Confira a identidade; a expedição permanece bloqueada.');
+    const orderName = words(customer.name), fiscalName = words(nfe.recipientName);
+    const abbreviatedName = sameRecipientDocument && orderName.length >= 2 && fiscalName.length > orderName.length
+        && startsWithWords(fiscalName, orderName);
+    if (!sameWords(customer.name, nfe.recipientName) && !(abbreviatedName && review.recipientConfirmed)) {
+        add('recipient_name', abbreviatedName
+            ? `Nome da cliente: o pedido apresenta “${text(customer.name)}” e a nota “${text(nfe.recipientName)}”. O documento coincide; confirme a abreviação com evidência. A expedição permanece bloqueada.`
+            : `Nome da cliente: o pedido apresenta “${text(customer.name)}” e a nota “${text(nfe.recipientName)}”. Confira a identidade; a expedição permanece bloqueada.`);
+    }
+    if (nfe.items.length !== orderItems.length)
+        add('item_count', `Quantidade de linhas: o pedido tem ${orderItems.length} e a nota tem ${nfe.items.length}. Confira os produtos; a expedição permanece bloqueada.`);
+    const remaining = [...orderItems];
+    const unmatched = [];
+    for (const [fiscalIndex, item] of nfe.items.entries()) {
+        const index = remaining.findIndex(row => {
+            const name = words(item.name), base = productBaseWords(row), size = words(row.size), color = words(row.color_name);
+            const full = [...base, ...color, ...size];
+            const exactDescription = sameWords(item.name, row.product_name) && !row.color_name && !row.size;
+            const variantMatches = startsWithWords(name, base) && name.join(' ') === full.join(' ');
+            return (exactDescription || variantMatches) && (!item.code || !row.product_sku || sameWords(item.code, row.product_sku));
+        });
+        if (index < 0) { unmatched.push({ item, fiscalIndex }); continue; }
+        const [matched] = remaining.splice(index, 1);
+        if (Number(matched.quantity) !== item.quantity)
+            add('quantity', `Quantidade de “${text(matched.product_name)}”: pedido ${matched.quantity}, nota ${item.quantity}. Confira os itens; a expedição permanece bloqueada.`);
+        if (!sameMoney(item.productCents, matched.subtotal))
+            add('item_value', `Valor de “${text(matched.product_name)}”: pedido ${moneyBR(Number(matched.subtotal) * 100)}, nota ${moneyBR(item.productCents)}. Confira os itens; a expedição permanece bloqueada.`);
+    }
+    let productCandidate = null;
+    if (unmatched.length === 1 && remaining.length === 1) {
+        const { item, fiscalIndex } = unmatched[0], row = remaining[0];
+        const fiscalWords = words(item.name), base = productBaseWords(row), size = words(row.size);
+        const sameBase = startsWithWords(fiscalWords, base);
+        const sameSize = !size.length || fiscalWords.slice(-size.length).join(' ') === size.join(' ');
+        const fiscalColor = fiscalWords.slice(base.length, size.length ? -size.length : undefined).join(' ');
+        if (sameBase && sameSize && !!fiscalColor && !!row.color_name && Number(row.quantity) === item.quantity
+            && sameMoney(item.productCents, row.subtotal) && row.id) {
+            productCandidate = { orderItemId: row.id, fiscalIndex, fiscalCode: item.code,
+                orderSku: row.product_sku || '', orderColor: row.color_name || '', fiscalColor,
+                productName: row.product_name, size: row.size || '' };
+        }
+    }
+    if (unmatched.length || remaining.length) {
+        if (productCandidate && review.productConfirmed === true
+            && review.orderItemId === productCandidate.orderItemId
+            && review.fiscalIndex === productCandidate.fiscalIndex) {
+            // A specific, audited administrator decision can only resolve this one candidate.
+        } else if (productCandidate) {
+            add('product_identity', `Produto “${text(productCandidate.productName)}”, tamanho ${text(productCandidate.size) || 'não informado'}: o pedido registra cor ${text(productCandidate.orderColor) || 'não informada'} e SKU ${text(productCandidate.orderSku) || 'não informado'}; a nota registra cor ${text(productCandidate.fiscalColor) || 'não identificada'} e código ${text(productCandidate.fiscalCode) || 'não informado'}. Confira a variante e a correspondência do código antes de confirmar; a expedição permanece bloqueada.`);
+        } else add('product_identity', 'Produto da nota sem correspondência segura no pedido. Confira nome, código, variante, tamanho, quantidade e valor; a expedição permanece bloqueada.');
+    }
+    if (!sameMoney(nfe.productCents, order.subtotal)) add('subtotal', `Mercadorias: pedido ${moneyBR(Number(order.subtotal) * 100)}, nota ${moneyBR(nfe.productCents)}. Confira os valores; a expedição permanece bloqueada.`);
+    if (!sameMoney(nfe.shippingCents, order.shipping_cost)) add('shipping', `Frete: pedido ${moneyBR(Number(order.shipping_cost) * 100)}, nota ${moneyBR(nfe.shippingCents)}. Confira os valores; a expedição permanece bloqueada.`);
+    if (!sameMoney(nfe.discountCents, order.discount)) add('discount', 'Desconto: os valores do pedido e da nota diferem. Confira os totais; a expedição permanece bloqueada.');
+    if (!sameMoney(nfe.totalCents, order.total)) add('total', `Total: pedido ${moneyBR(Number(order.total) * 100)}, nota ${moneyBR(nfe.totalCents)}. Confira os valores; a expedição permanece bloqueada.`);
+    if (nfe.insuranceCents !== 0 || nfe.otherCents !== 0 || nfe.taxesCents !== 0)
+        add('additional_charges', 'A nota contém seguro, outras despesas ou tributos adicionais que o pedido não discrimina. Confira os valores; a expedição permanece bloqueada.');
+    return { issues, abbreviatedName, productCandidate };
+}
+
+export function reconcileNfe(nfe, order, orderItems, senderDocument, review) {
+    return assessNfe(nfe, order, orderItems, senderDocument, review).issues.map(issue => issue.message);
 }

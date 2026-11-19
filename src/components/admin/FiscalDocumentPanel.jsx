@@ -22,6 +22,16 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
     const [history, setHistory] = useState([]);
     const [historyError, setHistoryError] = useState('');
     const [unlinkOpen, setUnlinkOpen] = useState(false);
+    const [equivalenceReason, setEquivalenceReason] = useState('');
+    const [equivalenceEvidence, setEquivalenceEvidence] = useState('');
+    const [recipientChecked, setRecipientChecked] = useState(false);
+    const [codeChecked, setCodeChecked] = useState(false);
+    const [variantChecked, setVariantChecked] = useState(false);
+    const reviewIssues = document?.analysis?.issues || [];
+    const nameReviewNeeded = reviewIssues.some(issue => issue.code === 'recipient_name') && document?.analysis?.abbreviatedName;
+    const productReviewNeeded = reviewIssues.some(issue => issue.code === 'product_identity') && !!document?.analysis?.productCandidate;
+    const canReview = document?.status === 'needs_review' && (nameReviewNeeded || productReviewNeeded)
+        && reviewIssues.every(issue => ['recipient_name', 'product_identity'].includes(issue.code));
     const refreshHistory = async () => {
         try {
             const result = await base44.functions.invoke('getFiscalDocumentHistory', { orderId: order.id });
@@ -55,6 +65,24 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
                     confirmed_authorized: confirmed, confirmed_document_matches: contentMatched } }));
             setKey(''); setProtocol(''); setConfirmed(false); setContentMatched(false);
         } catch (cause) { setError(userFacingError(cause, '/fiscal/verify')); }
+        finally { setBusy(false); }
+    };
+    const confirmEquivalence = async () => {
+        const candidate = document?.analysis?.productCandidate;
+        if (!canReview || busy) return;
+        setBusy(true); setError('');
+        try {
+            const result = await base44.functions.invoke('confirmFiscalEquivalence', { orderId: order.id, review: {
+                document_id: document.id, order_item_id: productReviewNeeded ? candidate.orderItemId : undefined,
+                fiscal_index: productReviewNeeded ? candidate.fiscalIndex : undefined,
+                confirmed_recipient: recipientChecked, confirmed_product_code: codeChecked,
+                confirmed_product_variant: variantChecked, reason: equivalenceReason.trim(),
+                evidence: equivalenceEvidence.trim(),
+            } });
+            onChanged(result);
+            setEquivalenceReason(''); setEquivalenceEvidence('');
+            setRecipientChecked(false); setCodeChecked(false); setVariantChecked(false);
+        } catch (cause) { setError(userFacingError(cause, '/fiscal/equivalence')); }
         finally { setBusy(false); }
     };
     const removeKey = async () => {
@@ -110,9 +138,26 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
             <ul className="text-xs list-disc pl-5">{document.data.items.map((item, index) => <li key={index}>{item.name} · {item.quantity} un. · {formatBRL(item.productCents / 100)}</li>)}</ul>
             {document.differences.length > 0 ? <div role="alert" className="border border-amber-500/50 p-3 text-sm">
                 <p className="font-medium">Divergência com o pedido. Associação e uso no Melhor Envio bloqueados.</p>
-                <p>Conferir com a administração e a contabilidade: {document.differences.join(', ')}.</p>
+                <ul className="list-disc pl-5 space-y-1">{(document.analysis?.issues?.length
+                    ? document.analysis.issues.map(issue => issue.message) : document.differences)
+                    .map((message, index) => <li key={index}>{message}</li>)}</ul>
             </div> : document.status === 'verified' ? <p role="status" className="text-sm">Conferência manual em fonte oficial registrada em {new Date(document.official_checked_at).toLocaleString('pt-BR')}. Chave liberada para a preparação do envio, sujeita às demais proteções.</p>
                 : <p role="status" className="text-sm">Dados cadastrados e pedido conferem. Falta confirmar a situação atual da NF-e no portal oficial.</p>}
+            {document.equivalence_reviewed_at && <p role="status" className="text-sm border border-border p-3">Equivalência documental registrada em {new Date(document.equivalence_reviewed_at).toLocaleString('pt-BR')}. A autorização fiscal ainda exige conferência separada em fonte oficial.</p>}
+            {canReview && <div className="border border-border p-3 space-y-3 text-sm" aria-label="Conferência de equivalência fiscal">
+                    <h3 className="font-medium">Conferir equivalência documental</h3>
+                    <p>Confirme somente os campos indicados com documentação de apoio. Este registro não altera o XML, não consulta a SEFAZ e não libera a expedição.</p>
+                    {nameReviewNeeded && <label className="flex gap-2 items-start"><input type="checkbox" checked={recipientChecked} onChange={event => setRecipientChecked(event.target.checked)} />Conferi que o nome abreviado e o nome completo pertencem à mesma cliente.</label>}
+                    {productReviewNeeded && <>
+                        <label className="flex gap-2 items-start"><input type="checkbox" checked={codeChecked} onChange={event => setCodeChecked(event.target.checked)} />Conferi que o código da nota corresponde ao produto vendido.</label>
+                        <label className="flex gap-2 items-start"><input type="checkbox" checked={variantChecked} onChange={event => setVariantChecked(event.target.checked)} />Conferi documentalmente a equivalência entre as cores da nota e do pedido.</label>
+                    </>}
+                    <label className="block">Motivo da equivalência<input className="admin-field block w-full p-2 mt-1" value={equivalenceReason} onChange={event => setEquivalenceReason(event.target.value)} maxLength={1000} /></label>
+                    <label className="block">Evidência consultada<input className="admin-field block w-full p-2 mt-1" value={equivalenceEvidence} onChange={event => setEquivalenceEvidence(event.target.value)} maxLength={1000} placeholder="Ex.: referência do cadastro da variante e documento de identificação conferido" /></label>
+                    <button type="button" className="btn-outline min-h-11 text-xs" disabled={busy || (nameReviewNeeded && !recipientChecked)
+                        || (productReviewNeeded && (!codeChecked || !variantChecked))
+                        || equivalenceReason.trim().length < 20 || equivalenceEvidence.trim().length < 20} onClick={confirmEquivalence}>Registrar equivalência</button>
+                </div>}
             {document.status === 'pending_official' && <div className="border border-border p-3 space-y-3 text-sm">
                 <p>Abra o portal oficial e compare a chave, o protocolo, o emitente, o destinatário, os produtos, as quantidades, os valores e o frete com esta nota. Confirme a autorização atual e a ausência de cancelamento. Importar XML não comprova autenticidade ou situação fiscal.</p>
                 <label className="block">Portal consultado

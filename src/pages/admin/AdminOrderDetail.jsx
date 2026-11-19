@@ -119,7 +119,12 @@ export default function AdminOrderDetail() {
                 {statusError && <p role="alert" className="border border-red-500/60 bg-red-500/10 p-3 text-sm">{statusError}</p>}
                 {uncertainPayment && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Pagamento com tentativa inconclusiva. Concilie no Mercado Pago antes de liberar reserva, cancelar ou repetir a cobrança.</p>}
                 {uncertainShipping && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">{shippingStatusLabel(order.shipping_status)}. O Melhor Envio ainda não confirmou o resultado. Confira o histórico no provedor antes de uma nova tentativa, que pode gerar duplicidade.</p>}
-                {fiscalDifferences && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Divergência fiscal: {fiscalDocument.differences.join(', ')}. Chave bloqueada para o Melhor Envio.</p>}
+                {fiscalDifferences && <div role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">
+                    <p>Divergência fiscal. Chave bloqueada para o Melhor Envio.</p>
+                    <ul className="list-disc pl-5">{(fiscalDocument.analysis?.issues?.length
+                        ? fiscalDocument.analysis.issues.map(issue => issue.message) : fiscalDocument.differences)
+                        .map((message, index) => <li key={index}>{message}</li>)}</ul>
+                </div>}
                 {fiscalXmlImportEnabled && isPaid && order.shipping_method === 'melhor_envio' && !fiscalDocument && !fiscalLoadError &&
                     <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">NF-e ainda não cadastrada. Importe o XML fiscal original; somente dados conciliados com o pedido e conferidos na fonte oficial podem liberar a chave.</p>}
                 {fiscalDocument?.status === 'pending_key' && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Chave fiscal pendente de XML, conciliação com o pedido e conferência oficial. Expedição bloqueada.</p>}

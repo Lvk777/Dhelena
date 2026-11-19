@@ -142,3 +142,38 @@ test('manual discrepancy blocks attestation and a verified manual record never o
         official_checked_at: '2026-11-18T12:10:00Z' }} onChanged={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Baixar XML autorizado' })).toBeNull();
 });
+
+test('a specific name, code and color equivalence requires evidence and does not start shipping', async () => {
+    const document = { id: '11111111-1111-4111-8111-111111111111', origin: 'xml',
+        access_key: '1'.repeat(44), status: 'needs_review',
+        differences: ['Nome do destinatário', 'Identificação dos produtos', 'Produtos do pedido'],
+        analysis: { abbreviatedName: true, productCandidate: {
+            orderItemId: '22222222-2222-4222-8222-222222222222', fiscalIndex: 0,
+            fiscalCode: '127', orderSku: '2026@', orderColor: 'Bege', fiscalColor: 'marfim',
+        }, issues: [{ code: 'recipient_name', message: 'Nome da cliente: pedido abreviado; confira a identidade.' },
+            { code: 'product_identity', message: 'Produto: pedido Bege, nota Marfim, código 127; confira a variante.' }] },
+        data: { number: '19', series: '1', issuedAt: '2026-11-18T12:00:00Z', protocol: '2'.repeat(15),
+            issuerName: 'Emitente', issuerCnpj: '12345678000199', recipientName: 'Cliente',
+            recipientDocument: '12345678909', productCents: 3000, shippingCents: 998,
+            totalCents: 3998, items: [{ name: 'Shorts Angel Marfim P', quantity: 1, productCents: 3000 }] } };
+    const onChanged = vi.fn();
+    base44.functions.invoke.mockImplementation(async name => name === 'confirmFiscalEquivalence'
+        ? { ...document, differences: [], status: 'pending_official', analysis: undefined } : []);
+    render(<FiscalDocumentPanel order={{ id: 'order-1', shipping_status: 'cart_inflight' }} document={document} onChanged={onChanged} />);
+    expect(screen.getByText(/pedido Bege, nota Marfim/)).toBeTruthy();
+    const button = screen.getByRole('button', { name: 'Registrar equivalência' });
+    expect(button.disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText(/nome abreviado e o nome completo/));
+    fireEvent.click(screen.getByLabelText(/código da nota corresponde/));
+    fireEvent.click(screen.getByLabelText(/equivalência entre as cores/));
+    fireEvent.change(screen.getByLabelText('Motivo da equivalência'), { target: { value: 'Abreviação e variante revisadas' } });
+    fireEvent.change(screen.getByLabelText('Evidência consultada'), { target: { value: 'Cadastro da variante e documento da cliente' } });
+    expect(button.disabled).toBe(false);
+    fireEvent.click(button);
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ status: 'pending_official' })));
+    expect(base44.functions.invoke).toHaveBeenCalledWith('confirmFiscalEquivalence', expect.objectContaining({
+        review: expect.objectContaining({ confirmed_recipient: true, confirmed_product_code: true,
+            confirmed_product_variant: true, order_item_id: document.analysis.productCandidate.orderItemId }),
+    }));
+    expect(base44.functions.invoke.mock.calls.every(([name]) => name !== 'generateShippingLabel')).toBe(true);
+});

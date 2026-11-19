@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import pg from 'pg';
 import { createFiscalUnlink } from '../src/services/fiscalUnlink.js';
+import { confirmFiscalEquivalence } from '../src/routes/fiscalDocuments.js';
 
 if (!process.env.TEST_DATABASE_URL) throw new Error('TEST_DATABASE_URL is required');
 const client = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
@@ -147,5 +148,39 @@ try {
             await assert.rejects(client.query('SELECT xml_bytes FROM fiscal_documents'), { code: '42501' });
         } finally { await client.query('ROLLBACK'); }
     }
+    await client.query(`INSERT INTO settings(key,value) VALUES('shipping_sender',$1::jsonb)
+        ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value`, [JSON.stringify({ document: '61738801000143' })]);
+    const reviewOrder = (await client.query(`INSERT INTO orders(order_number,user_id,subtotal,shipping_cost,total,snapshot,shipping_status,payment_status)
+        VALUES('FISCAL-EQUIVALENCE-FIXTURE',$1,30,9.98,39.98,$2::jsonb,'cart_inflight','approved') RETURNING id`,
+    [profiles[0].id, JSON.stringify({ customer: { name: 'Nataly Helena', cpf: '12345678909' } })])).rows[0];
+    const reviewItem = (await client.query(`INSERT INTO order_items(order_id,product_name,product_sku,color_name,size,quantity,unit_price,subtotal)
+        VALUES($1,'Shorts Angel','2026@','Bege','P',1,30,30) RETURNING id`, [reviewOrder.id])).rows[0];
+    const reviewData = { key: '7'.repeat(44), recipientName: 'Nataly Helena de Souza Freitas',
+        recipientDocument: '12345678909', issuerCnpj: '61738801000143',
+        items: [{ code: '127', name: 'Shorts Angel Marfim P', quantity: 1, productCents: 3000 }],
+        productCents: 3000, shippingCents: 998, discountCents: 0, totalCents: 3998,
+        insuranceCents: 0, otherCents: 0, taxesCents: 0 };
+    const reviewDoc = (await client.query(`INSERT INTO fiscal_documents(order_id,access_key,origin,xml_bytes,xml_sha256,
+        parsed_data,differences,status,imported_by) VALUES($1,$2,'xml',$3,$4,$5::jsonb,$6::jsonb,'needs_review',$7) RETURNING id`,
+    [reviewOrder.id, reviewData.key, Buffer.from('<synthetic-equivalence/>'), 'c'.repeat(64),
+        JSON.stringify(reviewData), JSON.stringify(['Nome do destinatário','Identificação dos produtos']), profiles[0].id])).rows[0];
+    const reviewInput = { document_id: reviewDoc.id, order_item_id: reviewItem.id, fiscal_index: 0,
+        confirmed_recipient: true, confirmed_product_code: true, confirmed_product_variant: true,
+        reason: 'Nome e variante sintéticos conferidos', evidence: 'Ficha sintética da variante e identificação' };
+    const reviewDb = { connect: async () => ({ query: client.query.bind(client), release() {} }) };
+    const reviewResult = await confirmFiscalEquivalence(reviewOrder.id, profiles[0].id, reviewInput, reviewDb);
+    assert.equal(reviewResult.status, 'pending_official');
+    const reviewed = (await client.query(`SELECT fd.xml_bytes,fd.differences,fd.status,o.payment_status,o.shipping_status
+        FROM fiscal_documents fd JOIN orders o ON o.id=fd.order_id WHERE fd.id=$1`, [reviewDoc.id])).rows[0];
+    assert.deepEqual(reviewed.xml_bytes, Buffer.from('<synthetic-equivalence/>'));
+    assert.deepEqual(reviewed.differences, []);
+    assert.equal(reviewed.payment_status, 'approved');
+    assert.equal(reviewed.shipping_status, 'cart_inflight');
+    const reviewAudit = (await client.query(`SELECT admin_id,changes FROM audit_logs
+        WHERE action='fiscal.equivalence_confirmed' AND entity_id=$1`, [reviewOrder.id])).rows[0];
+    assert.equal(reviewAudit.admin_id, profiles[0].id);
+    assert.equal(reviewAudit.changes.shipping_released, false);
+    assert.equal(reviewAudit.changes.official_status_verified, false);
+    await assert.rejects(confirmFiscalEquivalence(reviewOrder.id, profiles[0].id, reviewInput, reviewDb), { status: 409 });
     console.log('PASS: fiscal document migration is idempotent, private and references orders/profiles');
 } finally { await client.end(); }

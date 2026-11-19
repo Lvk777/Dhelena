@@ -31,7 +31,8 @@ test('operational sections start collapsed while critical payment, shipping and 
         <Routes><Route path="/admin/pedidos/:id" element={<AdminOrderDetail />} /></Routes>
     </MemoryRouter>);
     await waitFor(() => expect(screen.getByRole('heading', { name: 'TEST-ORDER' })).toBeTruthy());
-    await waitFor(() => expect(screen.getByText(/Divergência fiscal: Frete/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Divergência fiscal\. Chave bloqueada/)).toBeTruthy());
+    expect(screen.getAllByText('Frete').length).toBeGreaterThan(0);
     const panels = [...container.querySelectorAll('details')];
     expect(panels).toHaveLength(5);
     expect(panels.every(panel => !panel.open)).toBe(true);
