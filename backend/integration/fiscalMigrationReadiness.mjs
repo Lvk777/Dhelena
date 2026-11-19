@@ -77,5 +77,23 @@ try {
             await assert.rejects(client.query('SELECT xml_bytes FROM fiscal_documents'), { code: '42501' });
         } finally { await client.query('ROLLBACK'); }
     }
+    for (const name of ['025_pending_fiscal_keys.sql', '025_pending_fiscal_keys.sql']) {
+        await client.query(await fs.readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8'));
+    }
+    const pendingOrder = (await client.query(`INSERT INTO orders(order_number,user_id,subtotal,total,snapshot)
+        VALUES('FISCAL-KEY-FIXTURE',$1,30,39.98,'{}') RETURNING id`, [profiles[0].id])).rows[0];
+    await client.query('INSERT INTO pending_fiscal_keys(order_id,access_key,entered_by) VALUES($1,$2,$3)',
+        [pendingOrder.id, '4'.repeat(44), profiles[0].id]);
+    await assert.rejects(client.query('INSERT INTO pending_fiscal_keys(order_id,access_key,entered_by) VALUES($1,$2,$3)',
+        [pendingOrder.id, '5'.repeat(44), profiles[0].id]), { code: '23505' });
+    assert.equal((await client.query('SELECT count(*)::int AS n FROM fiscal_documents')).rows[0].n, 2);
+    assert.equal((await client.query("SELECT relrowsecurity FROM pg_class WHERE oid='pending_fiscal_keys'::regclass")).rows[0].relrowsecurity, true);
+    for (const role of ['anon', 'authenticated']) {
+        await client.query('BEGIN');
+        try {
+            await client.query(`SET LOCAL ROLE ${role}`);
+            await assert.rejects(client.query('SELECT access_key FROM pending_fiscal_keys'), { code: '42501' });
+        } finally { await client.query('ROLLBACK'); }
+    }
     console.log('PASS: fiscal document migration is idempotent, private and references orders/profiles');
 } finally { await client.end(); }

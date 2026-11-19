@@ -85,8 +85,9 @@ export async function validateCoupon(code, userId, cartSubtotal, items, { db = p
 
 // ─── Stock Adjust (admin manual) ───────────────────────────────────
 export async function adjustStock(client, productId, colorId, size, newStock, reason, adminId, orderId = null, type = 'adjust') {
-    const { rows: prodRows } = await client.query('SELECT colors, sizes FROM products WHERE id = $1 FOR UPDATE', [productId]);
+    const { rows: prodRows } = await client.query('SELECT colors, sizes, historical_only FROM products WHERE id = $1 FOR UPDATE', [productId]);
     if (prodRows.length === 0) throw Object.assign(new Error('Produto não encontrado'), { status: 404 });
+    if (prodRows[0].historical_only) throw Object.assign(new Error('Estoque histórico disponível somente para consulta'), { status: 409 });
 
     const colors = prodRows[0].colors || [];
     const colorIdx = colors.findIndex(c => c.id === colorId);

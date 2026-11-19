@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { pool } from '../config/db.js';
 import { auth, requireSupabaseAdmin } from '../middleware.js';
 import { uploadLimiter } from '../middleware/rateLimiters.js';
-import { parseAuthorizedNfe, parseManualNfe, reconcileNfe } from '../lib/fiscalXml.js';
+import { parseAuthorizedNfe, parseManualNfe, reconcileNfe, validNfeKey } from '../lib/fiscalXml.js';
 
 const router = Router();
 const xmlUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1024 * 1024, files: 1 } });
@@ -34,8 +34,55 @@ router.use(orderPath, auth, requireSupabaseAdmin, requireFiscalXmlImport);
 router.get(orderPath, async (req, res, next) => {
     try {
         const { rows } = await pool.query(`SELECT ${fields} FROM fiscal_documents WHERE order_id=$1`, [req.params.id]);
-        res.json(publicDocument(rows[0]) || null);
+        if (rows[0]) return res.json(publicDocument(rows[0]));
+        const pending = await pool.query('SELECT id,order_id,access_key,entered_by,created_at FROM pending_fiscal_keys WHERE order_id=$1', [req.params.id]);
+        const key = pending.rows[0];
+        res.json(key ? { id: key.id, order_id: key.order_id, access_key: key.access_key.trim(),
+            origin: 'key_only', status: 'pending_key', imported_by: key.entered_by,
+            created_at: key.created_at, data: null, differences: [] } : null);
     } catch (error) { next(error); }
+});
+
+router.post(`${orderPath}/key`, uploadLimiter, async (req, res, next) => {
+    let client;
+    try {
+        const key = String(req.body?.access_key ?? '').trim();
+        if (!validNfeKey(key)) throw fail('Informe uma chave válida de 44 dígitos da NF-e modelo 55.');
+        client = await pool.connect(); await client.query('BEGIN');
+        const order = await client.query('SELECT id FROM orders WHERE id=$1 FOR UPDATE', [req.params.id]);
+        if (!order.rowCount) throw fail('Pedido não encontrado.', 404);
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [key]);
+        const exists = await client.query(`SELECT 1 FROM fiscal_documents WHERE order_id=$1 OR access_key=$2
+            UNION ALL SELECT 1 FROM pending_fiscal_keys WHERE order_id=$1 OR access_key=$2`, [req.params.id, key]);
+        if (exists.rowCount) throw fail('Este pedido ou esta chave já possui cadastro fiscal. Confira antes de alterar.', 409);
+        const result = await client.query('INSERT INTO pending_fiscal_keys(order_id,access_key,entered_by) VALUES($1,$2,$3) RETURNING id,order_id,access_key,entered_by,created_at',
+            [req.params.id, key, req.user.id]);
+        await client.query(`INSERT INTO audit_logs(admin_id,action,entity_type,entity_id,changes)
+            VALUES($1,'fiscal.key_recorded','order',$2,$3)`, [req.user.id, req.params.id,
+            JSON.stringify({ pending_id: result.rows[0].id, key_last4: key.slice(-4), shipping_released: false })]);
+        await client.query('COMMIT');
+        res.status(201).json({ id: result.rows[0].id, order_id: req.params.id, access_key: key,
+            origin: 'key_only', status: 'pending_key', imported_by: req.user.id,
+            created_at: result.rows[0].created_at, data: null, differences: [] });
+    } catch (error) { if (client) await client.query('ROLLBACK').catch(() => {});
+        next(error.code === '23505' ? fail('Este pedido ou esta chave já possui cadastro fiscal.', 409) : error); }
+    finally { client?.release(); }
+});
+
+router.delete(`${orderPath}/key`, async (req, res, next) => {
+    let client;
+    try {
+        client = await pool.connect(); await client.query('BEGIN');
+        const order = await client.query('SELECT id FROM orders WHERE id=$1 FOR UPDATE', [req.params.id]);
+        if (!order.rowCount) throw fail('Pedido não encontrado.', 404);
+        const pending = await client.query('DELETE FROM pending_fiscal_keys WHERE order_id=$1 RETURNING id,access_key', [req.params.id]);
+        if (!pending.rowCount) throw fail('Não há chave pendente para remover.', 404);
+        await client.query(`INSERT INTO audit_logs(admin_id,action,entity_type,entity_id,changes)
+            VALUES($1,'fiscal.pending_key_removed','order',$2,$3)`, [req.user.id, req.params.id,
+            JSON.stringify({ pending_id: pending.rows[0].id, key_last4: pending.rows[0].access_key.trim().slice(-4) })]);
+        await client.query('COMMIT'); res.json({ removed: true });
+    } catch (error) { if (client) await client.query('ROLLBACK').catch(() => {}); next(error); }
+    finally { client?.release(); }
 });
 
 async function storeDocument(req, data, origin, xmlBytes = null, sha = null) {
@@ -45,8 +92,15 @@ async function storeDocument(req, data, origin, xmlBytes = null, sha = null) {
         await client.query('BEGIN');
         const { rows: orders } = await client.query('SELECT * FROM orders WHERE id=$1 FOR UPDATE', [req.params.id]);
         if (!orders[0]) throw fail('Pedido não encontrado.', 404);
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [data.key]);
         const { rows: existing } = await client.query('SELECT id FROM fiscal_documents WHERE order_id=$1 OR access_key=$2 OR xml_sha256=$3', [req.params.id, data.key, sha]);
         if (existing.length) throw fail('Já existe uma NF-e para este pedido ou esta chave já foi utilizada. Solicite revisão antes de substituir.', 409);
+        const pending = await client.query('SELECT id,access_key FROM pending_fiscal_keys WHERE order_id=$1 FOR UPDATE', [req.params.id]);
+        if (pending.rowCount && pending.rows[0].access_key.trim() !== data.key) {
+            throw fail('A chave do documento difere da chave pendente. Remova a pendência explicitamente antes de cadastrar outra nota.', 409);
+        }
+        const otherPending = await client.query('SELECT 1 FROM pending_fiscal_keys WHERE access_key=$1 AND order_id<>$2', [data.key, req.params.id]);
+        if (otherPending.rowCount) throw fail('Esta chave já está vinculada a outro pedido.', 409);
         const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id=$1', [req.params.id]);
         const { rows: sender } = await client.query("SELECT value FROM settings WHERE key='shipping_sender'");
         const differences = reconcileNfe(data, orders[0], items, sender[0]?.value?.document);
@@ -57,7 +111,9 @@ async function storeDocument(req, data, origin, xmlBytes = null, sha = null) {
         [req.params.id, data.key, origin, xmlBytes, sha, JSON.stringify(data), JSON.stringify(differences), status, req.user.id]);
         await client.query(`INSERT INTO audit_logs(admin_id,action,entity_type,entity_id,changes) VALUES($1,$2,'order',$3,$4)`,
             [req.user.id, origin === 'xml' ? 'fiscal.xml_imported' : 'fiscal.manual_recorded', req.params.id,
-                JSON.stringify({ document_id: rows[0].id, origin, key_last4: data.key.slice(-4), status, differences })]);
+                JSON.stringify({ document_id: rows[0].id, origin, key_last4: data.key.slice(-4), status, differences,
+                    completed_pending_key_id: pending.rows[0]?.id || null })]);
+        if (pending.rowCount) await client.query('DELETE FROM pending_fiscal_keys WHERE id=$1', [pending.rows[0].id]);
         await client.query('COMMIT');
         return publicDocument(rows[0]);
     } catch (error) {

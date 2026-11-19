@@ -117,7 +117,8 @@ export default function AdminOrderDetail() {
                 {uncertainShipping && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Expedição com resultado externo pendente ({order.shipping_status}). Confira o Melhor Envio antes de preparar ou comprar outra etiqueta.</p>}
                 {fiscalDifferences && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Divergência fiscal: {fiscalDocument.differences.join(', ')}. Chave bloqueada para o Melhor Envio.</p>}
                 {fiscalXmlImportEnabled && isPaid && order.shipping_method === 'melhor_envio' && !fiscalDocument && !fiscalLoadError &&
-                    <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">NF-e ainda não cadastrada. Importe o XML ou preencha os dados manualmente e confira a fonte oficial antes de usar a chave no Melhor Envio.</p>}
+                    <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">NF-e ainda não cadastrada. Importe o XML ou informe a chave pendente; somente dados fiscais completos, conciliados e conferidos na fonte oficial podem liberar a chave.</p>}
+                {fiscalDocument?.status === 'pending_key' && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Chave fiscal pendente de XML, conciliação com o pedido e conferência oficial. Expedição bloqueada.</p>}
                 {fiscalDocument?.status === 'pending_official' && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">NF-e ainda sem conferência administrativa em fonte oficial. Chave fiscal bloqueada.</p>}
                 {fiscalLoadError && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm">Não foi possível consultar a situação fiscal. A preparação do envio permanece bloqueada.</p>}
             </div>

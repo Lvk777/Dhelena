@@ -27,6 +27,8 @@ export default function Inventory() {
     const [historyProductId, setHistoryProductId] = useState(null);
     const [lowStockThreshold, setLowStockThreshold] = useState(3);
     const [showSettings, setShowSettings] = useState(false);
+    const [scope, setScope] = useState('operational');
+    const scopedProducts = useMemo(() => products.filter(p => scope === 'historical' ? p.historical_only : !p.historical_only), [products, scope]);
 
     const load = () => {
         setLoading(true);
@@ -48,19 +50,19 @@ export default function Inventory() {
 
     const allColors = useMemo(() => {
         const map = new Map();
-        products.forEach((p) => (p.colors || []).forEach((c) => map.set(c.id, { id: c.id, name: c.name || c.id })));
+        scopedProducts.forEach((p) => (p.colors || []).forEach((c) => map.set(c.id, { id: c.id, name: c.name || c.id })));
         return Array.from(map.values());
-    }, [products]);
+    }, [scopedProducts]);
 
     const allSizes = useMemo(() => {
         const set = new Set();
-        products.forEach((p) => (p.sizes || []).forEach((s) => set.add(s)));
+        scopedProducts.forEach((p) => (p.sizes || []).forEach((s) => set.add(s)));
         return Array.from(set);
-    }, [products]);
+    }, [scopedProducts]);
 
     const stats = useMemo(() => {
         let onHand = 0, reserved = 0, available = 0, sold = 0;
-        products.filter((p) => p.status === "published").forEach((p) => {
+        products.filter((p) => !p.historical_only).forEach((p) => {
             const ts = totalStock(p);
             onHand += p.stock_summary?.on_hand ?? ts;
             reserved += p.stock_summary?.reserved ?? 0;
@@ -71,7 +73,7 @@ export default function Inventory() {
     }, [products]);
 
     const filtered = useMemo(() => {
-        let result = [...products];
+        let result = [...scopedProducts];
         if (search.trim()) {
             const q = search.toLowerCase();
             result = result.filter((p) =>
@@ -95,7 +97,7 @@ export default function Inventory() {
             });
         }
         return result;
-    }, [products, search, filters, lowStockThreshold]);
+    }, [scopedProducts, search, filters, lowStockThreshold]);
 
     const activeFilterCount = Object.values(filters).filter((v) => v !== "all").length;
 
@@ -135,7 +137,12 @@ export default function Inventory() {
                 <StatCard icon={Package} label="Disponíveis" value={stats.available} color="text-emerald-800 dark:text-emerald-400" />
                 <StatCard icon={Boxes} label="Vendas líquidas (novo ciclo)" value={stats.sold} />
             </div>
-            <p className="text-xs text-muted-foreground mb-5">Estoque físico = disponível + reservado. Vendas líquidas contam aprovações do novo modelo após devoluções registradas; o contador legado não foi reinterpretado. Produtos arquivados ficam fora destes totais.</p>
+            <p className="text-xs text-muted-foreground mb-5">Totais dos produtos operacionais, inclusive peças ainda arquivadas. Produtos históricos permanecem preservados e fora destes totais.</p>
+            <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Escopo do estoque">
+                <button type="button" className="btn-outline min-h-11 text-xs" aria-pressed={scope === 'operational'} onClick={() => setScope('operational')}>Estoque operacional</button>
+                <button type="button" className="btn-outline min-h-11 text-xs" aria-pressed={scope === 'historical'} onClick={() => setScope('historical')}>Histórico preservado</button>
+            </div>
+            {scope === 'historical' && <p role="status" className="mb-4 text-xs border border-amber-500/50 p-3">Consulta histórica. Estas quantidades não fazem parte do estoque operacional e não podem ser ajustadas aqui.</p>}
 
             {/* Search + Filters */}
             <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -240,7 +247,7 @@ export default function Inventory() {
                                                 <td className="py-2.5 px-3">
                                                     <div className="flex items-center gap-2">
                                                         {p.images?.[0] && <img src={p.images[0]} alt="" className="w-8 h-10 object-cover bg-bone rounded shrink-0" />}
-                                                        <Link to={`/admin/produtos/${p.id}`} className="font-medium hover:text-gold-ink transition-colors truncate max-w-[200px]">{p.name}</Link>
+                                                        {p.historical_only ? <span className="font-medium truncate max-w-[200px]">{p.name}</span> : <Link to={`/admin/produtos/${p.id}`} className="font-medium hover:text-gold-ink transition-colors truncate max-w-[200px]">{p.name}</Link>}
                                                     </div>
                                                 </td>
                                                 <td className="py-2.5 px-3 text-muted-foreground font-numeric">{p.sku || "—"}</td>
@@ -255,7 +262,7 @@ export default function Inventory() {
                                                 <td className="py-2.5 px-3">
                                                     <div className="flex items-center justify-end gap-1">
                                                         <button onClick={() => openHistory(p.id)} className="p-1.5 hover:bg-muted rounded transition-colors" title="Histórico"><History className="w-4 h-4" strokeWidth={1.25} /></button>
-                                                        {p.colors?.length > 0 && p.colors[0]?.stock && Object.keys(p.colors[0].stock).length > 0 && (
+                                                        {!p.historical_only && p.colors?.length > 0 && p.colors[0]?.stock && Object.keys(p.colors[0].stock).length > 0 && (
                                                             <button
                                                                 onClick={() => setAdjustTarget({ product: p, color: p.colors[0], size: Object.keys(p.colors[0].stock)[0], currentStock: p.colors[0].stock[Object.keys(p.colors[0].stock)[0]] })}
                                                                 className="p-1.5 hover:bg-muted rounded transition-colors text-gold-ink"
@@ -286,13 +293,13 @@ export default function Inventory() {
                                                             <td className="py-2 px-3 hidden lg:table-cell"></td>
                                                             <td className="py-2 px-3">
                                                                 <div className="flex justify-end">
-                                                                    <button
+                                                                    {!p.historical_only && <button
                                                                         onClick={() => setAdjustTarget({ product: p, color: c, size, currentStock: qty })}
                                                                         className="p-1.5 hover:bg-background rounded transition-colors text-gold-ink"
                                                                         title="Ajustar"
                                                                     >
                                                                         <ArrowUpDown className="w-4 h-4" strokeWidth={1.25} />
-                                                                    </button>
+                                                                    </button>}
                                                                 </div>
                                                             </td>
                                                         </tr>
@@ -318,7 +325,7 @@ export default function Inventory() {
                                         <div className="flex items-center gap-2 min-w-0">
                                             {p.images?.[0] && <img src={p.images[0]} alt="" className="w-10 h-12 object-cover bg-bone rounded shrink-0" />}
                                             <div className="min-w-0">
-                                                <Link to={`/admin/produtos/${p.id}`} className="font-medium text-sm hover:text-gold-ink truncate block">{p.name}</Link>
+                                                {p.historical_only ? <span className="font-medium text-sm truncate block">{p.name}</span> : <Link to={`/admin/produtos/${p.id}`} className="font-medium text-sm hover:text-gold-ink truncate block">{p.name}</Link>}
                                                 <p className="text-[11px] text-muted-foreground font-numeric">{p.sku || "—"}</p>
                                             </div>
                                         </div>
@@ -347,9 +354,9 @@ export default function Inventory() {
                                                             <div className="flex items-center gap-2">
                                                                 <span className="font-numeric">{qty}</span>
                                                                 <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded ${vBadge.cls}`}>{vBadge.label}</span>
-                                                                <button onClick={() => setAdjustTarget({ product: p, color: c, size, currentStock: qty })} className="p-1 text-gold-ink">
+                                                                {!p.historical_only && <button onClick={() => setAdjustTarget({ product: p, color: c, size, currentStock: qty })} className="p-1 text-gold-ink">
                                                                     <ArrowUpDown className="w-3.5 h-3.5" strokeWidth={1.25} />
-                                                                </button>
+                                                                </button>}
                                                             </div>
                                                         </div>
                                                     );

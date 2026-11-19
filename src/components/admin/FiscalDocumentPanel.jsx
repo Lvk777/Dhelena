@@ -19,6 +19,8 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
     const [confirmed, setConfirmed] = useState(false);
     const [contentMatched, setContentMatched] = useState(false);
     const [manualOpen, setManualOpen] = useState(false);
+    const [keyOpen, setKeyOpen] = useState(false);
+    const [pendingKey, setPendingKey] = useState('');
 
     const importFile = async event => {
         const file = event.target.files?.[0];
@@ -40,6 +42,25 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
         } catch (cause) { setError(cause.message || 'Não foi possível confirmar a consulta oficial.'); }
         finally { setBusy(false); }
     };
+    const recordKey = async event => {
+        event.preventDefault();
+        if (busy || pendingKey.length !== 44) return;
+        setBusy(true); setError('');
+        try {
+            onChanged(await base44.functions.invoke('recordPendingFiscalKey', { orderId: order.id, accessKey: pendingKey }));
+            setPendingKey(''); setKeyOpen(false);
+        } catch (cause) { setError(cause.message || 'Não foi possível registrar a chave.'); }
+        finally { setBusy(false); }
+    };
+    const removeKey = async () => {
+        if (busy) return;
+        setBusy(true); setError('');
+        try {
+            await base44.functions.invoke('removePendingFiscalKey', { orderId: order.id });
+            onChanged(null);
+        } catch (cause) { setError(cause.message || 'Não foi possível remover a chave pendente.'); }
+        finally { setBusy(false); }
+    };
     const download = async () => {
         setBusy(true); setError('');
         try {
@@ -57,18 +78,41 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
         <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground flex items-center gap-2"><FileText className="w-4 h-4" /> Nota fiscal</h2>
         {loadError && <p role="alert" className="text-sm text-error-ink">{loadError}</p>}
         {error && <p role="alert" className="text-sm text-error-ink">{error}</p>}
+        {!loadError && <input ref={inputRef} type="file" accept=".xml,text/xml,application/xml" onChange={importFile} className="sr-only" aria-label="Arquivo XML da NF-e" />}
         {!document ? !loadError && <>
             <p className="text-sm">Cadastre a NF-e modelo 55 já emitida no Nota Fiscal Fácil. Nenhuma opção emite uma nova nota ou altera o pedido.</p>
-            <input ref={inputRef} type="file" accept=".xml,text/xml,application/xml" onChange={importFile} className="sr-only" aria-label="Arquivo XML da NF-e" />
             <div className="flex flex-wrap gap-2">
                 <button type="button" className="btn-outline text-xs inline-flex items-center gap-2 min-h-11" disabled={busy} onClick={() => inputRef.current?.click()}>
                     <Upload className="w-4 h-4" /> {busy ? 'Importando...' : 'Importar XML'}
                 </button>
-                <button type="button" className="btn-outline text-xs min-h-11" disabled={busy} aria-expanded={manualOpen}
-                    onClick={() => setManualOpen(value => !value)}>Preencher manualmente</button>
+                <button type="button" className="btn-outline text-xs min-h-11" disabled={busy} aria-expanded={keyOpen}
+                    onClick={() => setKeyOpen(value => !value)}>Informar chave da NF-e</button>
             </div>
+            {keyOpen && <form onSubmit={recordKey} className="border border-border p-4 space-y-3">
+                <p className="text-sm">A chave ficará pendente. Ela não comprova autorização e não libera o Melhor Envio. Importe o XML completo para conferir os dados com o pedido.</p>
+                <label className="block text-sm">Chave de acesso (44 dígitos)
+                    <input className="admin-field block w-full p-2 mt-1 font-numeric" inputMode="numeric" autoComplete="off" maxLength={44}
+                        value={pendingKey} onChange={event => setPendingKey(event.target.value.replace(/\D/g, '').slice(0, 44))} />
+                </label>
+                <a href={OFFICIAL_PORTALS.national} target="_blank" rel="noopener noreferrer" className="text-gold-ink underline inline-flex items-center gap-1">Consultar no portal oficial <ExternalLink className="w-3 h-3" /></a>
+                <div><button type="submit" className="btn-outline text-xs min-h-11" disabled={busy || pendingKey.length !== 44}>Registrar chave pendente</button></div>
+            </form>}
+            <details className="text-sm"><summary className="cursor-pointer min-h-11 flex items-center">Cadastro manual avançado</summary>
+                <p className="text-xs mb-3">Use quando tiver todos os dados da NF-e para confrontar com o pedido. A conferência oficial continua obrigatória.</p>
+                <button type="button" className="btn-outline text-xs min-h-11" disabled={busy} aria-expanded={manualOpen}
+                    onClick={() => setManualOpen(value => !value)}>Preencher dados completos</button>
             {manualOpen && <ManualFiscalForm orderId={order.id} onSaved={value => { setManualOpen(false); onChanged(value); }}
                 onCancel={() => setManualOpen(false)} />}
+            </details>
+        </> : document.origin === 'key_only' ? <>
+            <p className="text-xs font-medium">Chave registrada em {new Date(document.created_at).toLocaleString('pt-BR')} · pendente</p>
+            <p className="text-xs break-all">Chave: {document.access_key}</p>
+            <p role="status" className="text-sm border border-amber-500/50 p-3">Falta o XML ou o cadastro fiscal completo. A chave isolada não foi conferida com o pedido e não pode ser usada no Melhor Envio.</p>
+            <a href={OFFICIAL_PORTALS.national} target="_blank" rel="noopener noreferrer" className="text-gold-ink underline inline-flex items-center gap-1">Consultar no portal oficial <ExternalLink className="w-3 h-3" /></a>
+            <div className="flex flex-wrap gap-2">
+                <button type="button" className="btn-outline text-xs min-h-11" disabled={busy} onClick={() => inputRef.current?.click()}><Upload className="w-4 h-4" /> Importar XML</button>
+                <button type="button" className="btn-outline text-xs min-h-11" disabled={busy} onClick={removeKey}>Remover chave pendente</button>
+            </div>
         </> : <>
             <p className="text-xs font-medium">Origem: {document.origin === 'manual' ? 'Preenchimento manual' : 'XML importado'}{document.created_at && ` · cadastrado em ${new Date(document.created_at).toLocaleString('pt-BR')}`}</p>
             <p className="text-sm font-medium">NF-e {document.data.number} · série {document.data.series} · modelo 55</p>

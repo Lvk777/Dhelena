@@ -379,6 +379,10 @@ const functions = {
             }
             case 'recordManualFiscalDocument':
                 return apiFetch(`/orders/${args.orderId}/fiscal/manual`, { method: 'POST', body: JSON.stringify(args.data) });
+            case 'recordPendingFiscalKey':
+                return apiFetch(`/orders/${args.orderId}/fiscal/key`, { method: 'POST', body: JSON.stringify({ access_key: args.accessKey }) });
+            case 'removePendingFiscalKey':
+                return apiFetch(`/orders/${args.orderId}/fiscal/key`, { method: 'DELETE' });
             case 'verifyFiscalDocument':
                 return apiFetch(`/orders/${args.orderId}/fiscal/verify`, { method: 'POST', body: JSON.stringify(args.verification) });
             case 'downloadFiscalXml':

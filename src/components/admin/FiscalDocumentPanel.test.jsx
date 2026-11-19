@@ -15,7 +15,7 @@ test('a failed document lookup shows the error without offering an unsafe second
     expect(screen.getByRole('alert').textContent).toContain('Não foi possível consultar');
     expect(screen.queryByText(/NF-e .* série/)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Importar XML' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Preencher manualmente' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Informar chave da NF-e' })).toBeNull();
 });
 
 test('manual form records data for review without verification or issuing a document', async () => {
@@ -23,7 +23,8 @@ test('manual form records data for review without verification or issuing a docu
     base44.functions.invoke.mockResolvedValueOnce({ id: 'document-1', origin: 'manual', status: 'pending_official' });
     render(<FiscalDocumentPanel order={{ id: 'order-1' }} document={null} onChanged={onChanged} />);
     expect(screen.getByRole('button', { name: 'Importar XML' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Preencher manualmente' }));
+    fireEvent.click(screen.getByText('Cadastro manual avançado'));
+    fireEvent.click(screen.getByRole('button', { name: 'Preencher dados completos' }));
     const values = [
         ['Chave de acesso (44 dígitos)', '1'.repeat(44)], ['Número da NF-e', '19'], ['Série', '1'],
         ['Data e hora de emissão', '2026-11-18T12:00'], ['Protocolo de autorização (15 dígitos)', '2'.repeat(15)],
@@ -37,6 +38,21 @@ test('manual form records data for review without verification or issuing a docu
     await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
     expect(base44.functions.invoke).toHaveBeenCalledWith('recordManualFiscalDocument', expect.objectContaining({ orderId: 'order-1' }));
     expect(base44.functions.invoke).toHaveBeenCalledTimes(1);
+});
+
+test('key-only entry stays pending and cannot expose an official verification action', async () => {
+    const onChanged = vi.fn();
+    base44.functions.invoke.mockResolvedValueOnce({ id: 'pending-1', origin: 'key_only', status: 'pending_key', access_key: '1'.repeat(44) });
+    const { rerender } = render(<FiscalDocumentPanel order={{ id: 'order-1' }} document={null} onChanged={onChanged} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Informar chave da NF-e' }));
+    fireEvent.change(screen.getByLabelText('Chave de acesso (44 dígitos)'), { target: { value: '1'.repeat(44) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar chave pendente' }));
+    await waitFor(() => expect(base44.functions.invoke).toHaveBeenCalledWith('recordPendingFiscalKey', { orderId: 'order-1', accessKey: '1'.repeat(44) }));
+    const pending = { id: 'pending-1', origin: 'key_only', status: 'pending_key', access_key: '1'.repeat(44), created_at: '2026-11-19T12:00:00Z' };
+    rerender(<FiscalDocumentPanel order={{ id: 'order-1' }} document={pending} onChanged={onChanged} />);
+    expect(screen.getByRole('status').textContent).toContain('não pode ser usada no Melhor Envio');
+    expect(screen.getByRole('button', { name: 'Importar XML' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Registrar conferência oficial' })).toBeNull();
 });
 
 test('manual official verification requires checking both status and complete fiscal content', () => {

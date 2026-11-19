@@ -1,6 +1,7 @@
 // Synthetic, disposable PostgreSQL 17 rehearsal. Refuses non-local connections.
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
+import fs from 'node:fs/promises';
 import pg from 'pg';
 import { deleteProductPermanently } from '../src/services/productDeletion.js';
 import { assertHistoricalProductCanPublish } from '../src/lib/historicalProductPublication.js';
@@ -50,6 +51,13 @@ try {
         protectedProduct, 'Peça histórica', 'HIST-1', 'archived', JSON.stringify([{ stock: { P: 0 } }]), 1,
         discardable, 'Rascunho descartável', 'DRAFT-1', 'draft', JSON.stringify([{ stock: { P: 0 } }]), 0,
     ]);
+    const scopeMigration = await fs.readFile(new URL('../migrations/024_product_operational_scope.sql', import.meta.url), 'utf8');
+    await db.query(scopeMigration);
+    await db.query(scopeMigration);
+    assert.equal((await db.query('SELECT historical_only FROM products WHERE id=$1', [protectedProduct])).rows[0].historical_only, false);
+    await db.query('UPDATE products SET historical_only=true WHERE id=$1', [protectedProduct]);
+    await assert.rejects(db.query("UPDATE products SET status='published' WHERE id=$1", [protectedProduct]), { code: '23514' });
+    assert.equal((await db.query('SELECT status,historical_only FROM products WHERE id=$1', [protectedProduct])).rows[0].status, 'archived');
     await db.query("INSERT INTO orders(id,order_number,status,payment_status) VALUES ($1,$2,'pagamento_aprovado','approved')",
         [protectedOrder, 'DH-2026-000019']);
     await db.query('INSERT INTO order_items VALUES ($1,$2,$3,$4)', [randomUUID(), protectedOrder, protectedProduct, 'HIST-1']);

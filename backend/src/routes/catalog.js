@@ -224,7 +224,7 @@ async function updateRow(table, id, data, dateField = 'updated_at', db = pool) {
 router.get('/products', searchLimiter, async (req, res, next) => {
     try {
         const isAdmin = req.user?.role === 'admin';
-        const extra = isAdmin ? [] : ['status = $1'];
+        const extra = isAdmin ? [] : ['status = $1', 'historical_only = false'];
         const extraParams = isAdmin ? [] : ['published'];
         const { conditions, params } = buildFilter(req, CATALOG_FILTER_FIELDS.products, extra);
         const allParams = [...extraParams, ...params];
@@ -249,7 +249,7 @@ router.get('/products/:id', async (req, res, next) => {
         const { rows } = await pool.query('SELECT * FROM products WHERE id = $1', [req.params.id]);
         if (rows.length === 0) return res.status(404).json({ error: 'Produto não encontrado' });
         // Non-admin: only published
-        if (req.user?.role !== 'admin' && rows[0].status !== 'published') {
+        if (req.user?.role !== 'admin' && (rows[0].status !== 'published' || rows[0].historical_only)) {
             return res.status(404).json({ error: 'Produto não encontrado' });
         }
         res.json(req.user?.role === 'admin' ? (await withStockSummary(rows))[0] : rows[0]);
@@ -269,8 +269,9 @@ router.patch('/products/:id', auth, requireAdmin, async (req, res, next) => {
     try {
         const { expected_updated_date: expectedUpdatedDate, ...changes } = req.body;
         const product = await withTransaction(async client => {
-            const { rows: existing } = await client.query('SELECT id, status, sold_count, price, sale_price, sizes, colors, weight, package_height, package_width, package_length, updated_date FROM products WHERE id = $1 FOR UPDATE', [req.params.id]);
+            const { rows: existing } = await client.query('SELECT id, status, historical_only, sold_count, price, sale_price, sizes, colors, weight, package_height, package_width, package_length, updated_date FROM products WHERE id = $1 FOR UPDATE', [req.params.id]);
             if (!existing.length) return null;
+            if (existing[0].historical_only) throw Object.assign(new Error('Produto histórico preservado somente para consulta. Cadastre uma nova peça.'), { status: 409 });
             if (expectedUpdatedDate && new Date(existing[0].updated_date).getTime() !== new Date(expectedUpdatedDate).getTime()) {
                 throw Object.assign(new Error('O produto mudou desde a abertura do formulário. Recarregue antes de salvar.'), { status: 409 });
             }

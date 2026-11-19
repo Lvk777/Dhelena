@@ -33,7 +33,8 @@ export default function AdminProducts() {
     useEffect(() => { load(); }, []);
 
     const filtered = products.filter((p) => {
-        if (filter !== "all" && p.status !== filter) return false;
+        if (filter === 'historical' ? !p.historical_only : p.historical_only) return false;
+        if (filter !== "all" && filter !== 'historical' && p.status !== filter) return false;
         if (q && !p.name.toLowerCase().includes(q.toLowerCase()) && !(p.sku || "").toLowerCase().includes(q.toLowerCase())) return false;
         return true;
     });
@@ -84,6 +85,7 @@ export default function AdminProducts() {
                     <option value="published">Publicados</option>
                     <option value="draft">Rascunhos</option>
                     <option value="archived">Arquivados</option>
+                    <option value="historical">Histórico preservado</option>
                 </select>
             </div>
 
@@ -92,7 +94,7 @@ export default function AdminProducts() {
             ) : filtered.length === 0 ? (
                 <div className="bg-background text-foreground p-12 text-center">
                     <p className="font-heading text-2xl">{filter === "published" && !q ? "A nova coleção começa aqui" : "Nenhum produto encontrado."}</p>
-                    {filter === "published" && !q && <p className="text-sm text-muted-foreground mt-3">Os produtos arquivados continuam disponíveis no filtro “Arquivados”. Cadastre e publique uma nova peça para iniciar a vitrine.</p>}
+                    {filter === "published" && !q && <p className="text-sm text-muted-foreground mt-3">O Shorts Angel permanece em “Arquivados”. As peças antigas ficam em “Histórico preservado”. Cadastre e publique uma nova peça para iniciar a vitrine.</p>}
                     {filter === "published" && !q && <Link to="/admin/produtos/novo" className="btn-gold inline-block mt-6">Cadastrar produto</Link>}
                 </div>
             ) : (
@@ -117,7 +119,8 @@ export default function AdminProducts() {
                                         <img src={p.images?.[0]} alt="" className="w-10 h-12 object-cover bg-bone" />
                                     </td>
                                     <td className="py-2 px-3">
-                                        <Link to={`/admin/produtos/${p.id}`} className="font-medium hover:text-rose-ink">{p.name}</Link>
+                                        {p.historical_only ? <span className="font-medium">{p.name}</span>
+                                            : <Link to={`/admin/produtos/${p.id}`} className="font-medium hover:text-rose-ink">{p.name}</Link>}
                                         <p className="text-[11px] text-muted-foreground md:hidden font-numeric">{p.sku}</p>
                                     </td>
                                     <td className="py-2 px-3 hidden md:table-cell text-muted-foreground font-numeric">{p.sku || "—"}</td>
@@ -125,17 +128,19 @@ export default function AdminProducts() {
                                     <td className="py-2 px-3 font-numeric">{formatBRL(p.sale_price || p.price)}</td>
                                     <td className="py-2 px-3 hidden sm:table-cell font-numeric">{totalStock(p)}</td>
                                     <td className="py-2 px-3">
-                                        <span className={`text-[10px] uppercase tracking-[0.12em] px-2 py-1 ${STATUS[p.status]?.color || ""}`}>{STATUS[p.status]?.label || p.status}</span>
+                                        <span className={`text-[10px] uppercase tracking-[0.12em] px-2 py-1 ${STATUS[p.status]?.color || ""}`}>{p.historical_only ? 'Histórico' : STATUS[p.status]?.label || p.status}</span>
                                     </td>
                                     <td className="py-2 px-3">
                                         <div className="flex items-center justify-end gap-1">
-                                            {p.status === 'published' && <Link to={`/produto/${p.id}`} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Visualizar"><Eye className="w-4 h-4" strokeWidth={1.25} /></Link>}
+                                            {!p.historical_only && p.status === 'published' && <Link to={`/produto/${p.id}`} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Visualizar"><Eye className="w-4 h-4" strokeWidth={1.25} /></Link>}
+                                            {!p.historical_only && <>
                                             <Link to={`/admin/produtos/${p.id}`} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Editar"><Pencil className="w-4 h-4" strokeWidth={1.25} /></Link>
                                             {canDuplicateProduct(p) && <button onClick={() => duplicate(p)} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Duplicar"><Copy className="w-4 h-4" strokeWidth={1.25} /></button>}
                                             {p.status !== "archived" ? (
                                                 <button onClick={() => archive(p)} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded" title="Arquivar"><Archive className="w-4 h-4" strokeWidth={1.25} /></button>
                                             ) : null}
                                             <button onClick={() => setDeleteTarget(p)} className="p-1.5 hover:bg-[hsl(var(--bone))] rounded text-rose-ink" title="Excluir"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
+                                            </>}
                                         </div>
                                     </td>
                                 </tr>
