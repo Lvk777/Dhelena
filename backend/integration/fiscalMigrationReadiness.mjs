@@ -218,12 +218,12 @@ try {
         [row.id, product.id, colorId])).rows[0];
         return { order: row, item };
     };
-    const importXml = async (orderId, number) => {
+    const importXml = async (orderId, number, replacementReview = null) => {
         const bytes = syntheticXml(number);
         const data = parseAuthorizedNfe(bytes);
         return { bytes, document: await storeDocument({ params: { id: orderId },
             user: { id: profiles[0].id } }, data, 'xml', bytes,
-        createHash('sha256').update(bytes).digest('hex'), reviewDb) };
+        createHash('sha256').update(bytes).digest('hex'), reviewDb, replacementReview) };
     };
     const first = await makeOrder('FISCAL-END-TO-END-1');
     const imported = await importXml(first.order.id, 161110001);
@@ -273,14 +273,36 @@ try {
         official_source: 'national', prior_official_status: 'authorized',
         confirmed_official_check: true, confirmed_not_cancellation: true,
     });
+    const reactivated = await importXml(first.order.id, 161110001);
+    assert.equal(reactivated.document.id, imported.document.id);
+    assert.equal(reactivated.document.status, 'pending_official');
+    assert.deepEqual((await client.query('SELECT xml_bytes FROM fiscal_documents WHERE id=$1',
+        [imported.document.id])).rows[0].xml_bytes, imported.bytes);
+    assert.equal((await client.query(`SELECT count(*)::int AS n FROM audit_logs WHERE action='fiscal.xml_reactivated'
+        AND entity_id=$1`, [first.order.id])).rows[0].n, 1);
+    await assert.rejects(importXml(first.order.id, 161110001), { status: 409 });
+    await unlink(first.order.id, profiles[0].id, {
+        document_id: imported.document.id, reason: 'Nova substituição sintética após reativação',
+        official_source: 'national', prior_official_status: 'authorized',
+        confirmed_official_check: true, confirmed_not_cancellation: true,
+    });
     const replacement = await importXml(first.order.id, 161110004);
     assert.equal(replacement.document.status, 'pending_official');
+    const replacementReview = { document_id: replacement.document.id, official_source: 'national',
+        prior_official_status: 'authorized', confirmed_official_check: true,
+        confirmed_not_cancellation: true };
+    await assert.rejects(importXml(first.order.id, 161110005, replacementReview), { status: 409 });
+    assert.equal((await client.query('SELECT unlinked_at FROM fiscal_documents WHERE id=$1',
+        [replacement.document.id])).rows[0].unlinked_at, null);
+    const transactional = await importXml(first.order.id, 161110006, replacementReview);
+    assert.equal(transactional.document.status, 'pending_official');
     const history = (await client.query(`SELECT id,xml_bytes,unlinked_at FROM fiscal_documents
         WHERE order_id=$1 ORDER BY created_at,id`, [first.order.id])).rows;
-    assert.equal(history.length, 2);
+    assert.equal(history.length, 3);
     assert.equal(history.filter(row => row.unlinked_at === null).length, 1);
     assert.deepEqual(history.find(row => row.id === imported.document.id).xml_bytes, imported.bytes);
     assert.deepEqual(history.find(row => row.id === replacement.document.id).xml_bytes, replacement.bytes);
+    assert.deepEqual(history.find(row => row.id === transactional.document.id).xml_bytes, transactional.bytes);
     assert.equal((await client.query('SELECT shipping_status FROM orders WHERE id=$1',
         [first.order.id])).rows[0].shipping_status, 'cart_inflight');
     console.log('PASS: fiscal document migration is idempotent, private and references orders/profiles');

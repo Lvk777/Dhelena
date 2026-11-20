@@ -22,6 +22,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
     const [history, setHistory] = useState([]);
     const [historyError, setHistoryError] = useState('');
     const [unlinkOpen, setUnlinkOpen] = useState(false);
+    const [replaceOpen, setReplaceOpen] = useState(false);
     const [selectedPair, setSelectedPair] = useState('');
     const [matchConfirmed, setMatchConfirmed] = useState(false);
     const [saveForFuture, setSaveForFuture] = useState(false);
@@ -44,6 +45,13 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
     const unlink = async review => {
         await base44.functions.invoke('unlinkFiscalDocument', { orderId: order.id, review });
         onChanged(null);
+        await refreshHistory();
+    };
+    const replace = async (review, file) => {
+        const result = await base44.functions.invoke('replaceFiscalXml', { orderId: order.id, review, file });
+        onChanged(result);
+        try { onChanged(await base44.functions.invoke('getFiscalDocument', { orderId: order.id })); }
+        catch { /* Keep the committed response visible if the enriched reload fails. */ }
         await refreshHistory();
     };
 
@@ -222,14 +230,17 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
             </div>}
             {document.status === 'verified' && document.origin !== 'manual' && <button type="button" className="btn-outline text-xs inline-flex items-center gap-2 min-h-11" disabled={busy} onClick={download}><Download className="w-4 h-4" /> Baixar XML autorizado</button>}
             {document.origin === 'xml' && <div className="space-y-2">
-                <button type="button" className="btn-outline text-xs min-h-11" disabled={busy || unlinkBlocked || !!historyError} onClick={() => setUnlinkOpen(true)}>Desvincular XML</button>
+                <div className="flex flex-wrap gap-2">
+                    <button type="button" className="btn-outline text-xs min-h-11" disabled={busy || unlinkBlocked || !!historyError} onClick={() => setReplaceOpen(true)}>Substituir XML</button>
+                    <button type="button" className="text-xs underline min-h-11 px-2" disabled={busy || unlinkBlocked || !!historyError} onClick={() => setUnlinkOpen(true)}>Desvincular XML</button>
+                </div>
                 {unlinkBlocked && <p role="status" className="text-xs text-muted-foreground">Este envio já foi identificado ou avançou no Melhor Envio. Solicite análise administrativa específica antes de substituir a nota.</p>}
             </div>}
         </>}
         {historyError && <p role="alert" className="text-sm text-error-ink">{historyError}</p>}
         {history.length > 0 && <div className="border-t border-border pt-4 space-y-2" aria-label="Histórico de documentos fiscais">
             <h3 className="text-xs uppercase tracking-widest">Histórico de documentos anteriores</h3>
-            <ul className="space-y-3">{history.map(item => <li key={item.id} className="border border-border p-3 text-xs break-words">
+            <ul className="space-y-3">{history.map(item => <li key={`${item.id}-${item.unlinked_at}`} className="border border-border p-3 text-xs break-words">
                 <p className="font-medium">NF-e {item.number || '—'} · série {item.series || '—'} · chave terminada em {item.access_key_last4}</p>
                 <p>Desvinculada em {new Date(item.unlinked_at).toLocaleString('pt-BR')} · situação anterior: {item.prior_official_status === 'authorized' ? 'autorizada' : 'cancelada'}</p>
                 <p>Conferência registrada por {item.reviewed_by || 'administrador'} · {item.unlink_official_source === 'svrs' ? 'Portal SVRS' : 'Portal Nacional da NF-e'}</p>
@@ -238,5 +249,6 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
             </li>)}</ul>
         </div>}
         <FiscalUnlinkDialog open={unlinkOpen} onClose={() => setUnlinkOpen(false)} onConfirm={unlink} documentId={document?.id} />
+        <FiscalUnlinkDialog mode="replace" open={replaceOpen} onClose={() => setReplaceOpen(false)} onConfirm={replace} documentId={document?.id} />
     </section>;
 }

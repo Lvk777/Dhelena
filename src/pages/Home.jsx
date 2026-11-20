@@ -35,20 +35,6 @@ export default function Home() {
     }
     if (error) return <main className="container-boutique py-24 text-center"><p role="alert">Não foi possível carregar a coleção.</p><button onClick={reload} className="btn-outline mt-6">Tentar novamente</button></main>;
 
-    if (products.length === 0) {
-        return (
-            <main className="min-h-[70vh] bg-[hsl(var(--bone))] flex items-center py-24">
-                <div className="container-boutique max-w-3xl text-center">
-                    <p className="eyebrow">D’Helenas Boutique</p>
-                    <h1 className="font-heading text-5xl sm:text-7xl leading-tight mt-5">Uma nova coleção está sendo preparada</h1>
-                    <div className="gold-rule mx-auto mt-7" />
-                    <p className="text-muted-foreground leading-relaxed mt-7 max-w-xl mx-auto">No momento, não há peças disponíveis na loja. Volte para conhecer os novos cadastros quando estiverem publicados.</p>
-                    <Link to="/contato" className="btn-gold inline-block mt-9">Fale com a boutique</Link>
-                </div>
-            </main>
-        );
-    }
-
     return (
         <div>
             {/* HERO */}
@@ -78,10 +64,19 @@ export default function Home() {
             )}
 
             {/* PROMO CAMPAIGN BANNER */}
-            <PromotionCampaignBanner />
+            {products.length > 0 && <PromotionCampaignBanner />}
+
+            {products.length === 0 && <section className="bg-[hsl(var(--bone))] py-16 sm:py-20 text-center">
+                <div className="container-boutique max-w-2xl">
+                    <p className="eyebrow">D’Helenas Boutique</p>
+                    <h2 className="font-heading text-4xl sm:text-5xl leading-tight mt-4">Uma nova coleção está sendo preparada</h2>
+                    <p className="text-muted-foreground leading-relaxed mt-5">No momento, não há peças disponíveis na loja. Volte para conhecer os novos cadastros quando estiverem publicados.</p>
+                    <Link to="/contato" className="btn-gold inline-block mt-7">Fale com a boutique</Link>
+                </div>
+            </section>}
 
             {/* NOVIDADES */}
-            <Section title="Acabaram de chegar" eyebrow="Novidades" id="novidades">
+            {products.length > 0 && <Section title="Acabaram de chegar" eyebrow="Novidades" id="novidades">
                 <div className="relative">
                     <div ref={carouselRef} className="flex gap-5 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-4 -mx-5 px-5 sm:mx-0 sm:px-0">
                         {novidades.map((p, i) => (
@@ -96,7 +91,7 @@ export default function Home() {
                 <div className="text-center mt-10">
                     <Link to="/loja?filtro=novidades" className="btn-ghost link-underline">Ver todas as novidades →</Link>
                 </div>
-            </Section>
+            </Section>}
 
             {/* CATEGORIAS */}
             <section className="bg-[hsl(var(--blush))] py-20 sm:py-28">
@@ -132,14 +127,14 @@ export default function Home() {
             )}
 
             {/* MAIS DESEJADOS */}
-            <Section title="Os favoritos da D'Helenas" eyebrow="Mais desejados">
+            {products.length > 0 && <Section title="Os favoritos da D'Helenas" eyebrow="Mais desejados">
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6 mt-12">
                     {maisDesejados.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
                 </div>
-            </Section>
+            </Section>}
 
             {/* LOOK COMPLETO */}
-            <section className="bg-[hsl(var(--champagne))] py-20 sm:py-28">
+            {products.length > 0 && <section className="bg-[hsl(var(--champagne))] py-20 sm:py-28">
                 <div className="container-boutique grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
                     <div className="relative overflow-hidden aspect-[3/4] max-w-md mx-auto lg:mx-0 w-full">
                         <img src={LOOK_IMAGE} alt="Complete o look" className="w-full h-full object-cover" loading="lazy" />
@@ -157,10 +152,10 @@ export default function Home() {
                         <Link to="/loja" className="btn-gold mt-9">Ver peças do look</Link>
                     </div>
                 </div>
-            </section>
+            </section>}
 
             {/* MONTE SEU LOOK */}
-            <section className="bg-background py-16 sm:py-20 border-y border-border">
+            {products.length > 0 && <section className="bg-background py-16 sm:py-20 border-y border-border">
                 <div className="container-boutique text-center">
                     <p className="eyebrow">Personalize</p>
                     <h2 className="mt-3 font-heading text-3xl sm:text-4xl lg:text-5xl tracking-[0.03em]">Monte seu Look</h2>
@@ -168,7 +163,7 @@ export default function Home() {
                     <p className="mt-6 text-muted-foreground">Crie combinações do seu jeito.</p>
                     <Link to="/monte-seu-look" className="btn-gold mt-8 inline-block">Montar meu look</Link>
                 </div>
-            </section>
+            </section>}
 
             {/* INSTAGRAM */}
             {instagram && instImages.length > 0 && (

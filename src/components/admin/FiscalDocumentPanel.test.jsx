@@ -101,6 +101,39 @@ test('reviewed unlink preserves the historical entry and offers XML import again
     await waitFor(() => expect(screen.getByLabelText('Histórico de documentos fiscais').textContent).toContain('XML preservado'));
 });
 
+test('replacement confirms official status and imports a new XML in one request', async () => {
+    const document = { id: '11111111-1111-4111-8111-111111111111', origin: 'xml',
+        access_key: '1'.repeat(44), status: 'verified', differences: [],
+        official_checked_at: '2026-11-19T12:00:00Z',
+        data: { number: '19', series: '1', issuedAt: '2026-11-18T12:00:00Z', protocol: '2'.repeat(15),
+            issuerName: 'Emitente', issuerCnpj: '12345678000199', recipientName: 'Cliente',
+            recipientDocument: '12345678909', productCents: 3000, shippingCents: 998,
+            totalCents: 3998, items: [] } };
+    const replacement = { ...document, id: '22222222-2222-4222-8222-222222222222', status: 'pending_official' };
+    base44.functions.invoke.mockImplementation(async name => name === 'replaceFiscalXml' || name === 'getFiscalDocument'
+        ? replacement : []);
+    const onChanged = vi.fn();
+    render(<FiscalDocumentPanel order={{ id: 'order-1', shipping_status: 'cart_inflight' }}
+        document={document} onChanged={onChanged} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Substituir XML' }));
+    expect(screen.queryByLabelText('Motivo da desvinculação')).toBeNull();
+    const submit = screen.getByRole('button', { name: 'Confirmar substituição' });
+    expect(submit.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Novo XML da NF-e'), {
+        target: { files: [new File(['<nfeProc/>'], 'novo.xml', { type: 'text/xml' })] },
+    });
+    fireEvent.change(screen.getByLabelText('Portal oficial consultado'), { target: { value: 'national' } });
+    fireEvent.change(screen.getByLabelText('Situação da nota anterior no portal'), { target: { value: 'authorized' } });
+    fireEvent.click(screen.getByLabelText(/Conferi a situação da nota anterior/));
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+    await waitFor(() => expect(base44.functions.invoke).toHaveBeenCalledWith('replaceFiscalXml',
+        expect.objectContaining({ orderId: 'order-1', review: expect.objectContaining({
+            document_id: document.id, prior_official_status: 'authorized' }), file: expect.any(File) })));
+    expect(onChanged).toHaveBeenCalledWith(replacement);
+    expect(base44.functions.invoke.mock.calls.some(([name]) => name === 'unlinkFiscalDocument')).toBe(false);
+});
+
 test('historical pending key can be replaced by XML without exposing key registration', () => {
     const pending = { id: 'pending-1', origin: 'key_only', status: 'pending_key',
         access_key: '1'.repeat(44), created_at: '2026-11-19T12:00:00Z' };

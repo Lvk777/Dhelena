@@ -7,7 +7,7 @@ import { uploadLimiter } from '../middleware/rateLimiters.js';
 import { assessNfe, parseAuthorizedNfe, parseManualNfe, reconcileNfe, validNfeKey } from '../lib/fiscalXml.js';
 import { fiscalMappingKey, loadReusableMappings, orderVariantIdentity,
     resolveReusableMappings, reusableMappingDecision } from '../lib/fiscalProductMappings.js';
-import { unlinkFiscalDocument } from '../services/fiscalUnlink.js';
+import { assertFiscalUnlinkEligible, unlinkFiscalDocument, validateFiscalUnlink } from '../services/fiscalUnlink.js';
 
 const router = Router();
 const xmlUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1024 * 1024, files: 1 } });
@@ -289,8 +289,19 @@ router.get(`${orderPath}/history`, async (req, res, next) => {
             fd.parsed_data->>'series' AS series FROM fiscal_documents fd
             LEFT JOIN profiles p ON p.id=fd.unlinked_by
             WHERE fd.order_id=$1 AND fd.unlinked_at IS NOT NULL ORDER BY fd.unlinked_at DESC`, [req.params.id]);
+        const { rows: priorLinks } = await pool.query(`SELECT fd.id,fd.access_key,fd.origin,fd.status,fd.created_at,
+            a.created_at AS unlinked_at,a.changes->>'reason' AS unlink_reason,
+            a.changes->>'official_source' AS unlink_official_source,
+            a.changes->>'prior_official_status' AS prior_official_status,
+            COALESCE(p.full_name,p.email) AS reviewed_by,fd.parsed_data->>'number' AS number,
+            fd.parsed_data->>'series' AS series FROM audit_logs a
+            JOIN fiscal_documents fd ON fd.id::text=a.changes->>'document_id'
+            LEFT JOIN profiles p ON p.id=a.admin_id
+            WHERE a.action='fiscal.xml_unlinked' AND a.entity_id=$1
+            AND fd.order_id=$1::uuid AND fd.unlinked_at IS NULL ORDER BY a.created_at DESC`, [req.params.id]);
         res.set('Cache-Control', 'no-store');
-        res.json(rows.map(row => ({ ...row, access_key_last4: row.access_key.trim().slice(-4), access_key: undefined })));
+        res.json([...rows, ...priorLinks].sort((a, b) => new Date(b.unlinked_at) - new Date(a.unlinked_at))
+            .map(row => ({ ...row, access_key_last4: row.access_key.trim().slice(-4), access_key: undefined })));
     } catch (error) { next(error); }
 });
 
@@ -341,7 +352,7 @@ router.delete(`${orderPath}/key`, async (req, res, next) => {
     finally { client?.release(); }
 });
 
-export async function storeDocument(req, data, origin, xmlBytes = null, sha = null, db = pool) {
+export async function storeDocument(req, data, origin, xmlBytes = null, sha = null, db = pool, replaceInput = null) {
     let client;
     try {
         client = await db.connect();
@@ -349,9 +360,31 @@ export async function storeDocument(req, data, origin, xmlBytes = null, sha = nu
         const { rows: orders } = await client.query('SELECT * FROM orders WHERE id=$1 FOR UPDATE', [req.params.id]);
         if (!orders[0]) throw fail('Pedido não encontrado.', 404);
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [data.key]);
-        const { rows: existing } = await client.query(`SELECT id FROM fiscal_documents
-            WHERE (order_id=$1 AND unlinked_at IS NULL) OR access_key=$2 OR xml_sha256=$3`, [req.params.id, data.key, sha]);
-        if (existing.length) throw fail('Já existe uma NF-e para este pedido ou esta chave já foi utilizada. Solicite revisão antes de substituir.', 409);
+        const { rows: activeRows } = await client.query(`SELECT * FROM fiscal_documents
+            WHERE order_id=$1 AND unlinked_at IS NULL FOR UPDATE`, [req.params.id]);
+        const active = activeRows[0];
+        const { rows: duplicateRows } = await client.query(`SELECT * FROM fiscal_documents
+            WHERE access_key=$1 OR ($2::text IS NOT NULL AND xml_sha256=$2) FOR UPDATE`, [data.key, sha]);
+        const duplicate = duplicateRows.find(row => row.access_key.trim() === data.key) || duplicateRows[0];
+        if (active && !replaceInput) throw fail('Já existe uma nota vinculada a este pedido. Use “Substituir XML” para trocar o documento.', 409);
+        if (replaceInput && !active) throw fail('A nota ativa mudou. Atualize o pedido; nenhuma substituição foi feita.', 409);
+        if (duplicateRows.some(row => row.order_id !== req.params.id))
+            throw fail('Esta chave fiscal pertence a outro pedido. Confira o XML antes de continuar.', 409);
+        if (duplicateRows.length > 1)
+            throw fail('A chave e o arquivo já constam em registros fiscais diferentes. Solicite análise fiscal antes de continuar.', 409);
+        if (duplicate && (duplicate.access_key.trim() !== data.key || duplicate.xml_sha256 !== sha))
+            throw fail('A chave já foi registrada com um XML diferente. Solicite análise fiscal; o documento anterior permanece preservado.', 409);
+        if (duplicate && !duplicate.unlinked_at)
+            throw fail('Esta nota já está vinculada ao pedido. Nenhum documento foi duplicado.', 409);
+        let replacementReview = null;
+        if (replaceInput) {
+            if (origin !== 'xml') throw fail('A substituição exige o XML original da NF-e.', 422);
+            replacementReview = validateFiscalUnlink({ ...replaceInput,
+                reason: 'Substituição administrativa por novo XML' });
+            assertFiscalUnlinkEligible(orders[0]);
+            if (replacementReview.documentId !== active.id || active.origin !== 'xml')
+                throw fail('A nota ativa mudou. Atualize o pedido antes de substituir.', 409);
+        }
         const pending = await client.query('SELECT id,access_key FROM pending_fiscal_keys WHERE order_id=$1 FOR UPDATE', [req.params.id]);
         if (pending.rowCount && pending.rows[0].access_key.trim() !== data.key) {
             throw fail('A chave do documento difere da chave pendente. Remova a pendência explicitamente antes de cadastrar outra nota.', 409);
@@ -363,13 +396,34 @@ export async function storeDocument(req, data, origin, xmlBytes = null, sha = nu
         const automatic = resolveReusableMappings(data, items, await loadReusableMappings(client, data));
         const differences = reconcileNfe(data, orders[0], items, sender[0]?.value?.document, automatic);
         const status = differences.length ? 'needs_review' : 'pending_official';
-        const { rows } = await client.query(`INSERT INTO fiscal_documents
+        if (replacementReview) {
+            await client.query(`UPDATE fiscal_documents SET unlinked_at=now(),unlinked_by=$2,unlink_reason=$3,
+                unlink_official_source=$4,prior_official_status=$5,updated_at=now()
+                WHERE id=$1 AND unlinked_at IS NULL`, [active.id, req.user.id, replacementReview.reason,
+                replacementReview.source, replacementReview.priorStatus]);
+            await client.query(`INSERT INTO audit_logs(admin_id,action,entity_type,entity_id,changes)
+                VALUES($1,'fiscal.xml_unlinked','order',$2,$3)`, [req.user.id, req.params.id,
+                JSON.stringify({ document_id: active.id, key_last4: active.access_key.trim().slice(-4),
+                    previous_status: active.status, prior_official_status: replacementReview.priorStatus,
+                    official_source: replacementReview.source, reason: replacementReview.reason,
+                    replaced_in_same_transaction: true, shipping_released: false })]);
+        }
+        const { rows } = duplicate ? await client.query(`UPDATE fiscal_documents SET unlinked_at=NULL,unlinked_by=NULL,
+            unlink_reason=NULL,unlink_official_source=NULL,prior_official_status=NULL,
+            status=$2,differences=$3::jsonb,official_source=NULL,official_checked_at=NULL,verified_by=NULL,
+            updated_at=now() WHERE id=$1 AND unlinked_at IS NOT NULL RETURNING ${fields}`,
+        [duplicate.id, status, JSON.stringify(differences)]) : await client.query(`INSERT INTO fiscal_documents
             (order_id,access_key,origin,xml_bytes,xml_sha256,parsed_data,differences,status,imported_by)
             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING ${fields}`,
         [req.params.id, data.key, origin, xmlBytes, sha, JSON.stringify(data), JSON.stringify(differences), status, req.user.id]);
+        if (!rows[0]) throw fail('O vínculo fiscal mudou durante a operação. Atualize o pedido.', 409);
         await client.query(`INSERT INTO audit_logs(admin_id,action,entity_type,entity_id,changes) VALUES($1,$2,'order',$3,$4)`,
-            [req.user.id, origin === 'xml' ? 'fiscal.xml_imported' : 'fiscal.manual_recorded', req.params.id,
+            [req.user.id, duplicate ? 'fiscal.xml_reactivated' : origin === 'xml' ? 'fiscal.xml_imported' : 'fiscal.manual_recorded', req.params.id,
                 JSON.stringify({ document_id: rows[0].id, origin, key_last4: data.key.slice(-4), status, differences,
+                    previous_unlinked_at: duplicate?.unlinked_at || null,
+                    previous_status: duplicate?.status || null, previous_official_source: duplicate?.official_source || null,
+                    previous_official_checked_at: duplicate?.official_checked_at || null,
+                    previous_verified_by: duplicate?.verified_by || null,
                     automatic_mapping_audit_ids: automatic.mappingAuditIds,
                     recipient_name_abbreviation_accepted: assessNfe(data, orders[0], items,
                         sender[0]?.value?.document, automatic).abbreviatedName,
@@ -393,6 +447,22 @@ router.post(orderPath, uploadLimiter, (req, res, next) => xmlUpload.single('file
         const data = parseFiscalXmlUpload(req.file.buffer);
         const sha = createHash('sha256').update(req.file.buffer).digest('hex');
         res.status(201).json(await storeDocument(req, data, 'xml', req.file.buffer, sha));
+    } catch (error) { next(error); }
+});
+
+router.post(`${orderPath}/replace`, uploadLimiter, (req, res, next) => xmlUpload.single('file')(req, res, error => {
+    if (error) return next(fail('Selecione um XML de NF-e de até 1 MB.'));
+    next();
+}), async (req, res, next) => {
+    if (!req.file || !/\.xml$/i.test(req.file.originalname)) return next(fail('Selecione o XML original da NF-e.'));
+    try {
+        const data = parseFiscalXmlUpload(req.file.buffer);
+        const sha = createHash('sha256').update(req.file.buffer).digest('hex');
+        const review = { document_id: req.body.document_id, official_source: req.body.official_source,
+            prior_official_status: req.body.prior_official_status,
+            confirmed_official_check: req.body.confirmed_official_check === 'true',
+            confirmed_not_cancellation: req.body.confirmed_not_cancellation === 'true' };
+        res.status(201).json(await storeDocument(req, data, 'xml', req.file.buffer, sha, pool, review));
     } catch (error) { next(error); }
 });
 

@@ -386,6 +386,12 @@ const functions = {
                 form.append('file', args.file);
                 return apiFetch(`/orders/${args.orderId}/fiscal`, { method: 'POST', body: form });
             }
+            case 'replaceFiscalXml': {
+                const form = new FormData();
+                form.append('file', args.file);
+                for (const [name, value] of Object.entries(args.review)) form.append(name, String(value));
+                return apiFetch(`/orders/${args.orderId}/fiscal/replace`, { method: 'POST', body: form });
+            }
             case 'recordManualFiscalDocument':
                 return apiFetch(`/orders/${args.orderId}/fiscal/manual`, { method: 'POST', body: JSON.stringify(args.data) });
             case 'recordPendingFiscalKey':
