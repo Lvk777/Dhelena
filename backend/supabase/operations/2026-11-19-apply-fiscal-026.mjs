@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import pg from 'pg';
+import { databaseConnectionOptions } from '../../src/config/databaseSsl.js';
 
 if (!process.env.DATABASE_URL || process.env.NODE_ENV !== 'production') throw new Error('Production context required');
 const apply = process.argv.includes('--apply');
-const db = new pg.Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+const db = new pg.Client(databaseConnectionOptions(process.env.DATABASE_URL, { production: true }));
 await db.connect();
 try {
     await db.query(apply ? 'BEGIN' : 'BEGIN TRANSACTION READ ONLY');

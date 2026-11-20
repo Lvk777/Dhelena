@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { logSafeError } from '../lib/safeErrorLog.js';
+import { databaseConnectionOptions } from './databaseSsl.js';
 
 const { Pool } = pg;
 
@@ -26,8 +27,7 @@ export function createPool(options, PoolType = Pool) {
 }
 
 let _pool = createPool({
-    connectionString: dbUrl,
-    ssl: isSupabase ? { rejectUnauthorized: false } : false,
+    ...databaseConnectionOptions(dbUrl, { production: isProduction }),
     connectionTimeoutMillis: 5000,
 });
 

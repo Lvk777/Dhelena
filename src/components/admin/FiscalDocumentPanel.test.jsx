@@ -49,6 +49,24 @@ test('invalid converted PDF XML shows explanatory validation error without chang
     expect(onChanged).not.toHaveBeenCalled();
 });
 
+test('prefills the fiscal key and protocol without replacing the independent official check', async () => {
+    base44.functions.invoke.mockResolvedValue([]);
+    const document = { id: 'doc-19', origin: 'xml', status: 'pending_official',
+        access_key: '3'.repeat(44), data: { protocol: '4'.repeat(15), productCents: 3000,
+            shippingCents: 998, totalCents: 3998, items: [] }, differences: [] };
+    render(<FiscalDocumentPanel order={{ id: 'order-19', shipping_status: 'cart_inflight' }}
+        document={document} onChanged={vi.fn()} />);
+    expect(screen.getByLabelText('Chave vista no portal').value).toBe('3'.repeat(44));
+    expect(screen.getByLabelText('Protocolo visto no portal').value).toBe('4'.repeat(15));
+    const submit = screen.getByRole('button', { name: 'Registrar conferência oficial' });
+    expect(submit.disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText(/Confirmo que a consulta oficial/));
+    expect(submit.disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText(/Comparei no documento oficial/));
+    expect(submit.disabled).toBe(false);
+    expect(base44.functions.invoke.mock.calls.filter(([name]) => name === 'verifyFiscalDocument')).toHaveLength(0);
+});
+
 test('unlink confirmation can be cancelled without a request or changing the fiscal document', async () => {
     base44.functions.invoke.mockResolvedValue([]);
     const document = { id: '11111111-1111-4111-8111-111111111111', origin: 'xml',

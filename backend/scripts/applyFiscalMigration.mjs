@@ -1,11 +1,11 @@
 import fs from 'node:fs/promises';
 import pg from 'pg';
+import { databaseConnectionOptions } from '../src/config/databaseSsl.js';
 
 if (process.env.APPLY_FISCAL_MIGRATION !== '1' || !process.env.DATABASE_URL) {
     throw new Error('Set APPLY_FISCAL_MIGRATION=1 and DATABASE_URL to apply only fiscal migration 022.');
 }
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL,
-    ssl: process.env.DATABASE_URL.includes('supabase') ? { rejectUnauthorized: false } : false });
+const client = new pg.Client(databaseConnectionOptions(process.env.DATABASE_URL, { production: true }));
 await client.connect();
 try {
     await client.query('BEGIN');

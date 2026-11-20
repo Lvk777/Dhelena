@@ -22,6 +22,19 @@ describe('preparation blockers', () => {
         expect(check({ ready: { ...ready, status: 'cart_inflight' } }).join(' ')).toMatch(/duplicidade/);
         expect(check({ ready: { ...ready, status: 'cart_uncertain' } }).join(' ')).toMatch(/Concilie/);
     });
+    it('shows an invalid old SEDEX package independently of the provider reconciliation block', () => {
+        const result = check({ order: { ...order, shipping_quote_id: '2' }, ready: { ...ready,
+            status: 'cart_inflight', carrier: 'Correios', service: 'SEDEX',
+            packages: [{ height: 0.4, width: 8, length: 13, weight: 0.3 }] } });
+        expect(result.join(' ')).toMatch(/duplicidade/);
+        expect(result.join(' ')).toMatch(/medidas ou o peso/);
+        expect(result.join(' ')).toMatch(/Não use dimensões estimadas/);
+    });
+    it('does not impose Correios-only measurements on another carrier', () => {
+        const result = check({ ready: { ...ready, carrier: 'Outra transportadora', service: 'Express',
+            packages: [{ height: 0.4, width: 8, length: 13, weight: 0.3 }] } });
+        expect(result).toEqual([]);
+    });
     it('explains payment, cancellation, environment, flag and busy state', () => {
         expect(check({ order: { ...order, payment_status: 'pending' } }).join(' ')).toMatch(/pagamento/);
         expect(check({ order: { ...order, status: 'cancelado' } }).join(' ')).toMatch(/cancelado/);

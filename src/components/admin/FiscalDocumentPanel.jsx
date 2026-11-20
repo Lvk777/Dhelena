@@ -33,6 +33,15 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
     const productReviewNeeded = reviewIssues.some(issue => issue.code === 'product_identity') && candidates.length > 0;
     const canReview = document?.status === 'needs_review' && productReviewNeeded;
     const canReuse = !!(candidate?.productId && candidate?.colorId && candidate?.fiscalCode);
+    useEffect(() => {
+        // Avoid retyping 44+15 digits already read from the XML. These values
+        // are merely references to compare with the official portal, not proof
+        // that the NF-e is currently authorized.
+        setKey(document?.origin === 'xml' ? document.access_key || '' : '');
+        setProtocol(document?.origin === 'xml' ? document.data?.protocol || '' : '');
+        setConfirmed(false);
+        setContentMatched(false);
+    }, [document?.id, document?.status]);
     const refreshHistory = async () => {
         try {
             const result = await base44.functions.invoke('getFiscalDocumentHistory', { orderId: order.id });
@@ -216,6 +225,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
             </div>}
             {document.status === 'pending_official' && <div className="border border-border p-3 space-y-3 text-sm">
                 <p>Abra o portal oficial e compare a chave, o protocolo, o emitente, o destinatário, os produtos, as quantidades, os valores e o frete com esta nota. Confirme a autorização atual e a ausência de cancelamento. Importar XML não comprova autenticidade ou situação fiscal.</p>
+                <p className="text-xs text-muted-foreground">Chave e protocolo foram preenchidos com os dados do XML para facilitar a comparação. Confirme os números e a situação atual no portal oficial antes de marcar as declarações.</p>
                 <label className="block">Portal consultado
                     <select className="admin-field block w-full p-2 mt-1" value={source} onChange={event => setSource(event.target.value)}>
                         <option value="national">Portal Nacional da NF-e</option><option value="svrs">Portal SVRS</option>

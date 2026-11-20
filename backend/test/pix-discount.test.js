@@ -21,7 +21,7 @@ const request = (extra = {}) => ({ items: [{ productId: id, colorId: 'white', si
 const ack = p => ({ subtotal: p.subtotal, discount: p.discount, shipping_cost: p.shipping_cost, total: p.total });
 
 function fixture({ price = 100, sale_price = null, promotions = [], coupon = null, quote = 20,
-    shipping = {}, stock = 3, env = enabled } = {}) {
+    shipping = {}, stock = 3, env = enabled, onQuote = () => {} } = {}) {
     let state = { products: [product(price, { sale_price, colors: [{ id: 'white', name: 'Synthetic', stock: { M: stock } }] })],
         orders: [], movements: [], usages: [], orderItems: [] };
     const settings = { payments: { pix_enabled: true, pix_discount_enabled: true, pix_discount: 5 }, address: { cep: '01001000' },
@@ -53,19 +53,51 @@ function fixture({ price = 100, sale_price = null, promotions = [], coupon = nul
         }
         assert.fail(`Unexpected fixture query: ${sql}`);
     } };
-    const quoteShipping = async () => [{ id: 1, price: quote, company: 'Synthetic', name: 'Mock', delivery_time: 3 }];
+    let inTransaction = false;
+    const quoteShipping = async () => { onQuote(inTransaction); return [{ id: 1, price: quote, company: 'Synthetic', name: 'Mock', delivery_time: 3 }]; };
     const options = { db, env, quoteShipping };
     const transaction = async callback => {
         const before = structuredClone(state);
+        inTransaction = true;
         try { return await callback(db); } catch (error) { state = before; throw error; }
+        finally { inTransaction = false; }
     };
     return { db, settings, queries, options, get state() { return state; },
         preview: body => previewCheckout(body, userId, options),
-        place: (body, key = 'synthetic-key-000000001') => placeOrder(userId, body, key, {
+        place: (body, key = 'synthetic-key-000000001', extra = {}) => placeOrder(userId, body, key, {
             transaction, quoteShipping, env, notify: async () => {},
             pixReadiness: () => ({ configured: true, webhook_configured: true }),
+            ...extra,
         }) };
 }
+
+test('provider quote runs before locked checkout when read-only preflight is available', async () => {
+    const underLock = [];
+    const f = fixture({ onQuote: locked => underLock.push(locked) });
+    const body = request({ shipping_method: 'melhor_envio', shipping_quote_id: 1 });
+    const preview = await f.preview(body);
+    underLock.length = 0;
+    const order = await f.place({ ...body, expected_pricing: ack(preview) }, 'preflight-before-lock', {
+        preflightCheckout: (data, customerId, opts) => previewCheckout(data, customerId, { ...opts, db: f.db }),
+    });
+    assert.deepEqual(underLock, [false]);
+    assert.equal(order.shipping_cost, 20);
+    assert.equal(f.state.orders.length, 1);
+});
+
+test('changed origin during read-only quote fails closed without creating an order', async () => {
+    const f = fixture();
+    const body = request({ shipping_method: 'melhor_envio', shipping_quote_id: 1 });
+    const preview = await f.preview(body);
+    await assert.rejects(f.place({ ...body, expected_pricing: ack(preview) }, 'preflight-stale-000001', {
+        preflightCheckout: async (data, customerId, opts) => {
+            const result = await previewCheckout(data, customerId, { ...opts, db: f.db });
+            f.settings.address.cep = '99999999';
+            return result;
+        },
+    }), { status: 409 });
+    assert.equal(f.state.orders.length, 0);
+});
 
 test('Pix offer stays off without its explicit operator gate and approved percentage', () => {
     assert.deepEqual(pixDiscountOffer({ pix_discount: 5 }, {}), { enabled: false, percentage: 0 });

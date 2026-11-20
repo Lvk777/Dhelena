@@ -13,13 +13,14 @@ import { reserveVariantStock } from './lib/variantStock.js';
 import { getPixCapability } from './lib/pixAvailability.js';
 import { getMercadoPagoReadiness } from './services/mercadoPago.js';
 import { reservationExpiryAt } from './lib/orderReservationExpiry.js';
+import { previewCheckout } from './lib/checkoutPreview.js';
 import { isDeferredStockOrder, releaseOrderStockInTransaction } from './lib/deferredStock.js';
 
 // ─── placeOrder: atomic order creation ──────────────────────────────
 export async function placeOrder(userId, body, idempotencyKey, {
     transaction = withTransaction, notify = sendOrderNotifications,
     quoteShipping = melhorEnvio.calculateShipping, pixReadiness = getMercadoPagoReadiness,
-    env = process.env,
+    env = process.env, preflightCheckout = null,
 } = {}) {
     const normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
     const idempotencyFingerprint = createOrderRequestFingerprint(body);
@@ -31,6 +32,27 @@ export async function placeOrder(userId, body, idempotencyKey, {
     }
     if (!['pix', 'credito', 'debito'].includes(payment_method)) {
         throw Object.assign(new Error('Forma de pagamento inválida'), { status: 400 });
+    }
+
+    // The network quote must not hold product, customer or coupon row locks.
+    // In production, obtain it using the same read-only server calculations as
+    // the checkout preview. The locked transaction below recalculates the
+    // cart and accepts it only when every provider input still matches.
+    let preQuoted = null;
+    const preflight = preflightCheckout || (transaction === withTransaction ? previewCheckout : null);
+    if (shipping_method === 'melhor_envio' && preflight) {
+        // Preserve idempotent retries even if products or quotes changed after
+        // the original order was successfully committed.
+        if (transaction === withTransaction) {
+            const { rows } = await pool.query('SELECT * FROM orders WHERE idempotency_key=$1 AND user_id=$2',
+                [normalizedIdempotencyKey, userId]);
+            if (rows[0]) return assertMatchingIdempotencyRequest(rows[0], idempotencyFingerprint);
+        }
+        const preview = await preflight(body, userId, { quoteShipping, env, includeShippingQuote: true });
+        preQuoted = preview?.internalShippingQuote || null;
+        if (!preQuoted?.quote || !preQuoted?.request) {
+            throw Object.assign(new Error('Não foi possível confirmar a cotação do frete. Tente novamente.'), { status: 503 });
+        }
     }
 
     return transaction(async (client) => {
@@ -81,7 +103,7 @@ export async function placeOrder(userId, body, idempotencyKey, {
             reserveVariantStock(product, color, size, quantity);
 
             orderItems.push({
-                product_id: productId,
+                product_id: product.id,
                 product_name: product.name,
                 product_sku: product.sku,
                 product_image: product.images?.[0] || null,
@@ -164,13 +186,27 @@ export async function placeOrder(userId, body, idempotencyKey, {
                 throw Object.assign(new Error('Melhor Envio não está ativado'), { status: 503 });
             }
             const packages = buildShippingPackages(orderItems);
-            const options = await quoteShipping({
+            const quoteRequest = {
                 fromPostalCode: originPostalCode,
                 toPostalCode: destinationPostalCode,
                 products: packages,
                 totalValue: subtotal - discount,
-            });
-            const quote = withDeliveryEstimate(selectShippingQuote(options, shipping_quote_id), shipConfig, env);
+            };
+            let quote;
+            if (preQuoted) {
+                // Changes to catalog dimensions, quantities, prices, coupons,
+                // origin or destination invalidate the prior provider quote.
+                if (Date.now() - preQuoted.capturedAt > 30_000
+                    || JSON.stringify(quoteRequest) !== JSON.stringify(preQuoted.request)) {
+                    throw Object.assign(new Error('Os dados ou o prazo da cotação mudaram. Atualize o frete e tente novamente.'), { status: 409 });
+                }
+                quote = withDeliveryEstimate(preQuoted.quote, shipConfig, env);
+            } else {
+                // Synthetic unit-test transaction injection retains the old
+                // quote seam; production always uses the read-only preflight.
+                const options = await quoteShipping(quoteRequest);
+                quote = withDeliveryEstimate(selectShippingQuote(options, shipping_quote_id), shipConfig, env);
+            }
             shippingQuoteId = String(quote.id);
             shippingCarrier = quote.company || null;
             shippingServiceName = quote.service || quote.name || null;

@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import pg from 'pg';
+import { databaseConnectionOptions } from '../../src/config/databaseSsl.js';
 
 assert.equal(process.env.NODE_ENV, 'production');
 assert.ok(process.env.DATABASE_URL);
@@ -21,7 +22,7 @@ const historicalIds = [
 ];
 const shortsId = 'd97cec57-2578-4d8d-827f-9f3938c9eab9';
 assert.equal(new Set(historicalIds).size, 16);
-const db = new pg.Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+const db = new pg.Client(databaseConnectionOptions(process.env.DATABASE_URL, { production: true }));
 await db.connect();
 try {
     await db.query('BEGIN');

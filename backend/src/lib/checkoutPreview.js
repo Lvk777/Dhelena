@@ -9,7 +9,8 @@ import * as melhorEnvio from '../services/melhorEnvio.js';
 
 function invalid(message, status = 400) { return Object.assign(new Error(message), { status }); }
 
-export async function previewCheckout(body, userId = null, { db = pool, quoteShipping = melhorEnvio.calculateShipping, env = process.env } = {}) {
+export async function previewCheckout(body, userId = null, { db = pool, quoteShipping = melhorEnvio.calculateShipping,
+    env = process.env, includeShippingQuote = false } = {}) {
     const { items, payment_method, coupon_code = '', shipping_method, shipping_quote_id, shipping_address } = body || {};
     if (!Array.isArray(items) || !items.length || items.length > 100 || items.some(item =>
         !item || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.productId || '')
@@ -45,6 +46,7 @@ export async function previewCheckout(body, userId = null, { db = pool, quoteShi
         promotions, paymentMethod: payment_method, paymentConfig: settings.payments, env });
     let shippingCost = 0;
     let deliveryEstimate = null;
+    let internalShippingQuote = null;
     if (shipping_method === 'retirada') {
         if (settings.shipping?.pickup_enabled !== true) throw invalid('Retirada indisponível');
     } else {
@@ -53,9 +55,11 @@ export async function previewCheckout(body, userId = null, { db = pool, quoteShi
         const destination = String(shipping_address?.cep || shipping_address?.zip_code || '').replace(/\D/g, '');
         if (origin.length !== 8 || !settings.shipping?.melhor_envio_enabled) throw invalid('Entrega indisponível', 503);
         if (destination.length !== 8) throw invalid('CEP de entrega inválido');
-        const options = await quoteShipping({ fromPostalCode: origin, toPostalCode: destination,
-            products: buildShippingPackages(lines), totalValue: subtotal - pricing.discount });
+        const request = { fromPostalCode: origin, toPostalCode: destination,
+            products: buildShippingPackages(lines), totalValue: subtotal - pricing.discount };
+        const options = await quoteShipping(request);
         const quote = withDeliveryEstimate(selectShippingQuote(options, shipping_quote_id), settings.shipping, env);
+        if (includeShippingQuote) internalShippingQuote = { request, quote, capturedAt: Date.now() };
         deliveryEstimate = quote.delivery_estimate;
         shippingCost = calculateCheckoutShippingCost(quote.price, subtotal, pricing.discount,
             settings.shipping.free_shipping_enabled, settings.shipping.free_shipping_threshold);
@@ -63,5 +67,6 @@ export async function previewCheckout(body, userId = null, { db = pool, quoteShi
     return { subtotal, discount: pricing.discount, discount_breakdown: pricing.discount_breakdown,
         pix_discount_reason: pricing.pix_discount_reason, pix_discount_percentage: pricing.pix_discount_percentage,
         shipping_cost: shippingCost, delivery_estimate: deliveryEstimate, total: calculateServerOrderTotal(subtotal, pricing.discount, shippingCost),
-        items: lines.map(({ product_id, color_id, size, quantity, unit_price, subtotal }) => ({ product_id, color_id, size, quantity, unit_price, subtotal })) };
+        items: lines.map(({ product_id, color_id, size, quantity, unit_price, subtotal }) => ({ product_id, color_id, size, quantity, unit_price, subtotal })),
+        ...(includeShippingQuote ? { internalShippingQuote } : {}) };
 }

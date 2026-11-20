@@ -1,7 +1,8 @@
 import pg from 'pg';
+import { databaseConnectionOptions } from '../../src/config/databaseSsl.js';
 
 if (process.env.NODE_ENV !== 'production' || !process.env.DATABASE_URL) throw new Error('Production context required');
-const db = new pg.Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+const db = new pg.Client(databaseConnectionOptions(process.env.DATABASE_URL, { production: true }));
 await db.connect();
 try {
     await db.query('BEGIN TRANSACTION READ ONLY');
