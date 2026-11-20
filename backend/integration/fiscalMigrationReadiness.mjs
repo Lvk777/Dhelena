@@ -167,8 +167,7 @@ try {
     [reviewOrder.id, reviewData.key, Buffer.from('<synthetic-equivalence/>'), 'c'.repeat(64),
         JSON.stringify(reviewData), JSON.stringify(['Nome do destinatário','Identificação dos produtos']), profiles[0].id])).rows[0];
     const reviewInput = { document_id: reviewDoc.id, order_item_id: reviewItem.id, fiscal_index: 0,
-        confirmed_recipient: false, confirmed_product_code: true, confirmed_product_variant: true,
-        reason: 'Variante sintética conferida', evidence: 'Ficha sintética da variante comercial' };
+        confirmed_recipient: false, confirmed_product_match: true };
     const reviewDb = { connect: async () => ({ query: client.query.bind(client), release() {} }) };
     const reviewResult = await confirmFiscalEquivalence(reviewOrder.id, profiles[0].id, reviewInput, reviewDb);
     assert.equal(reviewResult.status, 'pending_official');
@@ -236,9 +235,7 @@ try {
     await assert.rejects(importXml(first.order.id, 161110001), { status: 409 });
     const mapped = await confirmFiscalEquivalence(first.order.id, profiles[0].id, {
         document_id: imported.document.id, order_item_id: first.item.id, fiscal_index: 0,
-        confirmed_recipient: false, confirmed_product_code: true, confirmed_product_variant: true,
-        save_for_future: true, reason: 'Cor comercial sintética conferida no catálogo',
-        evidence: 'Ficha sintética da variante Bege com código fiscal 127',
+        confirmed_recipient: false, confirmed_product_match: true, save_for_future: true,
     }, reviewDb);
     assert.equal(mapped.status, 'pending_official');
     assert.equal((await client.query("SELECT count(*)::int AS n FROM audit_logs WHERE action='fiscal.product_mapping_saved'")).rows[0].n, 1);
@@ -265,9 +262,7 @@ try {
     assert.ok(rejected.document.differences.length > 0);
     await assert.rejects(confirmFiscalEquivalence(otherColor.order.id, profiles[0].id, {
         document_id: rejected.document.id, order_item_id: otherColor.item.id, fiscal_index: 0,
-        confirmed_recipient: false, confirmed_product_code: true, confirmed_product_variant: true,
-        save_for_future: true, reason: 'Tentativa sintética de cadastrar outra cor',
-        evidence: 'Documento sintético não prova equivalência da cor diferente',
+        confirmed_recipient: false, confirmed_product_match: true, save_for_future: true,
     }, reviewDb), { status: 409 });
     assert.equal((await client.query('SELECT status FROM fiscal_documents WHERE id=$1',
         [rejected.document.id])).rows[0].status, 'needs_review');
