@@ -22,17 +22,16 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
     const [history, setHistory] = useState([]);
     const [historyError, setHistoryError] = useState('');
     const [unlinkOpen, setUnlinkOpen] = useState(false);
-    const [nameReason, setNameReason] = useState('');
-    const [nameEvidence, setNameEvidence] = useState('');
     const [productReason, setProductReason] = useState('');
     const [productEvidence, setProductEvidence] = useState('');
-    const [recipientChecked, setRecipientChecked] = useState(false);
     const [codeChecked, setCodeChecked] = useState(false);
     const [variantChecked, setVariantChecked] = useState(false);
+    const [saveForFuture, setSaveForFuture] = useState(false);
     const reviewIssues = document?.analysis?.issues || [];
-    const nameReviewNeeded = reviewIssues.some(issue => issue.code === 'recipient_name') && document?.analysis?.abbreviatedName;
     const productReviewNeeded = reviewIssues.some(issue => issue.code === 'product_identity') && !!document?.analysis?.productCandidate;
-    const canReview = document?.status === 'needs_review' && (nameReviewNeeded || productReviewNeeded);
+    const canReview = document?.status === 'needs_review' && productReviewNeeded;
+    const canReuse = !!(document?.analysis?.productCandidate?.productId
+        && document?.analysis?.productCandidate?.colorId && document?.analysis?.productCandidate?.fiscalCode);
     const refreshHistory = async () => {
         try {
             const result = await base44.functions.invoke('getFiscalDocumentHistory', { orderId: order.id });
@@ -68,27 +67,24 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
         } catch (cause) { setError(userFacingError(cause, '/fiscal/verify')); }
         finally { setBusy(false); }
     };
-    const confirmEquivalence = async kind => {
+    const confirmEquivalence = async () => {
         const candidate = document?.analysis?.productCandidate;
-        if (!canReview || busy || (kind === 'product' && !productReviewNeeded)
-            || (kind === 'name' && !nameReviewNeeded)) return;
+        if (!canReview || busy) return;
         setBusy(true); setError('');
         try {
             const result = await base44.functions.invoke('confirmFiscalEquivalence', { orderId: order.id, review: {
-                document_id: document.id, order_item_id: kind === 'product' ? candidate.orderItemId : undefined,
-                fiscal_index: kind === 'product' ? candidate.fiscalIndex : undefined,
-                confirmed_recipient: kind === 'name' && recipientChecked,
-                confirmed_product_code: kind === 'product' && codeChecked,
-                confirmed_product_variant: kind === 'product' && variantChecked,
-                reason: (kind === 'product' ? productReason : nameReason).trim(),
-                evidence: (kind === 'product' ? productEvidence : nameEvidence).trim(),
+                document_id: document.id, order_item_id: candidate.orderItemId,
+                fiscal_index: candidate.fiscalIndex,
+                confirmed_recipient: false, confirmed_product_code: codeChecked,
+                confirmed_product_variant: variantChecked,
+                save_for_future: saveForFuture && canReuse,
+                reason: productReason.trim(), evidence: productEvidence.trim(),
             } });
             onChanged(result);
             try { onChanged(await base44.functions.invoke('getFiscalDocument', { orderId: order.id })); }
             catch { /* The confirmed response remains visible if refreshing the audit view fails. */ }
-            if (kind === 'product') { setProductReason(''); setProductEvidence(''); }
-            else { setNameReason(''); setNameEvidence(''); }
-            setRecipientChecked(false); setCodeChecked(false); setVariantChecked(false);
+            setProductReason(''); setProductEvidence(''); setSaveForFuture(false);
+            setCodeChecked(false); setVariantChecked(false);
         } catch (cause) { setError(userFacingError(cause, '/fiscal/equivalence')); }
         finally { setBusy(false); }
     };
@@ -155,13 +151,17 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
                     <h3 className="font-medium">Correspondências registradas</h3>
                     {document.equivalence_reviews.map((review, index) => <div key={index} className="border-t border-border pt-2">
                         <p>{review.fields_compared?.includes('product_code') ? 'Produto' : 'Nome da cliente'} · {new Date(review.created_at).toLocaleString('pt-BR')} · {review.reviewed_by}</p>
+                        {review.reusable_mapping_saved && <p>Relação reutilizável registrada para esta variante e código fiscal.</p>}
                         <p>Motivo: {review.reason}</p><p>Evidência: {review.evidence}</p>
                     </div>)}
                     <p className="text-xs text-muted-foreground">O XML original permanece intacto. A autorização fiscal requer consulta separada em fonte oficial.</p>
                 </div>}
+            {document.automatic_product_matches > 0 && <p role="status" className="border border-border p-3 text-sm">
+                {document.automatic_product_matches} correspondência(s) de produto já comprovada(s) foram aplicadas. Quantidades, valores e demais dados continuam sujeitos à conferência.
+            </p>}
             {document.review_stale && <p role="alert" className="border border-amber-500/50 p-3 text-sm">O pedido mudou desde uma conferência anterior. Solicite nova análise fiscal; a expedição permanece bloqueada.</p>}
             {canReview && <div className="space-y-3 text-sm" aria-label="Conferência de equivalência fiscal">
-                {productReviewNeeded && <div className="border border-border p-3 space-y-3" aria-label="Correspondência do produto">
+                <div className="border border-border p-3 space-y-3" aria-label="Correspondência do produto">
                     <h3 className="font-medium">Conferir correspondência do produto</h3>
                     <div className="grid gap-3 sm:grid-cols-2 min-w-0">
                         <div className="border border-border p-3 min-w-0 break-words" aria-label="Produto do pedido">
@@ -188,20 +188,12 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
                     <label className="flex gap-2 items-start"><input type="checkbox" checked={variantChecked} onChange={event => setVariantChecked(event.target.checked)} />Conferi documentalmente a descrição e a variante, inclusive a diferença de cor quando existir.</label>
                     <label className="block">Justificativa da correspondência<input className="admin-field block w-full p-2 mt-1" value={productReason} onChange={event => setProductReason(event.target.value)} maxLength={1000} /></label>
                     <label className="block">Evidência da correspondência<input className="admin-field block w-full p-2 mt-1" value={productEvidence} onChange={event => setProductEvidence(event.target.value)} maxLength={1000} /></label>
+                    {canReuse && <label className="flex gap-2 items-start"><input type="checkbox" checked={saveForFuture} onChange={event => setSaveForFuture(event.target.checked)} />Salvar esta relação entre código fiscal, descrição e variante para futuras notas. Exige evidência específica de pelo menos 30 caracteres; não cria equivalência geral entre cores.</label>}
                     <button type="button" className="btn-outline min-h-11 text-xs" disabled={busy || !codeChecked || !variantChecked
-                        || productReason.trim().length < 20 || productEvidence.trim().length < 20}
-                        onClick={() => confirmEquivalence('product')}>Confirmar correspondência do produto</button>
-                </div>}
-                {nameReviewNeeded && <div className="border border-border p-3 space-y-3" aria-label="Correspondência da cliente">
-                    <h3 className="font-medium">Conferir nome da cliente</h3>
-                    <p>O documento coincide, mas o nome do pedido está abreviado. Confira a identidade antes de confirmar.</p>
-                    <label className="flex gap-2 items-start"><input type="checkbox" checked={recipientChecked} onChange={event => setRecipientChecked(event.target.checked)} />Conferi que o nome abreviado e o nome completo pertencem à mesma cliente.</label>
-                    <label className="block">Justificativa do nome<input className="admin-field block w-full p-2 mt-1" value={nameReason} onChange={event => setNameReason(event.target.value)} maxLength={1000} /></label>
-                    <label className="block">Evidência da identidade<input className="admin-field block w-full p-2 mt-1" value={nameEvidence} onChange={event => setNameEvidence(event.target.value)} maxLength={1000} /></label>
-                    <button type="button" className="btn-outline min-h-11 text-xs" disabled={busy || !recipientChecked
-                        || nameReason.trim().length < 20 || nameEvidence.trim().length < 20}
-                        onClick={() => confirmEquivalence('name')}>Confirmar identidade da cliente</button>
-                </div>}
+                        || productReason.trim().length < 20 || productEvidence.trim().length < (saveForFuture ? 30 : 20)
+                        || (saveForFuture && productReason.trim().toLowerCase() === productEvidence.trim().toLowerCase())}
+                        onClick={confirmEquivalence}>Confirmar correspondência do produto</button>
+                </div>
                 <p className="text-xs text-muted-foreground">Cada confirmação resolve somente o campo indicado. Outras pendências e o envio aguardando confirmação continuam bloqueados.</p>
             </div>}
             {document.status === 'pending_official' && <div className="border border-border p-3 space-y-3 text-sm">

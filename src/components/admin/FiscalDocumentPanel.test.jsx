@@ -151,7 +151,7 @@ test('product correspondence is separate, shows both records and keeps name and 
             orderItemId: '22222222-2222-4222-8222-222222222222', fiscalIndex: 0,
             fiscalCode: '127', orderSku: '2026@', orderColor: 'Bege', fiscalColor: 'marfim',
             productName: 'Shorts Angel', fiscalName: 'Shorts Angel Marfim P', size: 'P',
-            quantity: 1, productCents: 3000,
+            quantity: 1, productCents: 3000, productId: '33333333-3333-4333-8333-333333333333', colorId: 'bege-id',
         }, issues: [{ code: 'recipient_name', message: 'Nome da cliente: pedido abreviado; confira a identidade.' },
             { code: 'product_identity', message: 'Produto: pedido Bege, nota Marfim, código 127; confira a variante.' }] },
         data: { number: '19', series: '1', issuedAt: '2026-11-18T12:00:00Z', protocol: '2'.repeat(15),
@@ -174,16 +174,18 @@ test('product correspondence is separate, shows both records and keeps name and 
     fireEvent.click(screen.getByLabelText(/descrição e a variante/));
     fireEvent.change(screen.getByLabelText('Justificativa da correspondência'), { target: { value: 'Variante comercial revisada no cadastro' } });
     fireEvent.change(screen.getByLabelText('Evidência da correspondência'), { target: { value: 'Ficha de cadastro da peça e variante' } });
+    fireEvent.click(screen.getByLabelText(/Salvar esta relação entre código fiscal/));
     expect(button.disabled).toBe(false);
     fireEvent.click(button);
     await waitFor(() => expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ status: 'needs_review', differences: ['Nome da cliente'] })));
     expect(base44.functions.invoke).toHaveBeenCalledWith('confirmFiscalEquivalence', expect.objectContaining({
         review: expect.objectContaining({ confirmed_recipient: false, confirmed_product_code: true,
-            confirmed_product_variant: true, order_item_id: document.analysis.productCandidate.orderItemId }),
+            confirmed_product_variant: true, save_for_future: true,
+            order_item_id: document.analysis.productCandidate.orderItemId }),
     }));
     rerender(<FiscalDocumentPanel order={order} document={partial} onChanged={onChanged} />);
     expect(screen.queryByRole('button', { name: 'Confirmar correspondência do produto' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Confirmar identidade da cliente' }).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Confirmar identidade da cliente' })).toBeNull();
     expect(base44.functions.invoke.mock.calls.every(([name]) => name !== 'generateShippingLabel')).toBe(true);
 });
 

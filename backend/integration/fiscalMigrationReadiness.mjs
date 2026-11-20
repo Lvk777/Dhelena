@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import pg from 'pg';
 import { createFiscalUnlink } from '../src/services/fiscalUnlink.js';
-import { confirmFiscalEquivalence } from '../src/routes/fiscalDocuments.js';
+import { confirmFiscalEquivalence, storeDocument, verifyFiscalDocument } from '../src/routes/fiscalDocuments.js';
+import { parseAuthorizedNfe, validNfeKey } from '../src/lib/fiscalXml.js';
 
 if (!process.env.TEST_DATABASE_URL) throw new Error('TEST_DATABASE_URL is required');
 const client = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
@@ -169,16 +171,9 @@ try {
         reason: 'Variante sintética conferida', evidence: 'Ficha sintética da variante comercial' };
     const reviewDb = { connect: async () => ({ query: client.query.bind(client), release() {} }) };
     const reviewResult = await confirmFiscalEquivalence(reviewOrder.id, profiles[0].id, reviewInput, reviewDb);
-    assert.equal(reviewResult.status, 'needs_review');
-    assert.equal(reviewResult.differences.length, 1);
-    assert.match(reviewResult.differences[0], /Nome da cliente/);
+    assert.equal(reviewResult.status, 'pending_official');
+    assert.equal(reviewResult.differences.length, 0);
     await assert.rejects(confirmFiscalEquivalence(reviewOrder.id, profiles[0].id, reviewInput, reviewDb), { status: 409 });
-    const nameResult = await confirmFiscalEquivalence(reviewOrder.id, profiles[0].id, {
-        document_id: reviewDoc.id, confirmed_recipient: true,
-        confirmed_product_code: false, confirmed_product_variant: false,
-        reason: 'Nome abreviado sintético conferido', evidence: 'Documento sintético da cliente conferido',
-    }, reviewDb);
-    assert.equal(nameResult.status, 'pending_official');
     const reviewed = (await client.query(`SELECT fd.xml_bytes,fd.differences,fd.status,o.payment_status,o.shipping_status
         FROM fiscal_documents fd JOIN orders o ON o.id=fd.order_id WHERE fd.id=$1`, [reviewDoc.id])).rows[0];
     assert.deepEqual(reviewed.xml_bytes, Buffer.from('<synthetic-equivalence/>'));
@@ -187,9 +182,111 @@ try {
     assert.equal(reviewed.shipping_status, 'cart_inflight');
     const reviewAudits = (await client.query(`SELECT admin_id,changes FROM audit_logs
         WHERE action='fiscal.equivalence_confirmed' AND entity_id=$1 ORDER BY created_at,id`, [reviewOrder.id])).rows;
-    assert.equal(reviewAudits.length, 2);
+    assert.equal(reviewAudits.length, 1);
     assert.ok(reviewAudits.every(entry => entry.admin_id === profiles[0].id && entry.changes.shipping_released === false
         && entry.changes.official_status_verified === false));
-    assert.deepEqual(reviewAudits.map(entry => entry.changes.fields_compared.includes('product_code')), [true, false]);
+    assert.deepEqual(reviewAudits.map(entry => entry.changes.fields_compared.includes('product_code')), [true]);
+    const syntheticKey = number => {
+        const prefix = `3526116173880100014355026${String(number).padStart(9, '0')}394826583`;
+        for (let digit = 0; digit <= 9; digit += 1) if (validNfeKey(prefix + digit)) return prefix + digit;
+        throw new Error('synthetic key');
+    };
+    const syntheticXml = number => {
+        const accessKey = syntheticKey(number);
+        return Buffer.from(`<?xml version="1.0"?><nfeProc><NFe><infNFe Id="NFe${accessKey}">
+          <ide><cUF>35</cUF><mod>55</mod><tpAmb>1</tpAmb><nNF>${number}</nNF><serie>26</serie>
+          <tpEmis>3</tpEmis><cNF>94826583</cNF><dhEmi>2026-11-16T12:00:00-03:00</dhEmi></ide>
+          <emit><CNPJ>61738801000143</CNPJ><xNome>Emitente Sintético</xNome></emit>
+          <dest><CPF>12345678909</CPF><xNome>Nataly Helena de Souza Freitas</xNome></dest>
+          <det><prod><cProd>127</cProd><xProd>Shorts Angel Marfim P</xProd><qCom>1</qCom>
+          <vUnCom>30.00</vUnCom><vProd>30.00</vProd></prod></det>
+          <total><ICMSTot><vProd>30.00</vProd><vFrete>9.98</vFrete><vDesc>0.00</vDesc>
+          <vNF>39.98</vNF></ICMSTot></total></infNFe><Signature><SignedInfo/></Signature></NFe>
+          <protNFe><infProt><chNFe>${accessKey}</chNFe><cStat>100</cStat>
+          <nProt>235260655386875</nProt><dhRecbto>2026-11-16T12:01:00-03:00</dhRecbto>
+          </infProt></protNFe></nfeProc>`);
+    };
+    const product = (await client.query(`INSERT INTO products(name,sku,price)
+        VALUES('Shorts Angel Sintético','2026@',30) RETURNING id`)).rows[0];
+    const makeOrder = async (number, colorId = 'bege-id') => {
+        const row = (await client.query(`INSERT INTO orders(order_number,user_id,subtotal,shipping_cost,total,
+            snapshot,shipping_status,payment_status) VALUES($1,$2,30,9.98,39.98,$3::jsonb,
+            'cart_inflight','approved') RETURNING id`, [number, profiles[0].id,
+        JSON.stringify({ customer: { name: 'Nataly Helena', cpf: '12345678909' } })])).rows[0];
+        const item = (await client.query(`INSERT INTO order_items(order_id,product_id,product_name,product_sku,
+            color_id,color_name,size,quantity,unit_price,subtotal)
+            VALUES($1,$2,'Shorts Angel','2026@',$3,'Bege','P',1,30,30) RETURNING id`,
+        [row.id, product.id, colorId])).rows[0];
+        return { order: row, item };
+    };
+    const importXml = async (orderId, number) => {
+        const bytes = syntheticXml(number);
+        const data = parseAuthorizedNfe(bytes);
+        return { bytes, document: await storeDocument({ params: { id: orderId },
+            user: { id: profiles[0].id } }, data, 'xml', bytes,
+        createHash('sha256').update(bytes).digest('hex'), reviewDb) };
+    };
+    const first = await makeOrder('FISCAL-END-TO-END-1');
+    const imported = await importXml(first.order.id, 161110001);
+    assert.equal(imported.document.status, 'needs_review');
+    assert.equal(imported.document.differences.length, 1);
+    const earlier = await makeOrder('FISCAL-END-TO-END-EARLIER');
+    const earlierImport = await importXml(earlier.order.id, 161110005);
+    assert.equal(earlierImport.document.status, 'needs_review');
+    await assert.rejects(importXml(first.order.id, 161110001), { status: 409 });
+    const mapped = await confirmFiscalEquivalence(first.order.id, profiles[0].id, {
+        document_id: imported.document.id, order_item_id: first.item.id, fiscal_index: 0,
+        confirmed_recipient: false, confirmed_product_code: true, confirmed_product_variant: true,
+        save_for_future: true, reason: 'Cor comercial sintética conferida no catálogo',
+        evidence: 'Ficha sintética da variante Bege com código fiscal 127',
+    }, reviewDb);
+    assert.equal(mapped.status, 'pending_official');
+    assert.equal((await client.query("SELECT count(*)::int AS n FROM audit_logs WHERE action='fiscal.product_mapping_saved'")).rows[0].n, 1);
+    const reloaded = (await client.query('SELECT status,xml_bytes,xml_sha256 FROM fiscal_documents WHERE id=$1',
+        [imported.document.id])).rows[0];
+    assert.equal(reloaded.status, 'pending_official');
+    assert.deepEqual(reloaded.xml_bytes, imported.bytes);
+    assert.equal(reloaded.xml_sha256, createHash('sha256').update(imported.bytes).digest('hex'));
+    const attestation = { access_key: earlierImport.document.access_key,
+        protocol: earlierImport.document.data.protocol, source: 'national',
+        confirmed_authorized: true, confirmed_document_matches: true };
+    const verifiedEarlier = await verifyFiscalDocument(earlier.order.id, profiles[0].id, attestation, reviewDb);
+    assert.equal(verifiedEarlier.status, 'verified');
+    assert.deepEqual(verifiedEarlier.differences, []);
+    assert.deepEqual((await client.query('SELECT differences FROM fiscal_documents WHERE id=$1',
+        [earlierImport.document.id])).rows[0].differences, []);
+    const secondOrder = await makeOrder('FISCAL-END-TO-END-2');
+    const secondImport = await importXml(secondOrder.order.id, 161110002);
+    assert.equal(secondImport.document.status, 'pending_official');
+    assert.deepEqual(secondImport.document.differences, []);
+    const otherColor = await makeOrder('FISCAL-END-TO-END-WRONG-COLOR', 'outro-id');
+    const rejected = await importXml(otherColor.order.id, 161110003);
+    assert.equal(rejected.document.status, 'needs_review');
+    assert.ok(rejected.document.differences.length > 0);
+    await assert.rejects(confirmFiscalEquivalence(otherColor.order.id, profiles[0].id, {
+        document_id: rejected.document.id, order_item_id: otherColor.item.id, fiscal_index: 0,
+        confirmed_recipient: false, confirmed_product_code: true, confirmed_product_variant: true,
+        save_for_future: true, reason: 'Tentativa sintética de cadastrar outra cor',
+        evidence: 'Documento sintético não prova equivalência da cor diferente',
+    }, reviewDb), { status: 409 });
+    assert.equal((await client.query('SELECT status FROM fiscal_documents WHERE id=$1',
+        [rejected.document.id])).rows[0].status, 'needs_review');
+    await assert.rejects(verifyFiscalDocument(otherColor.order.id, profiles[0].id, {
+        ...attestation, access_key: rejected.document.access_key }, reviewDb), { status: 409 });
+    await unlink(first.order.id, profiles[0].id, {
+        document_id: imported.document.id, reason: 'Substituição sintética para testar histórico fiscal',
+        official_source: 'national', prior_official_status: 'authorized',
+        confirmed_official_check: true, confirmed_not_cancellation: true,
+    });
+    const replacement = await importXml(first.order.id, 161110004);
+    assert.equal(replacement.document.status, 'pending_official');
+    const history = (await client.query(`SELECT id,xml_bytes,unlinked_at FROM fiscal_documents
+        WHERE order_id=$1 ORDER BY created_at,id`, [first.order.id])).rows;
+    assert.equal(history.length, 2);
+    assert.equal(history.filter(row => row.unlinked_at === null).length, 1);
+    assert.deepEqual(history.find(row => row.id === imported.document.id).xml_bytes, imported.bytes);
+    assert.deepEqual(history.find(row => row.id === replacement.document.id).xml_bytes, replacement.bytes);
+    assert.equal((await client.query('SELECT shipping_status FROM orders WHERE id=$1',
+        [first.order.id])).rows[0].shipping_status, 'cart_inflight');
     console.log('PASS: fiscal document migration is idempotent, private and references orders/profiles');
 } finally { await client.end(); }

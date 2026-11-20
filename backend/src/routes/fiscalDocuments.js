@@ -5,6 +5,8 @@ import { pool } from '../config/db.js';
 import { auth, requireSupabaseAdmin } from '../middleware.js';
 import { uploadLimiter } from '../middleware/rateLimiters.js';
 import { assessNfe, parseAuthorizedNfe, parseManualNfe, reconcileNfe, validNfeKey } from '../lib/fiscalXml.js';
+import { fiscalMappingKey, loadReusableMappings, orderVariantIdentity,
+    resolveReusableMappings, reusableMappingDecision } from '../lib/fiscalProductMappings.js';
 import { unlinkFiscalDocument } from '../services/fiscalUnlink.js';
 
 const router = Router();
@@ -23,7 +25,7 @@ const reviewAuditSql = `SELECT a.changes,a.created_at,COALESCE(p.full_name,p.ema
     WHERE a.action='fiscal.equivalence_confirmed' AND a.entity_id=$1 AND a.changes->>'document_id'=$2
     ORDER BY a.created_at,a.id`;
 export function reviewFromAudit(rows, xmlHash, contextHash) {
-    const review = { recipientConfirmed: false, productConfirmed: false };
+    const review = { recipientConfirmed: false, productConfirmed: false, productMatches: [] };
     const records = [];
     let stale = false;
     for (const row of rows) {
@@ -35,12 +37,16 @@ export function reviewFromAudit(rows, xmlHash, contextHash) {
             review.productConfirmed = true;
             review.orderItemId = entry.order_item_id;
             review.fiscalIndex = entry.fiscal_index;
+            review.productMatches.push({ orderItemId: entry.order_item_id, fiscalIndex: entry.fiscal_index });
         }
         records.push({ created_at: row.created_at, reviewed_by: row.reviewed_by || 'administrador',
-            fields_compared: fields, reason: entry.reason, evidence: entry.evidence });
+            fields_compared: fields, reason: entry.reason, evidence: entry.evidence,
+            reusable_mapping_saved: entry.reusable_mapping_saved === true });
     }
     return { review, records, stale };
 }
+const combinedReview = (review, automatic) => ({ ...review,
+    productMatches: [...(review.productMatches || []), ...automatic.productMatches] });
 export function parseFiscalXmlUpload(buffer) {
     try { return parseAuthorizedNfe(buffer); }
     catch (error) { throw fail(error?.message || 'Arquivo XML fiscal inválido.'); }
@@ -67,6 +73,8 @@ export function validateFiscalEquivalence(input = {}) {
     const reason = String(input.reason ?? '').trim(), evidence = String(input.evidence ?? '').trim();
     if (!/^[0-9a-f-]{36}$/i.test(String(input.document_id || '')) || reason.length < 20 || reason.length > 1000
         || evidence.length < 20 || evidence.length > 1000
+        || (input.save_for_future === true && (input.confirmed_product_code !== true
+            || evidence.length < 30 || reason.toLowerCase() === evidence.toLowerCase()))
         || (input.confirmed_recipient === true) === (input.confirmed_product_code === true)
         || (input.confirmed_product_code === true) !== (input.confirmed_product_variant === true)
         || (input.confirmed_product_code === true && (!/^[0-9a-f-]{36}$/i.test(String(input.order_item_id || ''))
@@ -75,7 +83,8 @@ export function validateFiscalEquivalence(input = {}) {
     }
     return { documentId: input.document_id, reason, evidence, orderItemId: input.order_item_id,
         fiscalIndex: input.fiscal_index, recipientConfirmed: input.confirmed_recipient === true,
-        productConfirmed: input.confirmed_product_code === true && input.confirmed_product_variant === true };
+        productConfirmed: input.confirmed_product_code === true && input.confirmed_product_variant === true,
+        saveForFuture: input.save_for_future === true };
 }
 export function requireFiscalXmlImport(req, res, next, env = process.env) {
     if (!fiscalXmlImportEnabled(env)) return res.status(503).json({ error: 'Importação de NF-e indisponível até a homologação fiscal.' });
@@ -95,10 +104,14 @@ router.get(orderPath, async (req, res, next) => {
             const { rows: auditRows } = await pool.query(reviewAuditSql, [req.params.id, rows[0].id]);
             const reviewed = reviewFromAudit(auditRows, rows[0].xml_sha256,
                 fiscalContextHash(orders[0], items, sender[0]?.value?.document));
+            const automatic = resolveReusableMappings(rows[0].parsed_data, items,
+                await loadReusableMappings(pool, rows[0].parsed_data));
             result.analysis = assessNfe(rows[0].parsed_data, orders[0], items,
-                sender[0]?.value?.document, reviewed.review);
+                sender[0]?.value?.document, combinedReview(reviewed.review, automatic));
             result.differences = result.analysis.issues.map(issue => issue.message);
+            if (rows[0].status === 'needs_review' && !result.differences.length) result.status = 'pending_official';
             result.equivalence_reviews = reviewed.records;
+            result.automatic_product_matches = automatic.productMatches.length;
             if (reviewed.stale) result.review_stale = true;
             return res.json(result);
         }
@@ -128,8 +141,10 @@ export async function confirmFiscalEquivalence(orderId, actorId, input, db = poo
         const { rows: auditRows } = await client.query(reviewAuditSql, [orderId, document.id]);
         const reviewed = reviewFromAudit(auditRows, document.xml_sha256, contextHash);
         if (reviewed.stale) throw fail('O pedido mudou desde a conferência anterior. Solicite uma nova análise fiscal.', 409);
+        const automatic = resolveReusableMappings(document.parsed_data, items,
+            await loadReusableMappings(client, document.parsed_data));
         const before = assessNfe(document.parsed_data, orders[0], items,
-            sender[0]?.value?.document, reviewed.review);
+            sender[0]?.value?.document, combinedReview(reviewed.review, automatic));
         const hasNameIssue = before.issues.some(issue => issue.code === 'recipient_name');
         const hasProductIssue = before.issues.some(issue => issue.code === 'product_identity');
         if ((review.recipientConfirmed && (!hasNameIssue || !before.abbreviatedName))
@@ -138,11 +153,40 @@ export async function confirmFiscalEquivalence(orderId, actorId, input, db = poo
                 || before.productCandidate.fiscalIndex !== review.fiscalIndex))) {
             throw fail('Há outras divergências ou a correspondência mudou. Confira o pedido e o XML; a expedição permanece bloqueada.', 409);
         }
+        let mappingSaved = false;
+        if (review.saveForFuture) {
+            const candidate = before.productCandidate;
+            const item = document.parsed_data.items[review.fiscalIndex];
+            const row = items.find(entry => entry.id === review.orderItemId);
+            const key = fiscalMappingKey(document.parsed_data.issuerCnpj, item);
+            const variant = orderVariantIdentity(row);
+            if (!key || !variant || candidate?.orderItemId !== row.id)
+                throw fail('Esta variante não tem identificação estável para reutilizar a correspondência. Registre apenas a conferência desta nota.', 422);
+            await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',
+                [JSON.stringify(key)]);
+            const latest = await loadReusableMappings(client, document.parsed_data);
+            const decision = reusableMappingDecision(latest, key, variant);
+            if (decision === 'conflict') throw fail('O código fiscal já tem uma correspondência diferente. Solicite revisão antes de reutilizá-lo.', 409);
+            if (decision === 'new') {
+                await client.query(`INSERT INTO audit_logs(admin_id,action,entity_type,entity_id,changes)
+                    VALUES($1,'fiscal.product_mapping_saved','order',$2,$3)`, [actorId, orderId,
+                    JSON.stringify({ document_id: document.id, issuer_cnpj: key.issuer,
+                        fiscal_code: key.code, fiscal_description: key.description,
+                        product_id: variant.productId, color_id: variant.colorId, size: variant.size,
+                        order_sku: row.product_sku, order_color: row.color_name,
+                        reason: review.reason, evidence: review.evidence,
+                        xml_sha256: document.xml_sha256, shipping_released: false })]);
+                mappingSaved = true;
+            }
+        }
         const after = assessNfe(document.parsed_data, orders[0], items, sender[0]?.value?.document,
             { ...reviewed.review, recipientConfirmed: reviewed.review.recipientConfirmed || review.recipientConfirmed,
                 productConfirmed: reviewed.review.productConfirmed || review.productConfirmed,
                 orderItemId: review.productConfirmed ? review.orderItemId : reviewed.review.orderItemId,
-                fiscalIndex: review.productConfirmed ? review.fiscalIndex : reviewed.review.fiscalIndex });
+                fiscalIndex: review.productConfirmed ? review.fiscalIndex : reviewed.review.fiscalIndex,
+                productMatches: [...combinedReview(reviewed.review, automatic).productMatches,
+                    ...(review.productConfirmed ? [{ orderItemId: review.orderItemId,
+                        fiscalIndex: review.fiscalIndex }] : [])] });
         const remaining = after.issues.map(issue => issue.message);
         const status = remaining.length ? 'needs_review' : 'pending_official';
         const updated = await client.query(`UPDATE fiscal_documents SET differences=$2::jsonb,
@@ -165,7 +209,8 @@ export async function confirmFiscalEquivalence(orderId, actorId, input, db = poo
                 product_size: before.productCandidate?.size,
                 product_quantity: before.productCandidate?.quantity,
                 product_value_cents: before.productCandidate?.productCents,
-                reason: review.reason, evidence: review.evidence, official_status_verified: false,
+                reason: review.reason, evidence: review.evidence, reusable_mapping_saved: mappingSaved,
+                official_status_verified: false,
                 shipping_released: false })]);
         await client.query('COMMIT');
         return { ...publicDocument(updated.rows[0]), analysis: after, equivalence_reviewed: true };
@@ -240,10 +285,10 @@ router.delete(`${orderPath}/key`, async (req, res, next) => {
     finally { client?.release(); }
 });
 
-async function storeDocument(req, data, origin, xmlBytes = null, sha = null) {
+export async function storeDocument(req, data, origin, xmlBytes = null, sha = null, db = pool) {
     let client;
     try {
-        client = await pool.connect();
+        client = await db.connect();
         await client.query('BEGIN');
         const { rows: orders } = await client.query('SELECT * FROM orders WHERE id=$1 FOR UPDATE', [req.params.id]);
         if (!orders[0]) throw fail('Pedido não encontrado.', 404);
@@ -259,7 +304,8 @@ async function storeDocument(req, data, origin, xmlBytes = null, sha = null) {
         if (otherPending.rowCount) throw fail('Esta chave já está vinculada a outro pedido.', 409);
         const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id=$1', [req.params.id]);
         const { rows: sender } = await client.query("SELECT value FROM settings WHERE key='shipping_sender'");
-        const differences = reconcileNfe(data, orders[0], items, sender[0]?.value?.document);
+        const automatic = resolveReusableMappings(data, items, await loadReusableMappings(client, data));
+        const differences = reconcileNfe(data, orders[0], items, sender[0]?.value?.document, automatic);
         const status = differences.length ? 'needs_review' : 'pending_official';
         const { rows } = await client.query(`INSERT INTO fiscal_documents
             (order_id,access_key,origin,xml_bytes,xml_sha256,parsed_data,differences,status,imported_by)
@@ -268,6 +314,9 @@ async function storeDocument(req, data, origin, xmlBytes = null, sha = null) {
         await client.query(`INSERT INTO audit_logs(admin_id,action,entity_type,entity_id,changes) VALUES($1,$2,'order',$3,$4)`,
             [req.user.id, origin === 'xml' ? 'fiscal.xml_imported' : 'fiscal.manual_recorded', req.params.id,
                 JSON.stringify({ document_id: rows[0].id, origin, key_last4: data.key.slice(-4), status, differences,
+                    automatic_mapping_audit_ids: automatic.mappingAuditIds,
+                    recipient_name_abbreviation_accepted: assessNfe(data, orders[0], items,
+                        sender[0]?.value?.document, automatic).abbreviatedName,
                     completed_pending_key_id: pending.rows[0]?.id || null })]);
         if (pending.rowCount) await client.query('DELETE FROM pending_fiscal_keys WHERE id=$1', [pending.rows[0].id]);
         await client.query('COMMIT');
@@ -296,38 +345,47 @@ router.post(`${orderPath}/manual`, uploadLimiter, async (req, res, next) => {
     catch (error) { next(error); }
 });
 
-router.post(`${orderPath}/verify`, async (req, res, next) => {
+export async function verifyFiscalDocument(orderId, actorId, input, db = pool) {
     let client;
     try {
-        const { key, protocol, source } = validateFiscalVerification(req.body);
-        client = await pool.connect(); await client.query('BEGIN');
-        const order = await client.query('SELECT * FROM orders WHERE id=$1 FOR UPDATE', [req.params.id]);
+        const { key, protocol, source } = validateFiscalVerification(input);
+        client = await db.connect(); await client.query('BEGIN');
+        const order = await client.query('SELECT * FROM orders WHERE id=$1 FOR UPDATE', [orderId]);
         if (!order.rowCount) throw fail('Pedido não encontrado.', 404);
-        const { rows } = await client.query('SELECT * FROM fiscal_documents WHERE order_id=$1 AND unlinked_at IS NULL FOR UPDATE', [req.params.id]);
+        const { rows } = await client.query('SELECT * FROM fiscal_documents WHERE order_id=$1 AND unlinked_at IS NULL FOR UPDATE', [orderId]);
         const row = rows[0];
         if (!row) throw fail('Cadastre a NF-e antes da conferência.', 404);
         if (row.status === 'verified') throw fail('Esta NF-e já foi conferida. Nenhum dado foi alterado.', 409);
-        if (row.differences.length) throw fail('Há divergências com o pedido. Consulte a administração e a contabilidade.', 409);
-        const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id=$1', [req.params.id]);
+        const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id=$1', [orderId]);
         const { rows: sender } = await client.query("SELECT value FROM settings WHERE key='shipping_sender'");
-        const { rows: reviews } = await client.query(reviewAuditSql, [req.params.id, row.id]);
+        const { rows: reviews } = await client.query(reviewAuditSql, [orderId, row.id]);
         const reviewed = reviewFromAudit(reviews, row.xml_sha256,
             fiscalContextHash(order.rows[0], items, sender[0]?.value?.document));
         if (reviewed.stale)
             throw fail('O XML ou o pedido mudou desde a conferência de equivalência. Solicite revisão.', 409);
-        if (reconcileNfe(row.parsed_data, order.rows[0], items, sender[0]?.value?.document, reviewed.review).length)
+        const automatic = resolveReusableMappings(row.parsed_data, items,
+            await loadReusableMappings(client, row.parsed_data));
+        if (reconcileNfe(row.parsed_data, order.rows[0], items,
+            sender[0]?.value?.document, combinedReview(reviewed.review, automatic)).length)
             throw fail('O pedido ou a nota mudou desde a conciliação. Confira novamente antes de registrar a situação oficial.', 409);
         if (key !== row.access_key.trim() || protocol !== row.parsed_data.protocol) throw fail('Chave ou protocolo não conferem com a NF-e cadastrada.');
         const officialSource = source === 'svrs' ? 'https://dfe-portal.svrs.rs.gov.br/Nfe/da' : 'https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx';
-        const result = await client.query(`UPDATE fiscal_documents SET status='verified',official_source=$2,official_checked_at=now(),verified_by=$3,updated_at=now()
-            WHERE id=$1 RETURNING ${fields}`, [row.id, officialSource, req.user.id]);
+        const result = await client.query(`UPDATE fiscal_documents SET status='verified',differences='[]'::jsonb,
+            official_source=$2,official_checked_at=now(),verified_by=$3,updated_at=now()
+            WHERE id=$1 RETURNING ${fields}`, [row.id, officialSource, actorId]);
         await client.query(`INSERT INTO audit_logs(admin_id,action,entity_type,entity_id,changes) VALUES($1,'fiscal.official_check_attested','order',$2,$3)`,
-            [req.user.id, req.params.id, JSON.stringify({ document_id: row.id, source: officialSource,
+            [actorId, orderId, JSON.stringify({ document_id: row.id, source: officialSource,
                 key_last4: key.slice(-4), origin: row.origin,
-                authorization_attested: true, full_content_match_attested: true })]);
-        await client.query('COMMIT'); res.json(publicDocument(result.rows[0]));
-    } catch (error) { if (client) await client.query('ROLLBACK').catch(() => {}); next(error); }
+                authorization_attested: true, full_content_match_attested: true,
+                automatic_mapping_audit_ids: automatic.mappingAuditIds })]);
+        await client.query('COMMIT'); return publicDocument(result.rows[0]);
+    } catch (error) { if (client) await client.query('ROLLBACK').catch(() => {}); throw error; }
     finally { client?.release(); }
+}
+
+router.post(`${orderPath}/verify`, async (req, res, next) => {
+    try { res.json(await verifyFiscalDocument(req.params.id, req.user.id, req.body)); }
+    catch (error) { next(error); }
 });
 
 router.get(`${orderPath}/download`, async (req, res, next) => {

@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assessNfe, parseAuthorizedNfe, parseManualNfe, reconcileNfe, validNfeKey } from '../src/lib/fiscalXml.js';
 import { confirmFiscalEquivalence, fiscalContextHash, fiscalXmlImportEnabled, parseFiscalXmlUpload, requireFiscalXmlImport, reviewFromAudit, validateFiscalEquivalence, validateFiscalVerification } from '../src/routes/fiscalDocuments.js';
+import { fiscalMappingKey, orderVariantIdentity, resolveReusableMappings,
+    reusableMappingDecision } from '../src/lib/fiscalProductMappings.js';
 
 function accessKey() {
     const prefix = '3526116173880100014355026161110001394826583';
@@ -58,10 +60,10 @@ test('accepts the structural authorization fields but does not claim official st
         '61738801000143').some(message => message.startsWith('Documento da cliente:')));
     assert.ok(assessNfe(parsed, order, [{ ...items[0], quantity: 2 }], '61738801000143').issues.some(issue => issue.code === 'quantity'));
     assert.ok(reconcileNfe(parsed, order, [{ ...items[0], product_sku: 'OUTRO', product_name: 'Outra peça' }],
-        '61738801000143').some(message => message.startsWith('Produto da nota')));
+        '61738801000143').some(message => /produtos sem correspondência/i.test(message)));
 });
 
-test('abbreviated name is reviewable only with the exact recipient document and matching name prefix', () => {
+test('matching CPF and a verified name prefix resolve abbreviations without accepting a different person', () => {
     const data = parseAuthorizedNfe(Buffer.from(xml()));
     data.recipientName = 'Nataly Helena de Souza Freitas';
     const order = { subtotal: 30, shipping_cost: 9.98, discount: 0, total: 39.98,
@@ -70,14 +72,14 @@ test('abbreviated name is reviewable only with the exact recipient document and 
         product_sku: 'SKU1', quantity: 1, subtotal: 30 }];
     const assessment = assessNfe(data, order, items, '61738801000143');
     assert.equal(assessment.abbreviatedName, true);
-    assert.deepEqual(assessment.issues.map(issue => issue.code), ['recipient_name']);
-    assert.match(assessment.issues[0].message, /Nataly  Helena/);
+    assert.deepEqual(assessment.issues, []);
     assert.deepEqual(assessNfe(data, order, items, '61738801000143', { recipientConfirmed: true }).issues, []);
     const wrongCpf = structuredClone(order); wrongCpf.snapshot.customer.cpf = '00000000000';
     assert.equal(assessNfe(data, wrongCpf, items, '61738801000143').abbreviatedName, false);
     assert.ok(assessNfe(data, wrongCpf, items, '61738801000143', { recipientConfirmed: true }).issues.some(issue => issue.code === 'recipient_document'));
     const conflicting = structuredClone(order); conflicting.snapshot.customer.name = 'Nataly Maria';
     assert.equal(assessNfe(data, conflicting, items, '61738801000143').abbreviatedName, false);
+    assert.ok(assessNfe(data, conflicting, items, '61738801000143').issues.some(issue => issue.code === 'recipient_name'));
 });
 
 test('formatting only is accepted; distinct SKU and color need a specific administrative review', () => {
@@ -90,9 +92,9 @@ test('formatting only is accepted; distinct SKU and color need a specific admini
     const row = { id: '11111111-1111-4111-8111-111111111111', product_name: 'Shorts Angel',
         product_sku: '2026@', color_name: 'Bege', size: 'P', quantity: 1, subtotal: 30 };
     const assessment = assessNfe(data, order, [row], '61738801000143');
-    assert.deepEqual(assessment.issues.map(issue => issue.code), ['recipient_name', 'product_identity']);
+    assert.deepEqual(assessment.issues.map(issue => issue.code), ['product_identity']);
     assert.equal(assessment.productCandidate.fiscalColor, 'marfim');
-    assert.match(assessment.issues[1].message, /Bege.*2026@.*Marfim.*127/i);
+    assert.match(assessment.issues[0].message, /Bege.*2026@.*Marfim.*127/i);
     assert.deepEqual(assessNfe(data, order, [row], '61738801000143', {
         recipientConfirmed: true, productConfirmed: true,
         orderItemId: row.id, fiscalIndex: 0 }).issues, []);
@@ -114,12 +116,89 @@ test('formatting only is accepted; distinct SKU and color need a specific admini
     assert.equal(assessNfe(wrongValue, order, [row], '61738801000143').productCandidate, null);
 });
 
+test('reusable mappings are limited to the issuer, fiscal code, description and exact variant', () => {
+    const data = parseAuthorizedNfe(Buffer.from(xml()));
+    data.recipientName = 'Nataly Helena de Souza Freitas';
+    data.items[0] = { code: '127', name: 'Shorts Angel Marfim P', quantity: 1, productCents: 3000 };
+    const order = { subtotal: 30, shipping_cost: 9.98, discount: 0, total: 39.98,
+        snapshot: { customer: { cpf: '12345678909', name: 'Nataly Helena' } } };
+    const row = { id: '11111111-1111-4111-8111-111111111111',
+        product_id: '22222222-2222-4222-8222-222222222222', color_id: 'bege-id',
+        product_name: 'Shorts Angel', product_sku: '2026@', color_name: 'Bege',
+        size: 'P', quantity: 1, subtotal: 30 };
+    const key = fiscalMappingKey(data.issuerCnpj, data.items[0]);
+    const variant = orderVariantIdentity(row);
+    const saved = { id: 'audit-1', changes: { issuer_cnpj: key.issuer,
+        fiscal_code: key.code, fiscal_description: key.description,
+        product_id: variant.productId, color_id: variant.colorId, size: variant.size } };
+    assert.equal(reusableMappingDecision([], key, variant), 'new');
+    assert.equal(reusableMappingDecision([saved], key, variant), 'existing');
+    assert.equal(reusableMappingDecision([saved], key, { ...variant, colorId: 'outra-cor' }), 'conflict');
+    const automatic = resolveReusableMappings(data, [row], [saved]);
+    assert.deepEqual(automatic.productMatches, [{ orderItemId: row.id, fiscalIndex: 0 }]);
+    assert.deepEqual(assessNfe(data, order, [row], data.issuerCnpj, automatic).issues, []);
+    for (const changed of [{ color_id: 'outra-cor' }, { product_id: 'outro-produto' },
+        { size: 'M' }, { quantity: 2 }, { subtotal: 29 }]) {
+        assert.deepEqual(resolveReusableMappings(data, [{ ...row, ...changed }], [saved]).productMatches, []);
+    }
+    assert.deepEqual(resolveReusableMappings({ ...data, issuerCnpj: '00000000000000' }, [row], [saved]).productMatches, []);
+    assert.deepEqual(resolveReusableMappings({ ...data, items: [{ ...data.items[0], code: '128' }] }, [row], [saved]).productMatches, []);
+    assert.deepEqual(resolveReusableMappings({ ...data, items: [{ ...data.items[0], name: 'Outra peça P' }] }, [row], [saved]).productMatches, []);
+    assert.deepEqual(resolveReusableMappings(data, [row, { ...row, id: 'outro-item' }], [saved]).productMatches, []);
+    assert.deepEqual(resolveReusableMappings(data, [row], [saved, { ...saved, id: 'audit-2',
+        changes: { ...saved.changes, color_id: 'conflito' } }]).productMatches, []);
+});
+
+test('multiple products can be reviewed one by one; ambiguous lines stay blocked', () => {
+    const data = parseAuthorizedNfe(Buffer.from(xml()));
+    data.items = [
+        { code: '127', name: 'Shorts Angel Marfim P', quantity: 1, productCents: 3000 },
+        { code: '233', name: 'Blusa Floral Azul M', quantity: 2, productCents: 4000 },
+    ];
+    data.productCents = 7000; data.shippingCents = 0; data.totalCents = 7000;
+    const order = { subtotal: 70, shipping_cost: 0, discount: 0, total: 70,
+        snapshot: { customer: { cpf: '12345678909', name: 'Cliente' } } };
+    const rows = [
+        { id: 'item-1', product_name: 'Shorts Angel', product_sku: '2026@', color_name: 'Bege', size: 'P', quantity: 1, subtotal: 30 },
+        { id: 'item-2', product_name: 'Blusa Floral', product_sku: 'site-233', color_name: 'Azul', size: 'M', quantity: 2, subtotal: 40 },
+    ];
+    const first = assessNfe(data, order, rows, '61738801000143');
+    assert.equal(first.productCandidates.length, 2);
+    assert.deepEqual(first.issues.map(issue => issue.code), ['product_identity', 'product_identity']);
+    const second = assessNfe(data, order, rows, '61738801000143',
+        { productMatches: [{ orderItemId: 'item-1', fiscalIndex: 0 }] });
+    assert.equal(second.productCandidate.orderItemId, 'item-2');
+    assert.deepEqual(second.issues.map(issue => issue.code), ['product_identity']);
+    assert.deepEqual(assessNfe(data, order, rows, '61738801000143', { productMatches: [
+        { orderItemId: 'item-1', fiscalIndex: 0 }, { orderItemId: 'item-2', fiscalIndex: 1 },
+    ] }).issues, []);
+    const repeated = { ...data, items: [
+        { code: 'SKU1', name: 'Shorts Angel Marfim P', quantity: 1, productCents: 3000 },
+        { code: 'SKU1', name: 'Shorts Angel Marfim P', quantity: 1, productCents: 4000 },
+    ] };
+    const repeatedRows = [
+        { id: 'repeat-40', product_name: 'Shorts Angel Marfim P', product_sku: 'SKU1', quantity: 1, subtotal: 40 },
+        { id: 'repeat-30', product_name: 'Shorts Angel Marfim P', product_sku: 'SKU1', quantity: 1, subtotal: 30 },
+    ];
+    assert.deepEqual(assessNfe(repeated, order, repeatedRows, '61738801000143').issues, []);
+    const ambiguous = assessNfe({ ...data, items: [data.items[0], { ...data.items[0], code: '128' }],
+        productCents: 6000, totalCents: 6000 },
+    { ...order, subtotal: 60, total: 60 }, [rows[0], { ...rows[0], id: 'item-3' }], '61738801000143');
+    assert.equal(ambiguous.productCandidate, null);
+    assert.ok(ambiguous.issues.some(issue => issue.code === 'product_identity'));
+});
+
 test('equivalence submission requires separate confirmations, reason, evidence and exact identifiers', () => {
     const valid = { document_id: '11111111-1111-4111-8111-111111111111',
         order_item_id: '22222222-2222-4222-8222-222222222222', fiscal_index: 0,
         confirmed_recipient: false, confirmed_product_code: true, confirmed_product_variant: true,
         reason: 'Variante sintética conferida no cadastro', evidence: 'Cadastro original da peça e variante' };
     assert.equal(validateFiscalEquivalence(valid).productConfirmed, true);
+    assert.equal(validateFiscalEquivalence({ ...valid, save_for_future: true }).saveForFuture, true);
+    assert.throws(() => validateFiscalEquivalence({ ...valid, save_for_future: true,
+        evidence: 'Referência genérica sem prova' }));
+    assert.throws(() => validateFiscalEquivalence({ ...valid, save_for_future: true,
+        evidence: valid.reason }));
     assert.equal(validateFiscalEquivalence({ ...valid, confirmed_recipient: true,
         confirmed_product_code: false, confirmed_product_variant: false }).recipientConfirmed, true);
     for (const changed of [{ confirmed_product_code: false }, { confirmed_recipient: true },
@@ -168,35 +247,42 @@ test('equivalence is atomic, audited and leaves XML, payment, stock and shipping
         discount: '0.00', total: '39.98', payment_status: 'approved', shipping_status: 'cart_inflight',
         snapshot: { customer: { cpf: '12345678909', name: 'Nataly Helena' } } };
     const item = { id: '22222222-2222-4222-8222-222222222222', product_id: '44444444-4444-4444-8444-444444444444',
-        product_name: 'Shorts Angel', product_sku: '2026@', color_name: 'Bege', size: 'P', quantity: 1, subtotal: '30.00' };
+        color_id: 'bege-id', product_name: 'Shorts Angel', product_sku: '2026@', color_name: 'Bege', size: 'P', quantity: 1, subtotal: '30.00' };
     const document = { id: '11111111-1111-4111-8111-111111111111', access_key: key, origin: 'xml',
         xml_sha256: 'a'.repeat(64), xml_bytes: Buffer.from('<original/>'), parsed_data: data,
         status: 'needs_review', differences: ['old'] };
     const input = { document_id: document.id, order_item_id: item.id, fiscal_index: 0,
         confirmed_recipient: false, confirmed_product_code: true, confirmed_product_variant: true,
+        save_for_future: true,
         reason: 'Cadastro da cor comercial foi conferido', evidence: 'Ficha da variante e documento de identificação' };
-    const calls = [], audits = [];
+    const calls = [], audits = [], mappings = [];
     const db = { async connect() { return { release() {}, async query(sql, params) {
         calls.push({ sql, params });
         if (sql.includes('FROM orders')) return { rows: [order] };
         if (sql.includes('FROM fiscal_documents')) return { rows: [document] };
         if (sql.includes('FROM order_items')) return { rows: [item] };
         if (sql.includes('FROM settings')) return { rows: [{ value: { document: '61738801000143' } }] };
+        if (sql.includes("action='fiscal.product_mapping_saved'")) return { rows: mappings };
         if (sql.includes('FROM audit_logs')) return { rows: audits };
         if (sql.startsWith('UPDATE fiscal_documents')) {
             document.differences = JSON.parse(params[1]); document.status = params[2];
             return { rowCount: 1, rows: [document] };
         }
         if (sql.includes("'fiscal.equivalence_confirmed'")) audits.push({ changes: JSON.parse(params[2]), created_at: new Date().toISOString() });
+        if (sql.includes("'fiscal.product_mapping_saved'")) mappings.push({ id: 'mapping-1', changes: JSON.parse(params[2]) });
         return { rows: [] };
     } }; } };
     const result = await confirmFiscalEquivalence(order.id, '55555555-5555-4555-8555-555555555555', input, db);
-    assert.equal(result.status, 'needs_review');
-    assert.deepEqual(result.analysis.issues.map(issue => issue.code), ['recipient_name']);
-    assert.equal(result.differences.length, 1);
+    assert.equal(result.status, 'pending_official');
+    assert.deepEqual(result.analysis.issues, []);
+    assert.equal(result.differences.length, 0);
     assert.equal(calls.at(-1).sql, 'COMMIT');
-    const audit = calls.find(call => call.sql.startsWith('INSERT INTO audit_logs'));
+    const audit = calls.find(call => call.sql.startsWith('INSERT INTO audit_logs')
+        && call.sql.includes("'fiscal.equivalence_confirmed'"));
     assert.ok(audit);
+    assert.equal(mappings.length, 1);
+    assert.equal(mappings[0].changes.color_id, item.color_id);
+    assert.equal(JSON.parse(audit.params[2]).reusable_mapping_saved, true);
     assert.equal(JSON.parse(audit.params[2]).official_status_verified, false);
     assert.equal(JSON.parse(audit.params[2]).shipping_released, false);
     assert.equal(document.xml_bytes.toString(), '<original/>');
@@ -206,13 +292,7 @@ test('equivalence is atomic, audited and leaves XML, payment, stock and shipping
     await assert.rejects(confirmFiscalEquivalence(order.id, '55555555-5555-4555-8555-555555555555',
         input, db), { status: 409 });
     assert.equal(calls.at(-1).sql, 'ROLLBACK');
-    const nameResult = await confirmFiscalEquivalence(order.id, '55555555-5555-4555-8555-555555555555',
-        { ...input, order_item_id: undefined, fiscal_index: undefined,
-            confirmed_recipient: true, confirmed_product_code: false, confirmed_product_variant: false,
-            reason: 'Nome abreviado conferido com documento', evidence: 'Documento sintético de identificação' }, db);
-    assert.equal(nameResult.status, 'pending_official');
-    assert.deepEqual(nameResult.differences, []);
-    assert.equal(audits.length, 2);
+    assert.equal(audits.length, 1);
     document.status = 'needs_review'; audits.length = 0;
     data.items[0].quantity = 2;
     await assert.rejects(confirmFiscalEquivalence(order.id, '55555555-5555-4555-8555-555555555555', input, db), { status: 409 });
@@ -229,8 +309,16 @@ test('equivalence is atomic, audited and leaves XML, payment, stock and shipping
 
 test('rejects unsafe, malformed, inconsistent or non-authorized XML', () => {
     for (const input of [xml({ model: '65' }), xml({ status: '110' }), xml({ keyValue: key.slice(0, 43) + (key[43] === '0' ? '1' : '0') }),
-        '<!DOCTYPE a [<!ENTITY x "unsafe">]>' + xml(), '<nfeProc><NFe></nfeProc>']) {
+        '<!DOCTYPE a [<!ENTITY x "unsafe">]>' + xml(), '<nfeProc><NFe></nfeProc>',
+        '<document><page>DANFE convertido</page></document>',
+        xml().replace('<cProd>SKU1</cProd>', '<cProd></cProd>'),
+        xml().replace('<CPF>12345678909</CPF>', '<CPF></CPF>'),
+        xml().replace('<vNF>39.98</vNF>', '<vNF></vNF>')]) {
         assert.throws(() => parseAuthorizedNfe(Buffer.from(input)));
+    }
+    for (const input of [Buffer.alloc(0), Buffer.from('arquivo corrompido'),
+        Buffer.from('%PDF-1.7'), Buffer.alloc(1024 * 1024 + 1)]) {
+        assert.throws(() => parseFiscalXmlUpload(input), error => error.status === 422);
     }
 });
 
