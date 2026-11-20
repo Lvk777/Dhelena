@@ -185,24 +185,23 @@ test('multiple products can be reviewed one by one; ambiguous lines stay blocked
         productCents: 6000, totalCents: 6000 },
     { ...order, subtotal: 60, total: 60 }, [rows[0], { ...rows[0], id: 'item-3' }], '61738801000143');
     assert.equal(ambiguous.productCandidate, null);
+    assert.equal(ambiguous.manualCandidates.length, 4);
+    assert.deepEqual(assessNfe({ ...data, items: [data.items[0], { ...data.items[0], code: '128' }],
+        productCents: 6000, totalCents: 6000 }, { ...order, subtotal: 60, total: 60 },
+    [rows[0], { ...rows[0], id: 'item-3' }], '61738801000143',
+    { productMatches: [{ orderItemId: 'item-3', fiscalIndex: 0 }, { orderItemId: 'item-1', fiscalIndex: 1 }] }).issues, []);
     assert.ok(ambiguous.issues.some(issue => issue.code === 'product_identity'));
 });
 
-test('equivalence submission requires separate confirmations, reason, evidence and exact identifiers', () => {
+test('equivalence submission requires one explicit confirmation and exact identifiers', () => {
     const valid = { document_id: '11111111-1111-4111-8111-111111111111',
         order_item_id: '22222222-2222-4222-8222-222222222222', fiscal_index: 0,
-        confirmed_recipient: false, confirmed_product_code: true, confirmed_product_variant: true,
-        reason: 'Variante sintética conferida no cadastro', evidence: 'Cadastro original da peça e variante' };
+        confirmed_recipient: false, confirmed_product_match: true };
     assert.equal(validateFiscalEquivalence(valid).productConfirmed, true);
     assert.equal(validateFiscalEquivalence({ ...valid, save_for_future: true }).saveForFuture, true);
-    assert.throws(() => validateFiscalEquivalence({ ...valid, save_for_future: true,
-        evidence: 'Referência genérica sem prova' }));
-    assert.throws(() => validateFiscalEquivalence({ ...valid, save_for_future: true,
-        evidence: valid.reason }));
     assert.equal(validateFiscalEquivalence({ ...valid, confirmed_recipient: true,
-        confirmed_product_code: false, confirmed_product_variant: false }).recipientConfirmed, true);
-    for (const changed of [{ confirmed_product_code: false }, { confirmed_recipient: true },
-        { confirmed_product_variant: false }, { reason: 'curto' }, { evidence: '' },
+        confirmed_product_match: false }).recipientConfirmed, true);
+    for (const changed of [{ confirmed_product_match: false }, { confirmed_recipient: true },
         { document_id: 'outro' }, { fiscal_index: -1 }]) {
         assert.throws(() => validateFiscalEquivalence({ ...valid, ...changed }));
     }
@@ -252,9 +251,7 @@ test('equivalence is atomic, audited and leaves XML, payment, stock and shipping
         xml_sha256: 'a'.repeat(64), xml_bytes: Buffer.from('<original/>'), parsed_data: data,
         status: 'needs_review', differences: ['old'] };
     const input = { document_id: document.id, order_item_id: item.id, fiscal_index: 0,
-        confirmed_recipient: false, confirmed_product_code: true, confirmed_product_variant: true,
-        save_for_future: true,
-        reason: 'Cadastro da cor comercial foi conferido', evidence: 'Ficha da variante e documento de identificação' };
+        confirmed_recipient: false, confirmed_product_match: true, save_for_future: true };
     const calls = [], audits = [], mappings = [];
     const db = { async connect() { return { release() {}, async query(sql, params) {
         calls.push({ sql, params });

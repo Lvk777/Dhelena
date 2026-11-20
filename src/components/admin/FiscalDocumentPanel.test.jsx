@@ -166,21 +166,19 @@ test('product correspondence is separate, shows both records and keeps name and 
     const order = { id: 'order-1', shipping_status: 'cart_inflight' };
     const { rerender } = render(<FiscalDocumentPanel order={order} document={document} onChanged={onChanged} />);
     expect(screen.getByText(/pedido Bege, nota Marfim/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/Este produto da nota corresponde/), { target: { value: `${document.analysis.productCandidate.orderItemId}:0` } });
     expect(screen.getByLabelText('Produto do pedido').textContent).toContain('SKU: 2026@');
     expect(screen.getByLabelText('Produto da NF-e').textContent).toContain('Código fiscal: 127');
     const button = screen.getByRole('button', { name: 'Confirmar correspondência do produto' });
     expect(button.disabled).toBe(true);
-    fireEvent.click(screen.getByLabelText(/dois registros representam a mesma mercadoria/));
-    fireEvent.click(screen.getByLabelText(/descrição e a variante/));
-    fireEvent.change(screen.getByLabelText('Justificativa da correspondência'), { target: { value: 'Variante comercial revisada no cadastro' } });
-    fireEvent.change(screen.getByLabelText('Evidência da correspondência'), { target: { value: 'Ficha de cadastro da peça e variante' } });
-    fireEvent.click(screen.getByLabelText(/Salvar esta relação entre código fiscal/));
+    fireEvent.click(screen.getByLabelText(/Conferi no NFF e no cadastro da loja/));
+    fireEvent.click(screen.getByLabelText(/Salvar esta correspondência de código/));
     expect(button.disabled).toBe(false);
     fireEvent.click(button);
     await waitFor(() => expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ status: 'needs_review', differences: ['Nome da cliente'] })));
     expect(base44.functions.invoke).toHaveBeenCalledWith('confirmFiscalEquivalence', expect.objectContaining({
-        review: expect.objectContaining({ confirmed_recipient: false, confirmed_product_code: true,
-            confirmed_product_variant: true, save_for_future: true,
+        review: expect.objectContaining({ confirmed_recipient: false, confirmed_product_match: true,
+            save_for_future: true,
             order_item_id: document.analysis.productCandidate.orderItemId }),
     }));
     rerender(<FiscalDocumentPanel order={order} document={partial} onChanged={onChanged} />);
@@ -189,7 +187,7 @@ test('product correspondence is separate, shows both records and keeps name and 
     expect(base44.functions.invoke.mock.calls.every(([name]) => name !== 'generateShippingLabel')).toBe(true);
 });
 
-test('a rejected correspondence keeps the product discrepancy and entered evidence', async () => {
+test('a rejected correspondence keeps the product discrepancy and selected variant', async () => {
     const document = { id: '11111111-1111-4111-8111-111111111111', origin: 'xml',
         access_key: '1'.repeat(44), status: 'needs_review', differences: ['Produto'],
         analysis: { abbreviatedName: false, issues: [{ code: 'product_identity', message: 'Produto divergente.' }],
@@ -206,12 +204,10 @@ test('a rejected correspondence keeps the product discrepancy and entered eviden
         return [];
     });
     render(<FiscalDocumentPanel order={{ id: 'order-1' }} document={document} onChanged={onChanged} />);
-    fireEvent.click(screen.getByLabelText(/dois registros representam a mesma mercadoria/));
-    fireEvent.click(screen.getByLabelText(/descrição e a variante/));
-    fireEvent.change(screen.getByLabelText('Justificativa da correspondência'), { target: { value: 'Conferência sintética rejeitada pelo servidor' } });
-    fireEvent.change(screen.getByLabelText('Evidência da correspondência'), { target: { value: 'Documento sintético da variante consultado' } });
+    fireEvent.change(screen.getByLabelText(/Este produto da nota corresponde/), { target: { value: `${document.analysis.productCandidate.orderItemId}:0` } });
+    fireEvent.click(screen.getByLabelText(/Conferi no NFF e no cadastro da loja/));
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar correspondência do produto' }));
     await waitFor(() => expect(screen.getAllByRole('alert').some(node => node.textContent.includes('Correspondência não comprovada'))).toBe(true));
-    expect(screen.getByLabelText('Justificativa da correspondência').value).toContain('Conferência sintética');
+    expect(screen.getByLabelText(/Este produto da nota corresponde/).value).toContain(document.analysis.productCandidate.orderItemId);
     expect(onChanged).not.toHaveBeenCalled();
 });

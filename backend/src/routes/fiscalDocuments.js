@@ -70,20 +70,17 @@ export function validateFiscalVerification(input = {}) {
 export function validateFiscalEquivalence(input = {}) {
     if (!input || typeof input !== 'object' || Array.isArray(input))
         throw fail('Informe os dados da conferência de equivalência.');
-    const reason = String(input.reason ?? '').trim(), evidence = String(input.evidence ?? '').trim();
-    if (!/^[0-9a-f-]{36}$/i.test(String(input.document_id || '')) || reason.length < 20 || reason.length > 1000
-        || evidence.length < 20 || evidence.length > 1000
-        || (input.save_for_future === true && (input.confirmed_product_code !== true
-            || evidence.length < 30 || reason.toLowerCase() === evidence.toLowerCase()))
-        || (input.confirmed_recipient === true) === (input.confirmed_product_code === true)
-        || (input.confirmed_product_code === true) !== (input.confirmed_product_variant === true)
-        || (input.confirmed_product_code === true && (!/^[0-9a-f-]{36}$/i.test(String(input.order_item_id || ''))
+    const productConfirmed = input.confirmed_product_match === true;
+    if (!/^[0-9a-f-]{36}$/i.test(String(input.document_id || ''))
+        || (input.confirmed_recipient === true) === productConfirmed
+        || (input.save_for_future === true && !productConfirmed)
+        || (productConfirmed && (!/^[0-9a-f-]{36}$/i.test(String(input.order_item_id || ''))
             || !Number.isInteger(input.fiscal_index) || input.fiscal_index < 0))) {
-        throw fail('Confira nome, código, cor e documentos de apoio. Informe motivo e evidência com pelo menos 20 caracteres.');
+        throw fail('Selecione a variante do pedido e confirme somente após conferir que ela representa a mesma mercadoria da NF-e.');
     }
-    return { documentId: input.document_id, reason, evidence, orderItemId: input.order_item_id,
+    return { documentId: input.document_id, orderItemId: input.order_item_id,
         fiscalIndex: input.fiscal_index, recipientConfirmed: input.confirmed_recipient === true,
-        productConfirmed: input.confirmed_product_code === true && input.confirmed_product_variant === true,
+        productConfirmed,
         saveForFuture: input.save_for_future === true };
 }
 export function requireFiscalXmlImport(req, res, next, env = process.env) {
@@ -91,6 +88,65 @@ export function requireFiscalXmlImport(req, res, next, env = process.env) {
     next();
 }
 router.use(orderPath, auth, requireSupabaseAdmin, requireFiscalXmlImport);
+router.use('/products/:id/nff-mappings', auth, requireSupabaseAdmin, requireFiscalXmlImport);
+
+export async function saveNffVariantMapping(productId, actorId, input, db = pool) {
+    const code = String(input?.code ?? '').trim(), description = String(input?.description ?? '').trim();
+    const colorId = String(input?.color_id ?? ''), size = String(input?.size ?? '');
+    if (!code || code.length > 60 || !description || description.length > 255
+        || !colorId || !size || input?.confirmed_match !== true)
+        throw fail('Informe o código e a descrição usados no NFF e confirme a variante após conferir o cadastro fiscal.');
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query("SET LOCAL lock_timeout='2000ms'");
+        const { rows: products } = await client.query('SELECT id,name,colors,sizes FROM products WHERE id=$1 FOR UPDATE', [productId]);
+        const product = products[0];
+        const color = product?.colors?.find(entry => entry.id === colorId);
+        if (!product || !color || !product.sizes?.includes(size))
+            throw fail('A variante mudou. Atualize o produto e selecione uma cor e tamanho cadastrados.', 409);
+        if (input.expected_color_name !== undefined && color.name !== input.expected_color_name)
+            throw fail('A cor tem alterações ainda não salvas. Salve o produto antes de registrar a correspondência NFF.', 409);
+        if (input.expected_product_name !== undefined && product.name !== input.expected_product_name)
+            throw fail('O nome do produto tem alterações ainda não salvas. Salve o produto antes de registrar a correspondência NFF.', 409);
+        const { rows: sender } = await client.query("SELECT value FROM settings WHERE key='shipping_sender'");
+        const key = fiscalMappingKey(sender[0]?.value?.document, { code, name: description });
+        const variant = orderVariantIdentity({ product_id: productId, color_id: colorId, size });
+        if (!key || !variant) throw fail('Confira o CNPJ da loja e os identificadores da variante antes de salvar.');
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [JSON.stringify(key)]);
+        const existing = await loadReusableMappings(client, { issuerCnpj: key.issuer, items: [{ code }] });
+        const decision = reusableMappingDecision(existing, key, variant);
+        if (decision === 'conflict') throw fail('Este código e descrição do NFF já estão associados a outra variante. Solicite revisão fiscal.', 409);
+        if (decision === 'new') await client.query(`INSERT INTO audit_logs(admin_id,action,entity_type,entity_id,changes)
+            VALUES($1,'fiscal.product_mapping_saved','product',$2,$3)`, [actorId, productId,
+            JSON.stringify({ issuer_cnpj: key.issuer, fiscal_code: key.code,
+                fiscal_description: key.description, fiscal_description_original: description,
+                product_id: variant.productId, color_id: variant.colorId, size: variant.size,
+                order_color: color.name, order_product_name: product.name,
+                confirmation: 'admin_checked_nff_catalog_and_variant', shipping_released: false })]);
+        await client.query('COMMIT');
+        return { saved: decision === 'new', code, description, color_id: colorId, size };
+    } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error.code === '55P03' ? fail('Outra operação está atualizando esta variante. Aguarde e tente novamente.', 409) : error;
+    } finally { client.release(); }
+}
+
+router.get('/products/:id/nff-mappings', async (req, res, next) => {
+    try {
+        const { rows } = await pool.query(`SELECT changes,created_at FROM audit_logs
+            WHERE action='fiscal.product_mapping_saved' AND changes->>'product_id'=$1
+            ORDER BY created_at DESC`, [req.params.id]);
+        res.set('Cache-Control', 'no-store');
+        res.json(rows.map(row => ({ code: row.changes.fiscal_code,
+            description: row.changes.fiscal_description_original || row.changes.fiscal_description,
+            color_id: row.changes.color_id, size: row.changes.size, created_at: row.created_at })));
+    } catch (error) { next(error); }
+});
+router.post('/products/:id/nff-mappings', uploadLimiter, async (req, res, next) => {
+    try { res.status(201).json(await saveNffVariantMapping(req.params.id, req.user.id, req.body)); }
+    catch (error) { next(error); }
+});
 
 router.get(orderPath, async (req, res, next) => {
     try {
@@ -145,17 +201,17 @@ export async function confirmFiscalEquivalence(orderId, actorId, input, db = poo
             await loadReusableMappings(client, document.parsed_data));
         const before = assessNfe(document.parsed_data, orders[0], items,
             sender[0]?.value?.document, combinedReview(reviewed.review, automatic));
+        const selectedCandidate = before.manualCandidates.find(candidate =>
+            candidate.orderItemId === review.orderItemId && candidate.fiscalIndex === review.fiscalIndex);
         const hasNameIssue = before.issues.some(issue => issue.code === 'recipient_name');
         const hasProductIssue = before.issues.some(issue => issue.code === 'product_identity');
         if ((review.recipientConfirmed && (!hasNameIssue || !before.abbreviatedName))
-            || (review.productConfirmed && (!hasProductIssue || !before.productCandidate
-                || before.productCandidate.orderItemId !== review.orderItemId
-                || before.productCandidate.fiscalIndex !== review.fiscalIndex))) {
+            || (review.productConfirmed && (!hasProductIssue || !selectedCandidate))) {
             throw fail('Há outras divergências ou a correspondência mudou. Confira o pedido e o XML; a expedição permanece bloqueada.', 409);
         }
         let mappingSaved = false;
         if (review.saveForFuture) {
-            const candidate = before.productCandidate;
+            const candidate = selectedCandidate;
             const item = document.parsed_data.items[review.fiscalIndex];
             const row = items.find(entry => entry.id === review.orderItemId);
             const key = fiscalMappingKey(document.parsed_data.issuerCnpj, item);
@@ -174,7 +230,7 @@ export async function confirmFiscalEquivalence(orderId, actorId, input, db = poo
                         fiscal_code: key.code, fiscal_description: key.description,
                         product_id: variant.productId, color_id: variant.colorId, size: variant.size,
                         order_sku: row.product_sku, order_color: row.color_name,
-                        reason: review.reason, evidence: review.evidence,
+                        confirmation: 'admin_checked_nff_catalog_and_variant',
                         xml_sha256: document.xml_sha256, shipping_released: false })]);
                 mappingSaved = true;
             }
@@ -202,14 +258,14 @@ export async function confirmFiscalEquivalence(orderId, actorId, input, db = poo
                     ...(review.productConfirmed ? ['product_description','product_code','product_color','product_size','quantity','item_value'] : []),
                 ],
                 order_item_id: review.orderItemId, fiscal_index: review.fiscalIndex,
-                fiscal_code: before.productCandidate?.fiscalCode, order_sku: before.productCandidate?.orderSku,
-                order_color: before.productCandidate?.orderColor, fiscal_color: before.productCandidate?.fiscalColor,
-                order_product_name: before.productCandidate?.productName,
-                fiscal_product_name: before.productCandidate?.fiscalName,
-                product_size: before.productCandidate?.size,
-                product_quantity: before.productCandidate?.quantity,
-                product_value_cents: before.productCandidate?.productCents,
-                reason: review.reason, evidence: review.evidence, reusable_mapping_saved: mappingSaved,
+                fiscal_code: selectedCandidate?.fiscalCode, order_sku: selectedCandidate?.orderSku,
+                order_color: selectedCandidate?.orderColor, fiscal_color: selectedCandidate?.fiscalColor,
+                order_product_name: selectedCandidate?.productName,
+                fiscal_product_name: selectedCandidate?.fiscalName,
+                product_size: selectedCandidate?.size,
+                product_quantity: selectedCandidate?.quantity,
+                product_value_cents: selectedCandidate?.productCents,
+                confirmation: 'admin_checked_nff_catalog_and_variant', reusable_mapping_saved: mappingSaved,
                 official_status_verified: false,
                 shipping_released: false })]);
         await client.query('COMMIT');

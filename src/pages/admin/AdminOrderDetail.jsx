@@ -202,7 +202,7 @@ export default function AdminOrderDetail() {
                             <InfoRow label="ID Melhor Envio" value={order.melhor_envio_shipment_id || "—"} />
                         </div>
 
-                        <ShippingOperations order={order} fiscalDocument={fiscalDocument} onChanged={load} />
+                        <ShippingOperations order={order} fiscalDocument={fiscalDocument} fiscalLoadError={fiscalLoadError} onChanged={load} />
                         {order.melhor_envio_shipment_id && <button onClick={fetchTracking} disabled={trackingLoading} className="btn-outline text-xs mt-3">
                             {trackingLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />} Acompanhar entrega
                         </button>}

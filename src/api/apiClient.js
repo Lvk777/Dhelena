@@ -396,6 +396,10 @@ const functions = {
                 return apiFetch(`/orders/${args.orderId}/fiscal/verify`, { method: 'POST', body: JSON.stringify(args.verification) });
             case 'confirmFiscalEquivalence':
                 return apiFetch(`/orders/${args.orderId}/fiscal/equivalence`, { method: 'POST', body: JSON.stringify(args.review) });
+            case 'getNffVariantMappings':
+                return apiFetch(`/products/${args.productId}/nff-mappings`);
+            case 'saveNffVariantMapping':
+                return apiFetch(`/products/${args.productId}/nff-mappings`, { method: 'POST', body: JSON.stringify(args.mapping) });
             case 'unlinkFiscalDocument':
                 return apiFetch(`/orders/${args.orderId}/fiscal/unlink`, { method: 'POST', body: JSON.stringify(args.review) });
             case 'downloadFiscalXml':

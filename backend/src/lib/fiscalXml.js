@@ -209,11 +209,9 @@ export function assessNfe(nfe, order, orderItems, senderDocument, review = {}) {
                 && Number(row.quantity) === item.quantity && sameMoney(item.productCents, row.subtotal);
         });
         const sameBase = eligible.filter(row => startsWithWords(fiscalWords, productBaseWords(row)));
-        return { item, fiscalIndex, rows: sameBase.length === 1 ? sameBase : eligible };
+        return { item, fiscalIndex, rows: sameBase.length === 1 ? sameBase : eligible, eligible };
     });
-    const productCandidates = candidateEdges.filter(edge => edge.rows.length === 1
-        && candidateEdges.filter(other => other.rows.some(row => row.id === edge.rows[0].id)).length === 1)
-        .map(({ item, fiscalIndex, rows: [row] }) => {
+    const asCandidate = ({ item, fiscalIndex }, row) => {
             const fiscalWords = words(item.name), base = productBaseWords(row), size = words(row.size);
             const sameBase = startsWithWords(fiscalWords, base);
             return { orderItemId: row.id, fiscalIndex, fiscalCode: item.code,
@@ -222,7 +220,11 @@ export function assessNfe(nfe, order, orderItems, senderDocument, review = {}) {
                 productName: row.product_name, fiscalName: item.name, size: row.size || '',
                 quantity: item.quantity, productCents: item.productCents, sameBase,
                 productId: row.product_id || null, colorId: row.color_id || null };
-        });
+        };
+    const productCandidates = candidateEdges.filter(edge => edge.rows.length === 1
+        && candidateEdges.filter(other => other.rows.some(row => row.id === edge.rows[0].id)).length === 1)
+        .map(edge => asCandidate(edge, edge.rows[0]));
+    const manualCandidates = candidateEdges.flatMap(edge => edge.eligible.map(row => asCandidate(edge, row)));
     const productCandidate = productCandidates[0] || null;
     if (unmatched.length || remaining.length) {
         for (const candidate of productCandidates) add('product_identity',
@@ -236,7 +238,7 @@ export function assessNfe(nfe, order, orderItems, senderDocument, review = {}) {
     if (!sameMoney(nfe.totalCents, order.total)) add('total', `Total: pedido ${moneyBR(Number(order.total) * 100)}, nota ${moneyBR(nfe.totalCents)}. Confira os valores; a expedição permanece bloqueada.`);
     if (nfe.insuranceCents !== 0 || nfe.otherCents !== 0 || nfe.taxesCents !== 0)
         add('additional_charges', 'A nota contém seguro, outras despesas ou tributos adicionais que o pedido não discrimina. Confira os valores; a expedição permanece bloqueada.');
-    return { issues, abbreviatedName, productCandidate, productCandidates };
+    return { issues, abbreviatedName, productCandidate, productCandidates, manualCandidates };
 }
 
 export function reconcileNfe(nfe, order, orderItems, senderDocument, review) {

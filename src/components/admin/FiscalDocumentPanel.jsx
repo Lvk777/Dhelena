@@ -22,16 +22,16 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
     const [history, setHistory] = useState([]);
     const [historyError, setHistoryError] = useState('');
     const [unlinkOpen, setUnlinkOpen] = useState(false);
-    const [productReason, setProductReason] = useState('');
-    const [productEvidence, setProductEvidence] = useState('');
-    const [codeChecked, setCodeChecked] = useState(false);
-    const [variantChecked, setVariantChecked] = useState(false);
+    const [selectedPair, setSelectedPair] = useState('');
+    const [matchConfirmed, setMatchConfirmed] = useState(false);
     const [saveForFuture, setSaveForFuture] = useState(false);
     const reviewIssues = document?.analysis?.issues || [];
-    const productReviewNeeded = reviewIssues.some(issue => issue.code === 'product_identity') && !!document?.analysis?.productCandidate;
+    const candidates = document?.analysis?.manualCandidates || document?.analysis?.productCandidates
+        || (document?.analysis?.productCandidate ? [document.analysis.productCandidate] : []);
+    const candidate = candidates.find(item => `${item.orderItemId}:${item.fiscalIndex}` === selectedPair);
+    const productReviewNeeded = reviewIssues.some(issue => issue.code === 'product_identity') && candidates.length > 0;
     const canReview = document?.status === 'needs_review' && productReviewNeeded;
-    const canReuse = !!(document?.analysis?.productCandidate?.productId
-        && document?.analysis?.productCandidate?.colorId && document?.analysis?.productCandidate?.fiscalCode);
+    const canReuse = !!(candidate?.productId && candidate?.colorId && candidate?.fiscalCode);
     const refreshHistory = async () => {
         try {
             const result = await base44.functions.invoke('getFiscalDocumentHistory', { orderId: order.id });
@@ -53,7 +53,13 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
         if (!file) return;
         if (!/\.xml$/i.test(file.name) || file.size > 1024 * 1024) { setError('Selecione um XML de até 1 MB.'); return; }
         setBusy(true); setError('');
-        try { onChanged(await base44.functions.invoke('importFiscalXml', { orderId: order.id, file })); await refreshHistory(); }
+        try {
+            const imported = await base44.functions.invoke('importFiscalXml', { orderId: order.id, file });
+            onChanged(imported);
+            try { onChanged(await base44.functions.invoke('getFiscalDocument', { orderId: order.id })); }
+            catch { /* The imported record remains visible if the enriched comparison cannot reload. */ }
+            await refreshHistory();
+        }
         catch (cause) { setError(userFacingError(cause, '/fiscal/import')); }
         finally { setBusy(false); }
     };
@@ -68,23 +74,19 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
         finally { setBusy(false); }
     };
     const confirmEquivalence = async () => {
-        const candidate = document?.analysis?.productCandidate;
-        if (!canReview || busy) return;
+        if (!canReview || !candidate || !matchConfirmed || busy) return;
         setBusy(true); setError('');
         try {
             const result = await base44.functions.invoke('confirmFiscalEquivalence', { orderId: order.id, review: {
                 document_id: document.id, order_item_id: candidate.orderItemId,
                 fiscal_index: candidate.fiscalIndex,
-                confirmed_recipient: false, confirmed_product_code: codeChecked,
-                confirmed_product_variant: variantChecked,
+                confirmed_recipient: false, confirmed_product_match: true,
                 save_for_future: saveForFuture && canReuse,
-                reason: productReason.trim(), evidence: productEvidence.trim(),
             } });
             onChanged(result);
             try { onChanged(await base44.functions.invoke('getFiscalDocument', { orderId: order.id })); }
             catch { /* The confirmed response remains visible if refreshing the audit view fails. */ }
-            setProductReason(''); setProductEvidence(''); setSaveForFuture(false);
-            setCodeChecked(false); setVariantChecked(false);
+            setSelectedPair(''); setMatchConfirmed(false); setSaveForFuture(false);
         } catch (cause) { setError(userFacingError(cause, '/fiscal/equivalence')); }
         finally { setBusy(false); }
     };
@@ -152,7 +154,8 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
                     {document.equivalence_reviews.map((review, index) => <div key={index} className="border-t border-border pt-2">
                         <p>{review.fields_compared?.includes('product_code') ? 'Produto' : 'Nome da cliente'} · {new Date(review.created_at).toLocaleString('pt-BR')} · {review.reviewed_by}</p>
                         {review.reusable_mapping_saved && <p>Relação reutilizável registrada para esta variante e código fiscal.</p>}
-                        <p>Motivo: {review.reason}</p><p>Evidência: {review.evidence}</p>
+                        {review.reason && <p>Motivo: {review.reason}</p>}{review.evidence && <p>Evidência: {review.evidence}</p>}
+                        {!review.reason && !review.evidence && <p>Correspondência conferida e registrada pelo administrador.</p>}
                     </div>)}
                     <p className="text-xs text-muted-foreground">O XML original permanece intacto. A autorização fiscal requer consulta separada em fonte oficial.</p>
                 </div>}
@@ -163,35 +166,42 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
             {canReview && <div className="space-y-3 text-sm" aria-label="Conferência de equivalência fiscal">
                 <div className="border border-border p-3 space-y-3" aria-label="Correspondência do produto">
                     <h3 className="font-medium">Conferir correspondência do produto</h3>
+                    <label className="block">Este produto da nota corresponde a qual produto cadastrado na loja?
+                        <select className="admin-field block w-full p-2 mt-1" value={selectedPair} onChange={event => { setSelectedPair(event.target.value); setMatchConfirmed(false); }}>
+                            <option value="">Selecione o produto e a variante</option>
+                            {candidates.map(item => <option key={`${item.orderItemId}:${item.fiscalIndex}`} value={`${item.orderItemId}:${item.fiscalIndex}`}>
+                                {item.productName} · {item.orderColor} · {item.size} ↔ {item.fiscalName}
+                            </option>)}
+                        </select>
+                    </label>
+                    {candidate && <>
                     <div className="grid gap-3 sm:grid-cols-2 min-w-0">
                         <div className="border border-border p-3 min-w-0 break-words" aria-label="Produto do pedido">
                             <p className="text-xs uppercase tracking-widest mb-2">No pedido</p>
-                            <p>{document.analysis.productCandidate.productName}</p>
-                            <p>Cor: {document.analysis.productCandidate.orderColor}</p>
-                            <p>Tamanho: {document.analysis.productCandidate.size}</p>
-                            <p>SKU: {document.analysis.productCandidate.orderSku || 'não informado'}</p>
-                            <p>Quantidade: {document.analysis.productCandidate.quantity}</p>
-                            <p>Valor: {formatBRL(document.analysis.productCandidate.productCents / 100)}</p>
+                            <p>{candidate.productName}</p>
+                            <p>Cor: {candidate.orderColor}</p>
+                            <p>Tamanho: {candidate.size}</p>
+                            <p>SKU: {candidate.orderSku || 'não informado'}</p>
+                            <p>Quantidade: {candidate.quantity}</p>
+                            <p>Valor: {formatBRL(candidate.productCents / 100)}</p>
                         </div>
                         <div className="border border-border p-3 min-w-0 break-words" aria-label="Produto da NF-e">
                             <p className="text-xs uppercase tracking-widest mb-2">Na NF-e</p>
-                            <p>{document.analysis.productCandidate.fiscalName}</p>
-                            <p>Cor na descrição: {document.analysis.productCandidate.fiscalColor || 'conferir descrição completa'}</p>
-                            <p>Tamanho: {document.analysis.productCandidate.size}</p>
-                            <p>Código fiscal: {document.analysis.productCandidate.fiscalCode || 'não informado'}</p>
-                            <p>Quantidade: {document.analysis.productCandidate.quantity}</p>
-                            <p>Valor: {formatBRL(document.analysis.productCandidate.productCents / 100)}</p>
+                            <p>{candidate.fiscalName}</p>
+                            <p>Cor na descrição: {candidate.fiscalColor || 'conferir descrição completa'}</p>
+                            <p>Tamanho: {candidate.size}</p>
+                            <p>Código fiscal: {candidate.fiscalCode || 'não informado'}</p>
+                            <p>Quantidade: {candidate.quantity}</p>
+                            <p>Valor: {formatBRL(candidate.productCents / 100)}</p>
                         </div>
                     </div>
                     <p>Confirme somente se a documentação comprovar que são a mesma mercadoria e variante. Códigos internos diferentes podem ser relacionados mediante conferência; o XML não será alterado.</p>
-                    <label className="flex gap-2 items-start"><input type="checkbox" checked={codeChecked} onChange={event => setCodeChecked(event.target.checked)} />Confirmo que os dois registros representam a mesma mercadoria e que o código fiscal corresponde ao produto vendido.</label>
-                    <label className="flex gap-2 items-start"><input type="checkbox" checked={variantChecked} onChange={event => setVariantChecked(event.target.checked)} />Conferi documentalmente a descrição e a variante, inclusive a diferença de cor quando existir.</label>
-                    <label className="block">Justificativa da correspondência<input className="admin-field block w-full p-2 mt-1" value={productReason} onChange={event => setProductReason(event.target.value)} maxLength={1000} /></label>
-                    <label className="block">Evidência da correspondência<input className="admin-field block w-full p-2 mt-1" value={productEvidence} onChange={event => setProductEvidence(event.target.value)} maxLength={1000} /></label>
-                    {canReuse && <label className="flex gap-2 items-start"><input type="checkbox" checked={saveForFuture} onChange={event => setSaveForFuture(event.target.checked)} />Salvar esta relação entre código fiscal, descrição e variante para futuras notas. Exige evidência específica de pelo menos 30 caracteres; não cria equivalência geral entre cores.</label>}
-                    <button type="button" className="btn-outline min-h-11 text-xs" disabled={busy || !codeChecked || !variantChecked
-                        || productReason.trim().length < 20 || productEvidence.trim().length < (saveForFuture ? 30 : 20)
-                        || (saveForFuture && productReason.trim().toLowerCase() === productEvidence.trim().toLowerCase())}
+                    <label className="flex gap-2 items-start"><input type="checkbox" checked={matchConfirmed} onChange={event => setMatchConfirmed(event.target.checked)} />Conferi no NFF e no cadastro da loja: são a mesma mercadoria, cor e tamanho, inclusive quando os nomes comerciais diferem.</label>
+                    {canReuse && <label className="flex gap-2 items-start"><input type="checkbox" checked={saveForFuture} onChange={event => setSaveForFuture(event.target.checked)} />Salvar esta correspondência de código, descrição e variante para notas futuras.</label>}
+                    </>}
+                    {!candidate && <p role="status">Selecione uma variante para comparar os dados antes de confirmar.</p>}
+                    {candidate && !matchConfirmed && <p role="status">Confirme somente depois de conferir a mercadoria e a variante no NFF e na loja.</p>}
+                    <button type="button" className="btn-outline min-h-11 text-xs" disabled={busy || !candidate || !matchConfirmed}
                         onClick={confirmEquivalence}>Confirmar correspondência do produto</button>
                 </div>
                 <p className="text-xs text-muted-foreground">Cada confirmação resolve somente o campo indicado. Outras pendências e o envio aguardando confirmação continuam bloqueados.</p>

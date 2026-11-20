@@ -6,6 +6,7 @@ import { useCatalog } from "@/context/CatalogContext";
 import { COLOR_SWATCHES, SIZES_LIST } from "@/data/products";
 import ImageUploader from "@/components/ImageUploader";
 import AdminWizard from "@/components/admin/AdminWizard";
+import NffVariantMappings from "@/components/admin/NffVariantMappings";
 import { userFacingError } from '@/lib/userFacingError';
 import ProductPreview from "@/components/admin/ProductPreview";
 import { logAdminAction } from "@/lib/audit";
@@ -296,6 +297,7 @@ export default function ProductForm() {
                                 {form.colors.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma cor adicionada. Clique em uma cor acima para adicionar.</p>}
                             </div>
                         </div>
+                        <NffVariantMappings productId={id} productName={form.name} colors={form.colors} sizes={form.sizes} />
                     </div>
                 );
             case "price":

@@ -5,8 +5,9 @@ import { safeShippingPrintUrl } from '../../../backend/src/lib/shipping.js';
 import { fiscalXmlImportEnabled } from '@/lib/fiscalFeature';
 import { shippingStatusLabel } from '@/lib/shippingStatusLabel';
 import { userFacingError } from '@/lib/userFacingError';
+import { shippingPreparationBlockers } from '@/lib/shippingBlockers';
 
-export default function ShippingOperations({ order, fiscalDocument, onChanged }) {
+export default function ShippingOperations({ order, fiscalDocument, fiscalLoadError = '', onChanged }) {
     const [ready, setReady] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
     const [invoice, setInvoice] = useState(''), [printUrl, setPrintUrl] = useState(''), [confirm, setConfirm] = useState(false);
     const reload = () => base44.functions.invoke('shippingReadiness', { orderId: order.id }).then(setReady).catch(() => setReady(null));
@@ -26,6 +27,8 @@ export default function ShippingOperations({ order, fiscalDocument, onChanged })
     if (order.shipping_method !== 'melhor_envio') return null;
     const eligible = order.payment_status === 'approved' && order.status !== 'cancelado';
     const state = ready?.status || order.shipping_status;
+    const prepareBlockers = shippingPreparationBlockers({ order, ready, fiscalDocument,
+        fiscalLoadError, fiscalEnabled: fiscalXmlImportEnabled, busy });
     const packageData = ready?.packages?.[0];
     const stages = [
         ['prepare', 'Preparar envio'], ['purchase', 'Comprar etiqueta'],
@@ -34,6 +37,10 @@ export default function ShippingOperations({ order, fiscalDocument, onChanged })
     ];
     return <div className="mt-4 space-y-3 text-sm" aria-label="Expedição Melhor Envio">
         {error && <p role="alert" className="text-error-ink">{error}</p>}
+        {prepareBlockers.length > 0 && <div id="shipping-prepare-blockers" role="status" className="border border-amber-500/50 p-3">
+            <p className="font-medium">Pendências para preparar o envio:</p><ul className="list-disc pl-5">{prepareBlockers.map(reason => <li key={reason}>{reason}</li>)}</ul>
+        </div>}
+        {ready?.purchase_enabled === false && <p>Compra de etiquetas desabilitada. Essa proteção é separada da preparação do envio.</p>}
         {!eligible ? <p>Expedição disponível após a confirmação do pagamento.</p> : !ready?.environment ?
             <p>O ambiente deste envio precisa de análise antes de preparar ou comprar etiquetas.</p> : <>
                 <p>Ambiente do envio: {ready.environment === 'production' ? 'Produção' : 'Sandbox'}. Preparar a etiqueta não compra frete.</p>
@@ -53,13 +60,13 @@ export default function ShippingOperations({ order, fiscalDocument, onChanged })
                             <input aria-label="Chave da NF-e modelo 55" value={invoice} onChange={e=>setInvoice(e.target.value.replace(/\D/g,'').slice(0,44))}
                                 className="block w-full admin-field p-3 mt-1" inputMode="numeric" />
                         </label>}
-                    <button className="btn-outline text-xs" disabled={busy || ['cart_inflight','cart_uncertain'].includes(state) || ready.environment === 'production' && (!fiscalXmlImportEnabled || fiscalDocument?.status !== 'verified')} onClick={()=>run('prepare')}>Preparar envio (sem compra)</button>
+                    <button className="btn-outline text-xs min-h-11" disabled={prepareBlockers.length > 0} aria-describedby={prepareBlockers.length ? 'shipping-prepare-blockers' : undefined} onClick={()=>run('prepare')}>Preparar envio (sem compra)</button>
                 </>}
                 {state === 'cart_created' && <>
                     <p>Envio no carrinho; etiqueta ainda não comprada. Custo: {ready.price == null ? 'consulte novamente' : formatBRL(Number(ready.price))}. Frete cobrado da cliente: {formatBRL(Number(ready.customer_shipping_cost || 0))}.</p>
                     <label className="flex gap-2 items-center"><input type="checkbox" checked={confirm} onChange={e=>setConfirm(e.target.checked)} />Confirmo a compra pelo custo indicado, debitado da carteira Melhor Envio.</label>
                     <button className="btn-outline text-xs" disabled={busy || !ready.purchase_enabled || !confirm || ready.price == null} onClick={()=>run('purchase')}>Comprar etiqueta</button>
-                    {!ready.purchase_enabled && <p>Compra desabilitada até homologação e autorização operacional.</p>}
+                    {!ready.purchase_enabled && <p>A compra de etiquetas está desabilitada. Isso não altera a análise da preparação nem libera uma tentativa anterior pendente.</p>}
                 </>}
                 {state === 'purchased' && <button className="btn-outline text-xs" disabled={busy} onClick={()=>run('generate')}>Solicitar geração da etiqueta</button>}
                 {ready.shipment_id && <div className="flex flex-wrap gap-2">
