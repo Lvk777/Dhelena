@@ -6,6 +6,7 @@ import AdminInput from "@/components/admin/AdminInput";
 import AdminSelect from "@/components/admin/AdminSelect";
 import AdminTextarea from "@/components/admin/AdminTextarea";
 import AdminFormSection from "@/components/admin/AdminFormSection";
+import { userFacingError } from '@/lib/userFacingError';
 
 const ADJUST_TYPES = [
     { value: "entrada", label: "Entrada", icon: ArrowUp, desc: "Adicionar unidades ao estoque" },
@@ -30,6 +31,7 @@ export default function AdjustStockModal({ product, color, size, currentStock, o
     const [note, setNote] = useState("");
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState(/** @type {{qty?: string, reason?: string}} */ ({}));
 
     const previewQty = useMemo(() => {
         const q = parseInt(qty) || 0;
@@ -39,9 +41,12 @@ export default function AdjustStockModal({ product, color, size, currentStock, o
     }, [adjustType, qty, currentStock]);
 
     const save = async () => {
-        if (!qty && adjustType !== "set") return setError("Informe a quantidade");
-        if (adjustType === "set" && !qty) return setError("Informe a quantidade");
-        if (!reason) return setError("Selecione o motivo do ajuste");
+        const fields = {};
+        const amount = Number(qty);
+        if (qty === '' || !Number.isSafeInteger(amount) || amount < (adjustType === 'set' ? 0 : 1)) fields.qty = 'Informe uma quantidade inteira válida.';
+        if (!reason) fields.reason = 'Selecione o motivo do ajuste.';
+        setFieldErrors(fields);
+        if (Object.keys(fields).length) return;
         setSaving(true);
         setError("");
         try {
@@ -56,7 +61,7 @@ export default function AdjustStockModal({ product, color, size, currentStock, o
             });
             onAdjusted();
         } catch (e) {
-            setError(e.response?.data?.error || e.message || "Erro ao ajustar estoque");
+            setError(userFacingError(e, '/stock/adjust'));
         } finally {
             setSaving(false);
         }
@@ -105,7 +110,7 @@ export default function AdjustStockModal({ product, color, size, currentStock, o
                             onClick={() => setAdjustType(t.value)}
                             className={`flex items-start gap-3 p-3 border rounded-lg text-left transition-colors ${adjustType === t.value ? "border-accent bg-accent/5" : "border-border hover:border-foreground/30"}`}
                         >
-                            <t.icon className={`w-4 h-4 mt-0.5 shrink-0 ${adjustType === t.value ? "text-accent" : "text-muted-foreground"}`} strokeWidth={1.5} />
+                            <t.icon className={`w-4 h-4 mt-0.5 shrink-0 ${adjustType === t.value ? "text-gold-ink" : "text-muted-foreground"}`} strokeWidth={1.5} />
                             <div>
                                 <p className="text-sm font-medium">{t.label}</p>
                                 <p className="text-[11px] text-muted-foreground">{t.desc}</p>
@@ -115,8 +120,8 @@ export default function AdjustStockModal({ product, color, size, currentStock, o
                 </AdminFormSection>
 
                 <AdminFormSection title="Detalhes">
-                    <AdminInput label="Quantidade" type="number" value={qty} onChange={setQty} required placeholder="0" min="0" />
-                    <AdminSelect label="Motivo" value={reason} onChange={setReason} required options={REASONS} placeholder="Selecione..." />
+                    <AdminInput label="Quantidade" type="number" value={qty} onChange={value => { setQty(value); setFieldErrors(current => ({ ...current, qty: '' })); }} error={fieldErrors.qty} required placeholder="0" min="0" />
+                    <AdminSelect label="Motivo" value={reason} onChange={value => { setReason(value); setFieldErrors(current => ({ ...current, reason: '' })); }} error={fieldErrors.reason} required options={REASONS} placeholder="Selecione..." />
                     <AdminTextarea label="Observação (opcional)" value={note} onChange={setNote} rows={2} full placeholder="Notas adicionais sobre este ajuste" />
                 </AdminFormSection>
 
@@ -131,14 +136,14 @@ export default function AdjustStockModal({ product, color, size, currentStock, o
                         </div>
                     </div>
                     {adjustType === "saida" && parseInt(qty) > currentStock && (
-                        <div className="flex items-center gap-1.5 text-[11px] text-destructive">
+                        <div className="flex items-center gap-1.5 text-[11px] text-error-ink">
                             <AlertTriangle className="w-3.5 h-3.5" strokeWidth={1.5} />
                             Estoque será zerado
                         </div>
                     )}
                 </div>
 
-                {error && <p className="text-[11px] text-destructive text-center">{error}</p>}
+                {error && <p className="text-[11px] text-error-ink text-center">{error}</p>}
             </div>
         </AdminModal>
     );

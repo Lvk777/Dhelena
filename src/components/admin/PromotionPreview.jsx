@@ -1,6 +1,7 @@
 import React from "react";
-import { Tag, Truck, ShoppingCart, Layers, Home, ArrowRight } from "lucide-react";
+import { Tag, Truck, ShoppingCart, Layers, Home } from "lucide-react";
 import StorefrontFrame, { DeviceToggle } from "@/components/admin/StorefrontFrame";
+import { readableTextOnHex } from "@/lib/colorContrast";
 
 /**
  * PromotionPreview — context-aware promotion preview.
@@ -11,7 +12,7 @@ import StorefrontFrame, { DeviceToggle } from "@/components/admin/StorefrontFram
  *  - form: promotion form data
  *  - device: "desktop" | "mobile" (if controlled by parent)
  */
-export default function PromotionPreview({ form, device: deviceProp }) {
+export default function PromotionPreview({ form, device: deviceProp = undefined }) {
     const [internalDevice, setInternalDevice] = React.useState("desktop");
     const device = deviceProp || internalDevice;
     const isMobile = device === "mobile";
@@ -72,7 +73,7 @@ export default function PromotionPreview({ form, device: deviceProp }) {
             </StorefrontFrame>
 
             {/* Hidden pages notice */}
-            <div className="text-center text-[10px] text-muted-foreground/60">
+            <div className="text-center text-[10px] text-muted-foreground">
                 {isLookDiscount && "Não aparece em Home, Produto ou Carrinho"}
                 {isFreeShipping && !isLookDiscount && "Não aparece em Home ou Produto"}
                 {hasCategory && !isLookDiscount && !isFreeShipping && `Apenas produtos da categoria: ${form.applicable_category}`}
@@ -92,23 +93,23 @@ function PromoBanner({ form, campaignColor, isMobile }) {
             ) : (
                 <div className="absolute inset-0" style={{ backgroundColor: campaignColor + "15" }} />
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-charcoal/60 to-transparent" />
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 text-bone">
+            <div className="absolute inset-0 bg-charcoal/70" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 text-on-dark">
                 {form.title && (
-                    <h3 className={`font-heading tracking-wide ${isMobile ? "text-lg" : "text-2xl"}`} style={{ color: campaignColor }}>
+                    <h3 className={`font-heading tracking-wide ${isMobile ? "text-lg" : "text-2xl"}`}>
                         {form.title}
                     </h3>
                 )}
-                {form.subtitle && <p className={`font-heading italic text-bone/85 mt-1 ${isMobile ? "text-xs" : "text-sm"}`}>{form.subtitle}</p>}
-                {form.short_text && <p className={`mt-2 text-bone/70 ${isMobile ? "text-[9px]" : "text-[10px]"}`}>{form.short_text}</p>}
+                {form.subtitle && <p className={`font-heading italic text-on-dark/90 mt-1 ${isMobile ? "text-xs" : "text-sm"}`}>{form.subtitle}</p>}
+                {form.short_text && <p className={`mt-2 text-on-dark/90 ${isMobile ? "text-[9px]" : "text-[10px]"}`}>{form.short_text}</p>}
                 {/* Discount badge */}
                 {Number(form.discount_percent) > 0 && (
-                    <span className="mt-2 inline-block text-[8px] uppercase tracking-[0.18em] px-3 py-1 text-white" style={{ backgroundColor: campaignColor }}>
+                    <span className="mt-2 inline-block text-[8px] uppercase tracking-[0.18em] px-3 py-1" style={{ backgroundColor: campaignColor, color: readableTextOnHex(campaignColor) }}>
                         {form.discount_percent}% OFF
                     </span>
                 )}
                 {Number(form.discount_fixed) > 0 && (
-                    <span className="mt-2 inline-block text-[8px] uppercase tracking-[0.18em] px-3 py-1 text-white" style={{ backgroundColor: campaignColor }}>
+                    <span className="mt-2 inline-block text-[8px] uppercase tracking-[0.18em] px-3 py-1" style={{ backgroundColor: campaignColor, color: readableTextOnHex(campaignColor) }}>
                         R$ {form.discount_fixed} OFF
                     </span>
                 )}
@@ -197,13 +198,13 @@ function LookPagePreview({ form, isMobile, campaignColor }) {
                 ) : (
                     <div className="absolute inset-0" style={{ backgroundColor: campaignColor + "15" }} />
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-charcoal/60 to-transparent" />
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 text-bone">
+                <div className="absolute inset-0 bg-charcoal/70" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 text-on-dark">
                     <p className="text-[8px] uppercase tracking-[0.28em] text-[hsl(var(--gold))] mb-1">Monte seu look</p>
-                    {form.title && <h3 className={`font-heading tracking-wide ${isMobile ? "text-lg" : "text-2xl"}`} style={{ color: campaignColor }}>{form.title}</h3>}
-                    {form.subtitle && <p className={`font-heading italic text-bone/85 mt-1 ${isMobile ? "text-xs" : "text-sm"}`}>{form.subtitle}</p>}
+                    {form.title && <h3 className={`font-heading tracking-wide ${isMobile ? "text-lg" : "text-2xl"}`}>{form.title}</h3>}
+                    {form.subtitle && <p className={`font-heading italic text-on-dark/90 mt-1 ${isMobile ? "text-xs" : "text-sm"}`}>{form.subtitle}</p>}
                     {Number(form.discount_percent) > 0 && (
-                        <span className="mt-2 inline-block text-[8px] uppercase tracking-[0.18em] px-3 py-1 text-white" style={{ backgroundColor: campaignColor }}>
+                        <span className="mt-2 inline-block text-[8px] uppercase tracking-[0.18em] px-3 py-1" style={{ backgroundColor: campaignColor, color: readableTextOnHex(campaignColor) }}>
                             {form.discount_percent}% OFF com {form.min_items || 3}+ peças
                         </span>
                     )}

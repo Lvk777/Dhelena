@@ -1,11 +1,14 @@
 import { pool } from '../config/db.js';
+import { logSafeError } from '../lib/safeErrorLog.js';
 
 // ─── Security event logging ──────────────────────────────────────
 // Stores security-relevant events in audit_logs for admin visibility.
 // Never logs passwords, tokens, or secrets — only metadata.
 export async function logSecurityEvent(req, eventName, metadata = {}) {
     try {
-        const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+        // req.ip is derived by Express after the constrained trust-proxy rule.
+        // Treat it as a proxy identity until direct Railway access is blocked.
+        const ip = req.ip || req.socket?.remoteAddress || 'unknown';
         // Mask IP for privacy (keep first 3 octets for IPv4)
         const maskedIp = maskIp(ip);
         const userId = req.user?.id || null;
@@ -25,7 +28,7 @@ export async function logSecurityEvent(req, eventName, metadata = {}) {
             ]
         );
     } catch (err) {
-        console.error('[SecurityLog] Failed to log event:', err.message);
+        logSafeError('security_event_persistence_failed', err);
     }
 }
 

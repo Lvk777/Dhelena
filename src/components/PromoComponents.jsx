@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Sparkles, Tag, Truck, ArrowRight, Check } from "lucide-react";
+import { Sparkles, Truck, ArrowRight, Check } from "lucide-react";
+import { base44 } from '@/api/base44Client';
+import { readableTextOnHex } from '@/lib/colorContrast';
 
 export function useActivePromotions() {
     const [promos, setPromos] = useState([]);
     useEffect(() => {
-        fetch("/api/look-promotions")
-            .then(r => r.ok ? r.json() : [])
+        base44.custom.activePromotions()
             .then(data => setPromos(data || []))
             .catch(() => {});
     }, []);
@@ -23,10 +24,11 @@ export function PromotionCampaignBanner() {
     if (promos.length === 0) return null;
     const promo = promos[0];
     const color = promo.campaign_color || "#A5925A";
+    const foreground = readableTextOnHex(color);
     const hasPercent = Number(promo.discount_percent) > 0;
 
     return (
-        <section className="relative overflow-hidden" style={{ backgroundColor: color }}>
+        <section className="relative overflow-hidden" style={{ backgroundColor: color, color: foreground }}>
             {promo.banner_image && (
                 <div className="absolute inset-0 opacity-15">
                     <img src={promo.banner_image} alt="" className="w-full h-full object-cover" />
@@ -34,30 +36,30 @@ export function PromotionCampaignBanner() {
             )}
             <div className="relative container-boutique py-12 sm:py-16 text-center">
                 {promo.title && (
-                    <p className="text-[11px] uppercase tracking-[0.3em] text-white/75 mb-3">{promo.title}</p>
+                    <p className="text-[11px] uppercase tracking-[0.3em] mb-3">{promo.title}</p>
                 )}
                 {/* Percentage — the strongest visual element */}
                 {hasPercent && (
                     <div className="flex items-baseline justify-center gap-2 mb-2">
-                        <span className="font-heading text-7xl sm:text-8xl lg:text-9xl tracking-[0.02em] text-white leading-none">
+                        <span className="font-heading text-7xl sm:text-8xl lg:text-9xl tracking-[0.02em] leading-none">
                             {Number(promo.discount_percent)}
                         </span>
-                        <span className="font-heading text-3xl sm:text-4xl text-white/80">% OFF</span>
+                        <span className="font-heading text-3xl sm:text-4xl">% OFF</span>
                     </div>
                 )}
                 {/* Subtitle / campaign name */}
-                <h2 className="font-heading text-2xl sm:text-3xl tracking-[0.03em] text-white italic">
+                <h2 className="font-heading text-2xl sm:text-3xl tracking-[0.03em] italic">
                     {promo.subtitle || promo.name}
                 </h2>
                 {promo.short_text && (
-                    <p className="mt-4 text-sm text-white/80 max-w-lg mx-auto leading-relaxed">{promo.short_text}</p>
+                    <p className="mt-4 text-sm max-w-lg mx-auto leading-relaxed">{promo.short_text}</p>
                 )}
                 {promo.free_shipping && !hasPercent && (
-                    <p className="mt-4 text-sm text-white/85">Frete grátis especial</p>
+                    <p className="mt-4 text-sm">Frete grátis especial</p>
                 )}
                 <Link
                     to="/monte-seu-look"
-                    className="inline-flex items-center gap-2 mt-8 bg-white/15 backdrop-blur-sm border border-white/40 text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-white hover:text-charcoal"
+                    className="inline-flex items-center gap-2 mt-8 border border-current text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:opacity-80"
                 >
                     Aproveitar <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
                 </Link>

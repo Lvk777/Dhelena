@@ -7,11 +7,18 @@ import { PromotionCampaignBanner } from "@/components/PromoComponents";
 import { useReveal } from "@/hooks/useReveal";
 import { useCatalog } from "@/context/CatalogContext";
 import { LOOK_IMAGE, formatBRL } from "@/data/products";
+import SafeConfiguredLink from '@/components/SafeConfiguredLink';
+import { usePublicSettings } from '@/context/PublicSettingsContext';
+import { instagramLink } from '../../backend/src/lib/navigation.js';
+import { primaryBannerCta } from '@/lib/banners';
 
 export default function Home() {
-    const { products, categories, banners, loading } = useCatalog();
+    const { products, categories, banners, loading, error, reload } = useCatalog();
+    const { settings } = usePublicSettings();
+    const instagram = instagramLink(settings.social?.instagram);
     const hero = banners.find(b => b.position === "home_hero") || banners[0] || {};
     const concept = banners.find(b => b.position === "home_after_news") || banners[1] || {};
+    const heroCta = primaryBannerCta(hero), conceptCta = primaryBannerCta(concept);
     const novidades = products.filter((p) => p.badges?.novo).slice(0, 8);
     const maisDesejados = products.filter((p) => p.badges?.maisVendido).slice(0, 4);
     const instImages = products.slice(0, 6).map((p) => p.images[0]).filter(Boolean);
@@ -26,40 +33,50 @@ export default function Home() {
     if (loading) {
         return <div className="h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-[hsl(var(--bone))] border-t-[hsl(var(--gold))] rounded-full animate-spin" /></div>;
     }
+    if (error) return <main className="container-boutique py-24 text-center"><p role="alert">Não foi possível carregar a coleção.</p><button onClick={reload} className="btn-outline mt-6">Tentar novamente</button></main>;
 
     return (
         <div>
             {/* HERO */}
             {hero.image && (
                 <section className="relative h-[88vh] min-h-[560px] w-full overflow-hidden">
-                    <img src={hero.image} alt="D'Helenas" className="absolute inset-0 w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/30 via-black/10 to-transparent" />
+                    <img src={hero.image} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-charcoal/80 via-charcoal/60 to-charcoal/40" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
                     <div className="relative h-full container-boutique flex items-center">
-                        <div className="max-w-xl text-bone animate-fade-rise">
+                        <div className="max-w-xl text-on-dark animate-fade-rise">
                             <p className="eyebrow text-[hsl(var(--gold))]">{hero.eyebrow}</p>
                             <h1 className="mt-5 font-heading text-6xl sm:text-7xl lg:text-8xl leading-[0.95] tracking-[0.04em]">{hero.title}</h1>
-                            <p className="mt-5 font-heading text-2xl sm:text-3xl italic text-bone/90">{hero.subtitle}</p>
-                            <p className="mt-4 text-sm sm:text-base text-bone/80 leading-relaxed max-w-md">{hero.text}</p>
+                            <p className="mt-5 font-heading text-2xl sm:text-3xl italic text-on-dark/90">{hero.subtitle}</p>
+                            <p className="mt-4 text-sm sm:text-base text-on-dark/90 leading-relaxed max-w-md">{hero.text}</p>
                             <div className="mt-9 flex flex-wrap gap-3">
-                                <Link to={hero.button_link || hero.primary_cta_link || "/novidades"} className="inline-flex items-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--rose))]/85">
-                                    {hero.button_text || hero.primary_cta_label || "Ver novidades"} <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
-                                </Link>
-                                <Link to={(!hero.secondary_cta_link || hero.secondary_cta_link === "/loja") ? "/colecoes" : hero.secondary_cta_link} className="inline-flex items-center gap-2 border border-bone/80 text-bone text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-bone hover:text-charcoal">
+                                <SafeConfiguredLink to={heroCta.href || "/novidades"} className="inline-flex items-center gap-2 bg-[hsl(var(--rose))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:brightness-90">
+                                    {heroCta.label || "Ver novidades"} <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
+                                </SafeConfiguredLink>
+                                <SafeConfiguredLink to={(!hero.secondary_cta_link || hero.secondary_cta_link === "/loja") ? "/colecoes" : hero.secondary_cta_link} className="inline-flex items-center gap-2 border border-on-dark/80 text-on-dark text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-on-dark hover:text-charcoal">
                                     {hero.secondary_cta_label || "Conhecer a coleção"}
-                                </Link>
+                                </SafeConfiguredLink>
                             </div>
                         </div>
                     </div>
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-bone/70 text-[10px] uppercase tracking-[0.3em] animate-fade-in">Role para descobrir</div>
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-on-dark/90 text-[10px] uppercase tracking-[0.3em] animate-fade-in">Role para descobrir</div>
                 </section>
             )}
 
             {/* PROMO CAMPAIGN BANNER */}
-            <PromotionCampaignBanner />
+            {products.length > 0 && <PromotionCampaignBanner />}
+
+            {products.length === 0 && <section className="bg-[hsl(var(--bone))] py-16 sm:py-20 text-center">
+                <div className="container-boutique max-w-2xl">
+                    <p className="eyebrow">D’Helenas Boutique</p>
+                    <h2 className="font-heading text-4xl sm:text-5xl leading-tight mt-4">Uma nova coleção está sendo preparada</h2>
+                    <p className="text-muted-foreground leading-relaxed mt-5">No momento, não há peças disponíveis na loja. Volte para conhecer os novos cadastros quando estiverem publicados.</p>
+                    <Link to="/contato" className="btn-gold inline-block mt-7">Fale com a boutique</Link>
+                </div>
+            </section>}
 
             {/* NOVIDADES */}
-            <Section title="Acabaram de chegar" eyebrow="Novidades" id="novidades">
+            {products.length > 0 && <Section title="Acabaram de chegar" eyebrow="Novidades" id="novidades">
                 <div className="relative">
                     <div ref={carouselRef} className="flex gap-5 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-4 -mx-5 px-5 sm:mx-0 sm:px-0">
                         {novidades.map((p, i) => (
@@ -74,7 +91,7 @@ export default function Home() {
                 <div className="text-center mt-10">
                     <Link to="/loja?filtro=novidades" className="btn-ghost link-underline">Ver todas as novidades →</Link>
                 </div>
-            </Section>
+            </Section>}
 
             {/* CATEGORIAS */}
             <section className="bg-[hsl(var(--blush))] py-20 sm:py-28">
@@ -92,17 +109,17 @@ export default function Home() {
             {concept.image && (
                 <section className="relative h-[60vh] min-h-[420px] overflow-hidden">
                     <img src={concept.image} alt={concept.title} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
-                    <div className="absolute inset-0 bg-charcoal/35" />
+                    <div className="absolute inset-0 bg-charcoal/70" />
                     <div className="relative h-full container-boutique flex items-center justify-center text-center">
-                        <div className="max-w-2xl text-bone animate-fade-rise">
+                        <div className="max-w-2xl text-on-dark animate-fade-rise">
                             <div className="flex justify-center mb-6"><BridgeHeart /></div>
                             <p className="eyebrow text-[hsl(var(--gold))]">{concept.eyebrow}</p>
                             <h2 className="mt-4 font-heading text-5xl sm:text-6xl tracking-[0.03em]">{concept.title}</h2>
-                            <p className="mt-5 text-base text-bone/85 leading-relaxed max-w-xl mx-auto">{concept.text}</p>
-                            {concept.primary_cta_link && (
-                                <Link to={concept.primary_cta_link} className="mt-8 inline-flex items-center gap-2 bg-[hsl(var(--gold))] text-white text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--gold))]/85">
-                                    {concept.primary_cta_label}
-                                </Link>
+                            <p className="mt-5 text-base text-on-dark/90 leading-relaxed max-w-xl mx-auto">{concept.text}</p>
+                            {conceptCta.href && (
+                                <SafeConfiguredLink to={conceptCta.href} className="mt-8 inline-flex items-center gap-2 bg-[hsl(var(--gold))] text-accent-foreground text-[11px] uppercase tracking-[0.22em] px-8 py-4 transition-all duration-500 hover:bg-[hsl(var(--gold))]/85">
+                                    {conceptCta.label}
+                                </SafeConfiguredLink>
                             )}
                         </div>
                     </div>
@@ -110,14 +127,14 @@ export default function Home() {
             )}
 
             {/* MAIS DESEJADOS */}
-            <Section title="Os favoritos da D'Helenas" eyebrow="Mais desejados">
+            {products.length > 0 && <Section title="Os favoritos da D'Helenas" eyebrow="Mais desejados">
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6 mt-12">
                     {maisDesejados.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
                 </div>
-            </Section>
+            </Section>}
 
             {/* LOOK COMPLETO */}
-            <section className="bg-[hsl(var(--champagne))] py-20 sm:py-28">
+            {products.length > 0 && <section className="bg-[hsl(var(--champagne))] py-20 sm:py-28">
                 <div className="container-boutique grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
                     <div className="relative overflow-hidden aspect-[3/4] max-w-md mx-auto lg:mx-0 w-full">
                         <img src={LOOK_IMAGE} alt="Complete o look" className="w-full h-full object-cover" loading="lazy" />
@@ -135,10 +152,10 @@ export default function Home() {
                         <Link to="/loja" className="btn-gold mt-9">Ver peças do look</Link>
                     </div>
                 </div>
-            </section>
+            </section>}
 
             {/* MONTE SEU LOOK */}
-            <section className="bg-background py-16 sm:py-20 border-y border-border">
+            {products.length > 0 && <section className="bg-background py-16 sm:py-20 border-y border-border">
                 <div className="container-boutique text-center">
                     <p className="eyebrow">Personalize</p>
                     <h2 className="mt-3 font-heading text-3xl sm:text-4xl lg:text-5xl tracking-[0.03em]">Monte seu Look</h2>
@@ -146,17 +163,17 @@ export default function Home() {
                     <p className="mt-6 text-muted-foreground">Crie combinações do seu jeito.</p>
                     <Link to="/monte-seu-look" className="btn-gold mt-8 inline-block">Montar meu look</Link>
                 </div>
-            </section>
+            </section>}
 
             {/* INSTAGRAM */}
-            {instImages.length > 0 && (
-                <Section title="Siga a D'Helenas" eyebrow="@dhelenas.oficial">
+            {instagram && instImages.length > 0 && (
+                <Section title="Siga a D'Helenas" eyebrow="Instagram">
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mt-12">
                         {instImages.map((src, i) => (
-                            <a key={i} href="https://instagram.com" target="_blank" rel="noreferrer" className="group relative aspect-square overflow-hidden bg-bone">
+                            <a key={i} href={instagram} target="_blank" rel="noopener noreferrer" className="group relative aspect-square overflow-hidden bg-bone">
                                 <img src={src} alt="Instagram D'Helenas" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
                                 <div className="absolute inset-0 bg-charcoal/0 group-hover:bg-charcoal/30 transition-colors duration-500 flex items-center justify-center">
-                                    <Instagram className="w-5 h-5 text-bone opacity-0 group-hover:opacity-100 transition-opacity duration-500" strokeWidth={1.25} />
+                                    <Instagram className="w-5 h-5 text-on-dark opacity-0 group-hover:opacity-100 transition-opacity duration-500" strokeWidth={1.25} />
                                 </div>
                             </a>
                         ))}
@@ -169,7 +186,7 @@ export default function Home() {
     );
 }
 
-function Section({ children, title, eyebrow, id, className = "" }) {
+function Section({ children, title, eyebrow, id = undefined, className = "" }) {
     const { ref, visible } = useReveal();
     return (
         <section id={id} className={`py-20 sm:py-28 ${className}`}>
@@ -197,10 +214,10 @@ function CategoryCard({ category, index }) {
         <div ref={ref} className={`reveal ${visible ? "is-visible" : ""}`} style={{ transitionDelay: `${index * 90}ms` }}>
             <Link to={`/loja?cat=${category.slug}`} className="group block relative overflow-hidden aspect-[3/4] bg-bone">
                 <img src={category.image} alt={category.name} className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-105" loading="lazy" />
-                <div className="absolute inset-0 bg-gradient-to-t from-charcoal/55 via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-charcoal/75 via-charcoal/20 to-transparent" />
                 <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5 text-center">
-                    <h3 className="font-heading text-xl sm:text-2xl text-bone tracking-[0.04em]">{category.name}</h3>
-                    <span className="block mt-1 text-[9px] uppercase tracking-[0.28em] text-bone/70 group-hover:text-[hsl(var(--gold))] transition-colors">Ver peças →</span>
+                    <h3 className="font-heading text-xl sm:text-2xl text-on-dark tracking-[0.04em]">{category.name}</h3>
+                    <span className="block mt-1 text-[9px] uppercase tracking-[0.28em] text-on-dark/90 group-hover:text-[hsl(var(--gold))] transition-colors">Ver peças →</span>
                 </div>
             </Link>
         </div>
@@ -214,10 +231,10 @@ function LookLine({ product }) {
                 <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
             </div>
             <div className="flex-1">
-                <p className="text-sm font-medium group-hover:text-[hsl(var(--rose))] transition-colors">{product.name}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">{formatBRL(product.salePrice || product.price)} · {product.installments}x sem juros</p>
+                <p className="text-sm font-medium group-hover:text-rose-ink transition-colors">{product.name}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{formatBRL(product.salePrice || product.price)} · Consulte as formas de pagamento no checkout</p>
             </div>
-            <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-[hsl(var(--gold))] transition-colors" strokeWidth={1.25} />
+            <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-gold-ink transition-colors" strokeWidth={1.25} />
         </Link>
     );
 }

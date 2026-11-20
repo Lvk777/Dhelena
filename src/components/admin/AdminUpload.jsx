@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Upload, Loader2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 
-export default function AdminUpload({ label, value, onChange, description, aspect = "3/4", full }) {
+export default function AdminUpload({ label, value, onChange, description = "", aspect = "3/4", full = false }) {
     const [uploading, setUploading] = useState(false);
 
     const upload = async (file) => {
