@@ -44,8 +44,8 @@ export function resolveReusableMappings(nfe, orderItems, rows) {
         const matchingRows = orderItems.filter(row => {
             const variant = orderVariantIdentity(row);
             return variant && applicable.every(saved => sameVariant(saved.changes, variant)
-                && (!saved.changes.order_color || saved.changes.order_color === row.color_name)
-                && (!saved.changes.order_product_name || saved.changes.order_product_name === row.product_name));
+                && (!saved.changes.order_color || normalize(saved.changes.order_color) === normalize(row.color_name))
+                && (!saved.changes.order_product_name || normalize(saved.changes.order_product_name) === normalize(row.product_name)));
         });
         if (matchingRows.length !== 1) continue;
         const row = matchingRows[0];

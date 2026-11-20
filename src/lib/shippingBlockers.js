@@ -10,8 +10,10 @@ export function shippingPreparationBlockers({ order, ready, fiscalDocument, fisc
     if (ready?.environment === 'production') {
         if (!fiscalEnabled) reasons.push('A importação fiscal está indisponível. Solicite a homologação antes de preparar o envio.');
         else if (fiscalLoadError) reasons.push('Não foi possível consultar a nota fiscal. Atualize o pedido e confira o vínculo fiscal.');
-        else if (fiscalDocument?.differences?.length) reasons.push('A nota fiscal ainda diverge do pedido. Resolva as diferenças indicadas na seção Nota fiscal.');
-        else if (fiscalDocument?.status !== 'verified') reasons.push('Falta concluir a comparação com o pedido e registrar a conferência da autorização no portal oficial.');
+        else {
+            if (fiscalDocument?.differences?.length) reasons.push('A nota fiscal ainda diverge do pedido. Resolva as diferenças indicadas na seção Nota fiscal.');
+            if (fiscalDocument?.status !== 'verified') reasons.push('A autorização da NF-e ainda precisa de conferência administrativa no portal oficial. Confira os dados e registre a consulta após resolver as divergências.');
+        }
     }
     return reasons;
 }

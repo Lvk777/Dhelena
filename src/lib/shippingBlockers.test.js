@@ -12,7 +12,9 @@ describe('preparation blockers', () => {
         expect(check()).toEqual([]);
     });
     it('explains fiscal divergence and official check separately', () => {
-        expect(check({ fiscalDocument: { status: 'needs_review', differences: ['Produto'] } }).join(' ')).toMatch(/diverge/);
+        const divergent = check({ fiscalDocument: { status: 'needs_review', differences: ['Produto'] } });
+        expect(divergent.some(reason => /diverge/.test(reason))).toBe(true);
+        expect(divergent.some(reason => /portal oficial/.test(reason))).toBe(true);
         expect(check({ fiscalDocument: { status: 'pending_official', differences: [] } }).join(' ')).toMatch(/portal oficial/);
         expect(check({ fiscalLoadError: 'Falhou' }).join(' ')).toMatch(/consultar a nota fiscal/);
     });
