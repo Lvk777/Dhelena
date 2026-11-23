@@ -25,10 +25,23 @@ test('shows only known order data and copies each clicked fiscal value individua
     fireEvent.click(screen.getByRole('button', { name: 'Copiar Descrição cadastrada: Shorts Angel' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('Shorts Angel'));
     fireEvent.click(screen.getByRole('button', { name: 'Copiar Frete: R$ 9,98' }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith('R$ 9,98'));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('9,98'));
     expect(writeText).toHaveBeenCalledTimes(3);
     expect(screen.getByText(/Valor copiado/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copiar SKU interno (referência): 2026@' })).toBeTruthy();
+});
+
+test('shows the fiscal table expanded by default and lets Juliane collapse and reopen it', async () => {
+    render(<InvoiceCopyTable order={order} />);
+    const section = screen.getByLabelText('Dados para emissão da nota fiscal');
+    const header = screen.getByText('Dados para emissão da NF-e');
+    expect(section.open).toBe(true);
+    expect(screen.getByRole('button', { name: 'Copiar Nome completo: Cliente de Exemplo' })).toBeTruthy();
+
+    fireEvent.click(header);
+    await waitFor(() => expect(section.open).toBe(false));
+    fireEvent.click(header);
+    await waitFor(() => expect(section.open).toBe(true));
 });
 
 test('does not invent missing CPF, SKU, fiscal classification or amounts', () => {

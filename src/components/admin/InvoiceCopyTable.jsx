@@ -4,11 +4,16 @@ import { formatBRL } from '@/data/products';
 
 const available = (value) => value === null || value === undefined ? '' : String(value).trim();
 const money = (value) => value === null || value === undefined || value === '' ? '' : formatBRL(Number(value));
+const fiscalAmount = (value) => {
+    if (value === null || value === undefined || value === '') return ['', ''];
+    const number = Number(value);
+    return Number.isFinite(number) ? [money(number), number.toFixed(2).replace('.', ',')] : ['', ''];
+};
 const lineSubtotal = (item) => {
-    if (item.subtotal !== null && item.subtotal !== undefined) return money(item.subtotal);
+    if (item.subtotal !== null && item.subtotal !== undefined) return item.subtotal;
     const unit = item.unit_price ?? item.price;
     const quantity = item.quantity ?? item.qty;
-    return unit === null || unit === undefined || quantity === null || quantity === undefined ? '' : money(Number(unit) * Number(quantity));
+    return unit === null || unit === undefined || quantity === null || quantity === undefined ? '' : Number(unit) * Number(quantity);
 };
 
 export function invoiceCopyGroups(order) {
@@ -43,23 +48,24 @@ export function invoiceCopyGroups(order) {
                 ['Cor cadastrada', item.color_name],
                 ['Tamanho', item.size],
                 ['Quantidade', item.quantity ?? item.qty],
-                ['Valor unitário', money(item.unit_price ?? item.price)],
-                ['Subtotal do item', lineSubtotal(item)],
+                ['Valor unitário', ...fiscalAmount(item.unit_price ?? item.price)],
+                ['Subtotal do item', ...fiscalAmount(lineSubtotal(item))],
             ],
         })),
         {
             title: 'Valores do pedido', rows: [
                 ['Número do pedido (referência)', order?.order_number],
-                ['Subtotal de mercadorias', money(order?.subtotal)],
-                ['Desconto', money(order?.discount)],
-                ['Frete', money(order?.shipping_cost)],
-                ['Total do pedido', money(order?.total)],
+                ['Subtotal de mercadorias', ...fiscalAmount(order?.subtotal)],
+                ['Desconto', ...fiscalAmount(order?.discount)],
+                ['Frete', ...fiscalAmount(order?.shipping_cost)],
+                ['Total do pedido', ...fiscalAmount(order?.total)],
             ],
         },
     ];
 }
 
 export default function InvoiceCopyTable({ order }) {
+    const [expanded, setExpanded] = useState(true);
     const [copied, setCopied] = useState('');
     const [copyError, setCopyError] = useState('');
 
@@ -75,25 +81,29 @@ export default function InvoiceCopyTable({ order }) {
         }
     };
 
-    return <section className="bg-background text-foreground p-5 space-y-4" aria-label="Dados para emissão da nota fiscal">
-        <div>
-            <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground flex items-center gap-2">
+    return <details className="bg-background text-foreground group" open={expanded}
+        onToggle={event => setExpanded(event.currentTarget.open)} aria-label="Dados para emissão da nota fiscal">
+        <summary className="min-h-11 p-5 flex items-center justify-between gap-3 cursor-pointer list-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[hsl(var(--gold))] [&::-webkit-details-marker]:hidden">
+            <h2 className="text-[11px] uppercase tracking-[0.18em] font-medium flex items-center gap-2">
                 <FileText className="w-4 h-4" /> Dados para emissão da NF-e
             </h2>
-            <p className="text-xs text-muted-foreground mt-2">Clique no valor de cada campo para copiá-lo. Os dados vêm do pedido e não emitem nem alteram a nota fiscal.</p>
-        </div>
+            <span aria-hidden="true" className="text-xl leading-none group-open:rotate-45 transition-transform">+</span>
+        </summary>
+        <div className="border-t border-border p-5 space-y-4 min-w-0 [overflow-wrap:anywhere]">
+            <p className="text-xs text-muted-foreground">Clique no valor de cada campo para copiá-lo. Os dados vêm do pedido e não emitem nem alteram a nota fiscal. Valores monetários são copiados sem o símbolo R$.</p>
 
         {invoiceCopyGroups(order).map((group, groupIndex) => <div key={group.title}>
             <h3 className="text-xs font-semibold mb-2">{group.title}</h3>
             <table className="w-full table-fixed border-collapse text-xs sm:text-sm">
                 <tbody>
-                    {group.rows.map(([label, raw], rowIndex) => {
+                    {group.rows.map(([label, raw, rawCopy], rowIndex) => {
                         const value = available(raw);
+                        const copyValue = available(rawCopy ?? raw);
                         const key = `${groupIndex}:${rowIndex}`;
                         return <tr key={key} className="border-t border-border">
                             <th scope="row" className="text-left align-top py-2 pr-3 font-normal text-muted-foreground w-[43%] break-words">{label}</th>
                             <td className="py-1.5 align-top break-all">
-                                {value ? <button type="button" onClick={() => copy(value, key, label)}
+                                {value ? <button type="button" onClick={() => copy(copyValue, key, label)}
                                     className="w-full min-h-8 flex items-start justify-between gap-2 text-left rounded-sm p-1 hover:bg-muted/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(var(--gold))]"
                                     aria-label={`Copiar ${label}: ${value}`} title={`Copiar ${label}`}>
                                     <span className="break-words [overflow-wrap:anywhere]">{value}</span>
@@ -110,5 +120,6 @@ export default function InvoiceCopyTable({ order }) {
         <p role="status" aria-live="polite" className="text-xs text-muted-foreground">
             {copyError || (copied ? 'Valor copiado. Agora você pode colá-lo no emissor da NF-e.' : 'A descrição fiscal, NCM, CFOP e outros dados tributários devem ser conferidos no emissor. O SKU interno não substitui o código fiscal.')}
         </p>
-    </section>;
+        </div>
+    </details>;
 }

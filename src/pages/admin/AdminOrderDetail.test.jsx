@@ -18,7 +18,7 @@ vi.mock('@/components/checkout/CardFinancingSummary', () => ({ default: () => nu
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
-test('operational sections start collapsed while critical payment, shipping and fiscal warnings stay visible', async () => {
+test('operational sections start collapsed while fiscal copy data and critical warnings stay visible', async () => {
     base44.entities.Order.get.mockResolvedValue({ id: 'fixture', order_number: 'TEST-ORDER',
         created_date: '2026-11-18T12:00:00Z', status: 'recebido', payment_status: 'pending',
         payment_attempt_started_at: '2026-11-18T12:01:00Z', shipping_status: 'cart_inflight',
@@ -34,8 +34,10 @@ test('operational sections start collapsed while critical payment, shipping and 
     await waitFor(() => expect(screen.getByText(/Divergência fiscal\. Chave bloqueada/)).toBeTruthy());
     expect(screen.getAllByText('Frete').length).toBeGreaterThan(0);
     const panels = [...container.querySelectorAll('details')];
-    expect(panels).toHaveLength(5);
-    expect(panels.every(panel => !panel.open)).toBe(true);
+    expect(panels).toHaveLength(6);
+    const fiscalCopyPanel = panels.find(panel => panel.textContent.includes('Dados para emissão da NF-e'));
+    expect(fiscalCopyPanel.open).toBe(true);
+    expect(panels.filter(panel => panel !== fiscalCopyPanel).every(panel => !panel.open)).toBe(true);
     expect(screen.getByText(/Pagamento com tentativa inconclusiva/)).toBeTruthy();
     expect(screen.getByText(/Envio aguardando confirmação.*pode gerar duplicidade/)).toBeTruthy();
     expect(screen.queryByText(/cart_inflight/)).toBeNull();
