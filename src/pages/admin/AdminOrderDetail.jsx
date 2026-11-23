@@ -1,6 +1,7 @@
 import OperationalRefund from '@/components/admin/OperationalRefund';
 import ShippingOperations from '@/components/admin/ShippingOperations';
 import FiscalDocumentPanel from '@/components/admin/FiscalDocumentPanel';
+import InvoiceCopyTable from '@/components/admin/InvoiceCopyTable';
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Truck, Loader2, Copy, MapPin, QrCode, CreditCard, Banknote } from "lucide-react";
@@ -188,6 +189,7 @@ export default function AdminOrderDetail() {
                         <OperationalRefund key={order.id} order={order} onChanged={load} />
                     </OperationalPanel>
 
+                    <InvoiceCopyTable order={order} />
                     {fiscalXmlImportEnabled && <FiscalDocumentPanel order={order} document={fiscalDocument} loadError={fiscalLoadError} onChanged={setFiscalDocument} />}
 
                     {/* Delivery / Shipping */}

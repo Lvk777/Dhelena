@@ -40,7 +40,7 @@ test('operational sections start collapsed while critical payment, shipping and 
     expect(screen.getByText(/Envio aguardando confirmação.*pode gerar duplicidade/)).toBeTruthy();
     expect(screen.queryByText(/cart_inflight/)).toBeNull();
     expect(screen.getByRole('heading', { name: 'Cliente' })).toBeTruthy();
-    expect(screen.getByText('Peça')).toBeTruthy();
+    expect(screen.getAllByText('Peça').length).toBeGreaterThan(0);
     expect(screen.getByText('Pagamento')).toBeTruthy();
     fireEvent.click(screen.getByText('Expedição e etiquetas'));
     expect(panels.find(panel => panel.textContent.includes('Expedição e etiquetas')).open).toBe(true);
