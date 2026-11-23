@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createShippingOperations,shippingEnvironment,shippingPreparation} from '../src/services/shippingOperations.js';
 import {createShippingWebhookWorker,officialShippingUpdate} from '../src/services/shippingWebhookQueue.js';
-import {assertCorreiosPackage,fiscalKeyModel,safeShippingPrintUrl} from '../src/lib/shipping.js';
+import {assertCorreiosPackage,assertDistinctShippingAddresses,fiscalKeyModel,safeShippingPrintUrl} from '../src/lib/shipping.js';
 import {safeMelhorEnvioValidation} from '../src/services/melhorEnvio.js';
 function fiscalKey(model){
     const first43=`35${'2611'}${'12345678000195'}${model}${'001'}${'123456789'}${'12345678'}${'1'}`;
@@ -11,9 +11,10 @@ function fiscalKey(model){
     return `${first43}${remainder<2?0:11-remainder}`;
 }
 const origin={cep:'01001000',street:'Origem',number:'1',district:'Centro',city:'São Paulo',state:'SP'};
+const destination={cep:'01310930',street:'Destino',number:'2',district:'Bela Vista',city:'São Paulo',state:'SP'};
 const sender={name:'Fixture',document:'12345678909',phone:'11999999999',email:'sender@example.test'};
 const orderFixture={id:'fixture',shipping_quote_id:'1',payment_status:'approved',status:'pagamento_aprovado',shipping_method:'melhor_envio',
-    subtotal:100,discount:5,shipping_address:{...origin},snapshot:{shipping_environment:'sandbox',customer:{...sender,cpf:sender.document},
+    subtotal:100,discount:5,shipping_address:{...destination},snapshot:{shipping_environment:'sandbox',customer:{...sender,cpf:sender.document},
         items:[{product_name:'Peça',quantity:1,unit_price:100}],shipping_packages:[{weight:0.3,height:3,width:20,length:30}]}};
 function fixture(){
     let order=structuredClone(orderFixture),locked=false,backup,fiscalKeyValue=null;const calls=[];
@@ -128,11 +129,31 @@ test('SEDEX validates actual closed package in cm and kg before contacting provi
     order.snapshot.shipping_packages[0].weight=31;
     assert.throws(()=>shippingPreparation(order,origin,sender));
 });
+test('provider rejects identical physical addresses even if the recipient differs or complement changes',()=>{
+    const order=structuredClone(orderFixture);
+    order.shipping_address={...origin,cep:'01001-000'};
+    assert.throws(()=>shippingPreparation(order,origin,sender),/mesmo endereço/);
+    order.shipping_address.complement='Apartamento 3';
+    assert.throws(()=>shippingPreparation(order,origin,sender),/mesmo endereço/);
+    assert.throws(()=>assertDistinctShippingAddresses(origin, {...origin,street:'ORÍGEM',number:'1'}),/mesmo endereço/);
+    assert.doesNotThrow(()=>assertDistinctShippingAddresses(origin,{...origin,number:'2'}));
+    assert.doesNotThrow(()=>assertDistinctShippingAddresses(origin,{...origin,street:'Rua diferente'}));
+    assert.doesNotThrow(()=>assertDistinctShippingAddresses(origin,{...origin,cep:'01001-001'}));
+});
 test('provider validation reports field labels only, never submitted private values',()=>{
     assert.deepEqual(safeMelhorEnvioValidation({errors:{'volumes.0.height':['0.4'],
         'options.invoice.key':['private-fiscal-key'], 'to.document':['private-document'],
         'some.private.field':['secret']}}),
     ['altura da embalagem','chave do documento fiscal','documento da destinatária']);
+    assert.deepEqual(safeMelhorEnvioValidation({errors:{
+        from:{name:['full private name'],state_abbr:['UF mismatch'],other_field:['private']},
+        'products.0.quantity':['private'], 'to.email':['private-email'],
+        'agency':['private'], 'options.unrecognized':['private'], 'session_token':['secret'],
+    }}), ['nome do remetente','UF do remetente','cadastro do remetente',
+        'quantidade do produto','e-mail da destinataria','agencia de postagem','opcoes do envio']);
+    assert.deepEqual(safeMelhorEnvioValidation({errors:{'to.0.document':['private']}}),
+        ['documento da destinatária']);
+    assert.deepEqual(safeMelhorEnvioValidation({message:'CPF 123.456.789-01 inválido'}),[]);
 });
 test('shipping status cannot regress a delivered order or advance an unpaid one',()=>{
     const order={status:'entregue',payment_status:'approved',tracking_code:'MOCK'};

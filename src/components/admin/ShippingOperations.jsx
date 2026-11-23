@@ -11,7 +11,13 @@ export default function ShippingOperations({ order, fiscalDocument, fiscalLoadEr
     const [ready, setReady] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
     const [invoice, setInvoice] = useState(''), [printUrl, setPrintUrl] = useState(''), [confirm, setConfirm] = useState(false);
     const reload = () => base44.functions.invoke('shippingReadiness', { orderId: order.id }).then(setReady).catch(() => setReady(null));
-    useEffect(() => { reload(); setPrintUrl(''); setConfirm(false); }, [order.id, order.shipping_status]);
+    useEffect(() => { reload(); setPrintUrl(''); setConfirm(false); }, [order.id, order.shipping_status, fiscalDocument?.status]);
+    useEffect(() => {
+        if (fiscalDocument?.status !== 'verified' || !ready?.automatic_prepare_enabled
+            || ready.automatic_prepare_state !== 'pending') return;
+        const poll = setInterval(() => void reload(), 3500);
+        return () => clearInterval(poll);
+    }, [order.id, fiscalDocument?.status, ready?.automatic_prepare_enabled, ready?.automatic_prepare_state]);
     const run = async action => {
         setBusy(true); setError('');
         try {
@@ -41,6 +47,10 @@ export default function ShippingOperations({ order, fiscalDocument, fiscalLoadEr
             <p className="font-medium">Pendências para preparar o envio:</p><ul className="list-disc pl-5">{prepareBlockers.map(reason => <li key={reason}>{reason}</li>)}</ul>
         </div>}
         {ready?.purchase_enabled === false && <p>Compra de etiquetas desabilitada. Essa proteção é separada da preparação do envio.</p>}
+        {ready?.automatic_prepare_enabled && ready.automatic_prepare_state === 'pending' &&
+            <p role="status">NF-e conferida. Estamos preparando automaticamente o envio no carrinho do Melhor Envio, sem efetuar pagamento.</p>}
+        {ready?.automatic_prepare_state === 'blocked' &&
+            <p role="alert" className="text-error-ink">A preparação automática não foi concluída. Confira os dados e a situação do envio antes de tentar manualmente; se houver resultado incerto, solicite conciliação para evitar duplicidade.</p>}
         {!eligible ? <p>Expedição disponível após a confirmação do pagamento.</p> : !ready?.environment ?
             <p>O ambiente deste envio precisa de análise antes de preparar ou comprar etiquetas.</p> : <>
                 <p>Ambiente do envio: {ready.environment === 'production' ? 'Produção' : 'Sandbox'}. Preparar a etiqueta não compra frete.</p>
@@ -52,7 +62,7 @@ export default function ShippingOperations({ order, fiscalDocument, fiscalLoadEr
                 {ready.shipment_id && <p>ID do envio no Melhor Envio: <span className="font-numeric">{ready.shipment_id}</span></p>}
                 {ready.fiscal_model && <p>Documento informado: modelo {ready.fiscal_model}, chave terminada em {ready.fiscal_key_last4}. Confira a correspondência com a venda.</p>}
                 {ready.rejection_fields?.length > 0 && <p role="alert" className="text-error-ink">O Melhor Envio apontou dados inválidos. Confira remetente, destinatário e pacote com o suporte antes de tentar novamente. O envio permanece bloqueado até a conciliação.</p>}
-                {!order.melhor_envio_shipment_id && <>
+                {!ready?.shipment_id && !order.melhor_envio_shipment_id && <>
                     {ready.environment === 'production' ? <p>{fiscalXmlImportEnabled ?
                         `Chave fiscal: ${fiscalDocument?.status === 'verified' ? fiscalDocument.access_key : 'importe e confira a NF-e acima antes de preparar o envio'}.` :
                         'Importação fiscal indisponível até homologação. Preparação de envios comerciais bloqueada.'}</p> :
@@ -60,7 +70,7 @@ export default function ShippingOperations({ order, fiscalDocument, fiscalLoadEr
                             <input aria-label="Chave da NF-e modelo 55" value={invoice} onChange={e=>setInvoice(e.target.value.replace(/\D/g,'').slice(0,44))}
                                 className="block w-full admin-field p-3 mt-1" inputMode="numeric" />
                         </label>}
-                    <button className="btn-outline text-xs min-h-11" disabled={prepareBlockers.length > 0} aria-describedby={prepareBlockers.length ? 'shipping-prepare-blockers' : undefined} onClick={()=>run('prepare')}>Preparar envio (sem compra)</button>
+                    <button className="btn-outline text-xs min-h-11" disabled={prepareBlockers.length > 0 || ready?.automatic_prepare_state === 'pending'} aria-describedby={prepareBlockers.length ? 'shipping-prepare-blockers' : undefined} onClick={()=>run('prepare')}>Preparar envio (sem compra)</button>
                 </>}
                 {state === 'cart_created' && <>
                     <p>Envio no carrinho; etiqueta ainda não comprada. Custo: {ready.price == null ? 'consulte novamente' : formatBRL(Number(ready.price))}. Frete cobrado da cliente: {formatBRL(Number(ready.customer_shipping_cost || 0))}.</p>

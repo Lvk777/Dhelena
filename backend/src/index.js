@@ -1,4 +1,5 @@
 import { createShippingWebhookWorker } from './services/shippingWebhookQueue.js';
+import { createAutoShippingPreparationWorker } from './services/autoShippingPreparation.js';
 import { createNotificationWorker } from './services/notificationOutbox.js';
 import express from 'express';
 import cors from 'cors';
@@ -186,6 +187,7 @@ const PORT = process.env.PORT || 3001;
 const orderWebhookWorker = createOrderWebhookWorker();
 const notificationWorker = createNotificationWorker();
 const shippingWebhookWorker = createShippingWebhookWorker();
+const autoShippingPreparationWorker = createAutoShippingPreparationWorker();
 const reservationExpiryWorker = createOrderReservationExpiryWorker();
 const loginCodeCleanupWorker = createLoginCodeCleanupWorker({ db: pool });
 const server = app.listen(PORT, '0.0.0.0', () => {
@@ -194,6 +196,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     orderWebhookWorker.start();
     notificationWorker.start();
     shippingWebhookWorker.start();
+    autoShippingPreparationWorker.start();
     reservationExpiryWorker.start();
     loginCodeCleanupWorker.start();
 });
@@ -207,6 +210,7 @@ async function shutdown(signal) {
         await orderWebhookWorker.stop();
         await notificationWorker.stop();
         await shippingWebhookWorker.stop();
+        await autoShippingPreparationWorker.stop();
         await reservationExpiryWorker.stop();
         loginCodeCleanupWorker.stop();
         try { await pool.end(); } catch { /* pool may not have connected yet */ }

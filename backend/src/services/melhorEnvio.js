@@ -15,19 +15,52 @@ function isSandbox() {
 }
 
 const validationLabels = {
+    'from.name': 'nome do remetente', 'from.email': 'e-mail do remetente',
+    'from.phone': 'telefone do remetente', 'from.address': 'logradouro do remetente',
+    'from.number': 'numero do remetente', 'from.district': 'bairro do remetente',
+    'from.city': 'cidade do remetente', 'from.state_abbr': 'UF do remetente',
+    'to.name': 'nome da destinataria', 'to.email': 'e-mail da destinataria',
+    'to.phone': 'telefone da destinataria', 'to.address': 'logradouro da destinataria',
+    'to.number': 'numero da destinataria', 'to.district': 'bairro da destinataria',
+    'to.city': 'cidade da destinataria', 'to.state_abbr': 'UF da destinataria',
     'volumes.height': 'altura da embalagem', 'volumes.width': 'largura da embalagem',
     'volumes.length': 'comprimento da embalagem', 'volumes.weight': 'peso da embalagem',
     'options.invoice.key': 'chave do documento fiscal', 'from.state_register': 'inscrição estadual do remetente',
     'from.postal_code': 'CEP do remetente', 'to.postal_code': 'CEP da destinatária',
     'from.document': 'documento do remetente', 'from.company_document': 'CNPJ do remetente',
     'to.document': 'documento da destinatária', 'service': 'serviço de transporte',
+    'agency': 'agencia de postagem', 'products.name': 'nome do produto',
+    'products.quantity': 'quantidade do produto', 'products.unitary_value': 'valor do produto',
+    'options.insurance_value': 'valor segurado',
 };
 
 export function safeMelhorEnvioValidation(data) {
-    const keys = Object.keys(data?.errors && typeof data.errors === 'object' ? data.errors : {});
-    const fields = [...new Set(keys.map(key => key.replace(/\.\d+(?=\.|$)/g, '')).filter(key =>
-        Object.hasOwn(validationLabels, key)).map(key => validationLabels[key]))].slice(0, 8);
-    return fields;
+    // The provider may return flat Laravel paths, indexed array paths or nested
+    // validation objects. Never persist or display provider-supplied messages:
+    // they can echo names, documents and addresses from the request.
+    const paths = [];
+    const collect = (value, prefix = '', depth = 0) => {
+        if (!value || typeof value !== 'object' || depth > 5 || paths.length >= 40) return;
+        for (const [key, child] of Object.entries(value)) {
+            if (paths.length >= 40) break;
+            const path = prefix ? `${prefix}.${key}` : key;
+            if (Array.isArray(child) || typeof child !== 'object' || child === null) paths.push(path);
+            else collect(child, path, depth + 1);
+        }
+    };
+    collect(data?.errors);
+    const fallbackLabels = {
+        from: 'cadastro do remetente', to: 'cadastro da destinataria',
+        products: 'dados dos produtos', volumes: 'dados da embalagem',
+        options: 'opcoes do envio',
+    };
+    const fields = paths.map(path => {
+        const normalized = path.replace(/\[\d+\]/g, '').replace(/\.\d+(?=\.|$)/g, '');
+        if (Object.hasOwn(validationLabels, normalized)) return validationLabels[normalized];
+        const root = normalized.split('.')[0];
+        return fallbackLabels[root] || null;
+    }).filter(Boolean);
+    return [...new Set(fields)].slice(0, 8);
 }
 
 async function meFetch(path, options = {}) {

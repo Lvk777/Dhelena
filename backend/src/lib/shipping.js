@@ -33,6 +33,26 @@ export function normalizeBrazilianPhone(value) {
     return digits.startsWith('55') && [12, 13].includes(digits.length) ? digits.slice(2) : digits;
 }
 
+/** The Melhor Envio cart rejects parcels sent to their own posting address.
+ * A shared CEP is valid; compare the physical street and house number as well.
+ * Complements may differ while the carrier still considers the address equal.
+ */
+export function assertDistinctShippingAddresses(origin = {}, destination = {}) {
+    const postcode = value => String(value || '').replace(/\D/g, '');
+    const comparable = value => String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, ' ').trim();
+    const fromCep = postcode(origin.cep || origin.postal_code);
+    const toCep = postcode(destination.cep || destination.zip_code || destination.postal_code);
+    const fromStreet = comparable(origin.street || origin.address);
+    const toStreet = comparable(destination.street || destination.address);
+    const fromNumber = comparable(origin.number);
+    const toNumber = comparable(destination.number);
+    if (fromCep.length === 8 && fromCep === toCep && fromStreet && fromStreet === toStreet
+        && fromNumber && fromNumber === toNumber) {
+        throw Object.assign(new Error('O Melhor Envio não aceita remetente e destinatário no mesmo endereço. Confira o endereço real de entrega ou escolha retirada, se disponível.'), { status: 422 });
+    }
+}
+
 /** Build provider packages only from catalog records already read by the server. */
 export function buildShippingPackages(items) {
     return items.map((item) => {

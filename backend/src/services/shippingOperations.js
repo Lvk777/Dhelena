@@ -1,7 +1,7 @@
 import { refundInFlight } from '../lib/refundState.js';
 import { pool } from '../config/db.js';
 import * as melhorEnvio from './melhorEnvio.js';
-import { assertCorreiosPackage, assertLabelEligible, fiscalKeyModel, getPersistedShippingService, normalizeBrazilianPhone, safeShippingPrintUrl } from '../lib/shipping.js';
+import { assertCorreiosPackage, assertDistinctShippingAddresses, assertLabelEligible, fiscalKeyModel, getPersistedShippingService, normalizeBrazilianPhone, safeShippingPrintUrl } from '../lib/shipping.js';
 import { moneyCents } from '../lib/afterSalesPolicy.js';
 import { assertNoWithdrawalRequest } from '../lib/withdrawalRequest.js';
 
@@ -26,6 +26,7 @@ export function shippingPreparation(order, address, sender, invoiceKey) {
         || !/^\d{8}$/.test(String(to.cep || '').replace(/\D/g, '')) || !customer.name || !customer.email
         || String(customer.cpf || '').replace(/\D/g, '').length !== 11
         || ![10,11].includes(normalizeBrazilianPhone(customer.phone).length)) throw error('Dados da destinatária incompletos.', 422);
+    assertDistinctShippingAddresses(address, to);
     if (shippingEnvironment(order) === 'production' && !fiscalKey) throw error('Informe a chave de NF-e modelo 55 autorizada para o envio comercial.', 422);
     if (fiscalKey && fiscalKeyModel(fiscalKey) !== '55') throw error('Este envio comercial exige NF-e modelo 55 válida. NFC-e modelo 65 não é aceita nesta integração; confirme o documento com a contabilidade.', 422);
     const volumes = order.snapshot?.shipping_packages;

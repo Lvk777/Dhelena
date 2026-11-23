@@ -820,8 +820,12 @@ router.post('/orders/:id/shipping/label', auth, requireSupabaseAdmin, async (req
 
 router.get('/orders/:id/shipping/readiness', auth, requireSupabaseAdmin, async (req, res, next) => {
     try {
-        const { rows } = await pool.query(`SELECT snapshot, shipping_status, shipping_carrier,
-            shipping_service_name, shipping_cost, melhor_envio_shipment_id FROM orders WHERE id=$1`, [req.params.id]);
+        const { rows } = await pool.query(`SELECT o.snapshot, o.shipping_status, o.shipping_carrier,
+            o.shipping_service_name, o.shipping_cost, o.melhor_envio_shipment_id,
+            (SELECT e.metadata->>'auto_shipping_prepare_state' FROM order_events e
+                WHERE e.order_id=o.id AND e.event='shipping_auto_prepare_requested'
+                ORDER BY e.created_at DESC,e.id DESC LIMIT 1) AS automatic_prepare_state
+            FROM orders o WHERE o.id=$1`, [req.params.id]);
         if (!rows.length) return res.status(404).json({ error: 'Pedido não encontrado' });
         const row = rows[0], operation = row.snapshot?.shipping_operation || {};
         res.json({ environment: row.snapshot?.shipping_environment || null,
@@ -830,7 +834,9 @@ router.get('/orders/:id/shipping/readiness', auth, requireSupabaseAdmin, async (
             packages: row.snapshot?.shipping_packages || [], fiscal_model: operation.fiscal_model || null,
             fiscal_key_last4: operation.fiscal_key_last4 || null,
             rejection_fields: operation.rejection_fields || [], price: operation.price ?? null,
-            purchase_enabled: process.env.SHIPPING_LABEL_PURCHASE_ENABLED === 'true' });
+            purchase_enabled: process.env.SHIPPING_LABEL_PURCHASE_ENABLED === 'true',
+            automatic_prepare_enabled: process.env.AUTO_SHIPPING_PREPARE_ENABLED === 'true',
+            automatic_prepare_state: row.automatic_prepare_state || null });
     } catch (err) { next(err); }
 });
 

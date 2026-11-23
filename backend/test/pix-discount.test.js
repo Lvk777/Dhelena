@@ -99,6 +99,23 @@ test('changed origin during read-only quote fails closed without creating an ord
     assert.equal(f.state.orders.length, 0);
 });
 
+test('same street, number and CEP cannot be ordered via Melhor Envio, without stock changes', async () => {
+    let quoteCalls = 0;
+    const f = fixture({ onQuote: () => quoteCalls++ });
+    f.settings.address.street = 'Rua Sheila';
+    f.settings.address.number = '65';
+    const body = request({ shipping_method: 'melhor_envio', shipping_quote_id: 1,
+        shipping_address: { cep: '01001-000', street: 'RUA SHEILA', number: '65', complement: 'Apto 2' } });
+    await assert.rejects(f.preview(body), { status: 422 });
+    await assert.rejects(f.place(body), { status: 422 });
+    assert.equal(quoteCalls, 0);
+    assert.equal(f.state.orders.length, 0);
+    assert.equal(f.state.movements.length, 0);
+    assert.equal(f.state.products[0].colors[0].stock.M, 3);
+    const nearby = { ...body, shipping_address: { ...body.shipping_address, number: '66' } };
+    await assert.doesNotReject(f.preview(nearby));
+});
+
 test('Pix offer stays off without its explicit operator gate and approved percentage', () => {
     assert.deepEqual(pixDiscountOffer({ pix_discount: 5 }, {}), { enabled: false, percentage: 0 });
     assert.equal(pixDiscountOffer({ pix_discount: 5 }, enabled).enabled, false);

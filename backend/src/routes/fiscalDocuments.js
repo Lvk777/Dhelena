@@ -8,6 +8,7 @@ import { assessNfe, parseAuthorizedNfe, parseManualNfe, reconcileNfe, validNfeKe
 import { fiscalMappingKey, loadReusableMappings, orderVariantIdentity,
     resolveReusableMappings, reusableMappingDecision } from '../lib/fiscalProductMappings.js';
 import { assertFiscalUnlinkEligible, unlinkFiscalDocument, validateFiscalUnlink } from '../services/fiscalUnlink.js';
+import { enqueueAutomaticShippingPreparation } from '../services/autoShippingPreparation.js';
 
 const router = Router();
 const xmlUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1024 * 1024, files: 1 } });
@@ -471,7 +472,7 @@ router.post(`${orderPath}/manual`, uploadLimiter, async (req, res, next) => {
     catch (error) { next(error); }
 });
 
-export async function verifyFiscalDocument(orderId, actorId, input, db = pool) {
+export async function verifyFiscalDocument(orderId, actorId, input, db = pool, env = process.env) {
     let client;
     try {
         const { key, protocol, source } = validateFiscalVerification(input);
@@ -504,6 +505,9 @@ export async function verifyFiscalDocument(orderId, actorId, input, db = pool) {
                 key_last4: key.slice(-4), origin: row.origin,
                 authorization_attested: true, full_content_match_attested: true,
                 automatic_mapping_audit_ids: automatic.mappingAuditIds })]);
+        // Queue only after both official attestations; event and fiscal status commit
+        // atomically. The worker only places an unpaid label in the provider cart.
+        await enqueueAutomaticShippingPreparation(client, order.rows[0], actorId, env);
         await client.query('COMMIT'); return publicDocument(result.rows[0]);
     } catch (error) { if (client) await client.query('ROLLBACK').catch(() => {}); throw error; }
     finally { client?.release(); }

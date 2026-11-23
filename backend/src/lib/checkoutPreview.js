@@ -4,7 +4,7 @@ import { validateCoupon } from '../services.js';
 import { checkoutCents, checkoutDiscount } from './checkoutDiscount.js';
 import { resolveCatalogLine, calculateCheckoutShippingCost, calculateServerOrderTotal } from './orderPricing.js';
 import { reserveVariantStock } from './variantStock.js';
-import { buildShippingPackages, selectShippingQuote } from './shipping.js';
+import { assertDistinctShippingAddresses, buildShippingPackages, selectShippingQuote } from './shipping.js';
 import * as melhorEnvio from '../services/melhorEnvio.js';
 
 function invalid(message, status = 400) { return Object.assign(new Error(message), { status }); }
@@ -55,6 +55,7 @@ export async function previewCheckout(body, userId = null, { db = pool, quoteShi
         const destination = String(shipping_address?.cep || shipping_address?.zip_code || '').replace(/\D/g, '');
         if (origin.length !== 8 || !settings.shipping?.melhor_envio_enabled) throw invalid('Entrega indisponível', 503);
         if (destination.length !== 8) throw invalid('CEP de entrega inválido');
+        assertDistinctShippingAddresses(settings.address, shipping_address);
         const request = { fromPostalCode: origin, toPostalCode: destination,
             products: buildShippingPackages(lines), totalValue: subtotal - pricing.discount };
         const options = await quoteShipping(request);

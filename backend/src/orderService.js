@@ -6,7 +6,7 @@ import { validateCoupon, logAudit, sendOrderNotifications } from './services.js'
 import * as melhorEnvio from './services/melhorEnvio.js';
 import { restoreStock } from './afterSalesService.js';
 import { canCancelWithoutRefund } from './lib/afterSalesPolicy.js';
-import { buildShippingPackages, getCheckoutShippingInput, selectShippingQuote } from './lib/shipping.js';
+import { assertDistinctShippingAddresses, buildShippingPackages, getCheckoutShippingInput, selectShippingQuote } from './lib/shipping.js';
 import { assertMatchingIdempotencyRequest, createOrderRequestFingerprint, normalizeIdempotencyKey } from './lib/idempotency.js';
 import { calculateCheckoutShippingCost, calculateServerOrderTotal, resolveCatalogLine } from './lib/orderPricing.js';
 import { reserveVariantStock } from './lib/variantStock.js';
@@ -182,6 +182,7 @@ export async function placeOrder(userId, body, idempotencyKey, {
             if (originPostalCode.length !== 8) {
                 throw Object.assign(new Error('CEP de origem não configurado'), { status: 503 });
             }
+            assertDistinctShippingAddresses(addressRows[0]?.value, shipping_address);
             if (!shipConfig.melhor_envio_enabled) {
                 throw Object.assign(new Error('Melhor Envio não está ativado'), { status: 503 });
             }

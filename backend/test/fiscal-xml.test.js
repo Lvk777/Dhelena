@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assessNfe, parseAuthorizedNfe, parseManualNfe, reconcileNfe, validNfeKey } from '../src/lib/fiscalXml.js';
-import { confirmFiscalEquivalence, fiscalContextHash, fiscalXmlImportEnabled, parseFiscalXmlUpload, requireFiscalXmlImport, reviewFromAudit, validateFiscalEquivalence, validateFiscalVerification } from '../src/routes/fiscalDocuments.js';
+import { confirmFiscalEquivalence, fiscalContextHash, fiscalXmlImportEnabled, parseFiscalXmlUpload, requireFiscalXmlImport, reviewFromAudit, validateFiscalEquivalence, validateFiscalVerification, verifyFiscalDocument } from '../src/routes/fiscalDocuments.js';
 import { fiscalMappingKey, orderVariantIdentity, resolveReusableMappings,
     reusableMappingDecision } from '../src/lib/fiscalProductMappings.js';
 
@@ -349,4 +349,43 @@ test('official verification requires separate authorization and full-content att
     assert.throws(() => validateFiscalVerification({ ...input, confirmed_authorized: false }), /correspondência/);
     assert.throws(() => validateFiscalVerification({ ...input, confirmed_document_matches: false }), /correspondência/);
     assert.throws(() => validateFiscalVerification({ ...input, source: 'untrusted' }), /portal oficial/);
+});
+
+test('official fiscal verification atomically queues an unpaid shipping preparation for an eligible order', async () => {
+    const events = [], queries = [];
+    const order = { id: '11111111-1111-4111-8111-111111111111', ...{
+        subtotal: '30.00', shipping_cost: '9.98', discount: '0.00', total: '39.98',
+        payment_status: 'approved', shipping_method: 'melhor_envio', status: 'pagamento_aprovado',
+        shipping_status: null, melhor_envio_shipment_id: null,
+        snapshot: { shipping_environment: 'production', customer: { cpf: '12345678909', name: 'Cliente' } },
+    } };
+    const fiscal = { id: '22222222-2222-4222-8222-222222222222', order_id: order.id,
+        access_key: key, parsed_data: parseAuthorizedNfe(Buffer.from(xml())),
+        status: 'pending_official', origin: 'xml', xml_sha256: 'a'.repeat(64) };
+    const item = { id: '33333333-3333-4333-8333-333333333333', product_id: '44444444-4444-4444-8444-444444444444',
+        product_sku: 'SKU1', product_name: 'Shorts Angel Marfim P', quantity: 1, subtotal: '30.00' };
+    const db = { async connect() { return { release() {}, async query(sql, params = []) {
+        queries.push(sql);
+        if (sql.includes('FROM orders')) return { rowCount: 1, rows: [order] };
+        if (sql.includes('FROM fiscal_documents')) return { rows: [fiscal] };
+        if (sql.includes('FROM order_items')) return { rows: [item] };
+        if (sql.includes('FROM settings')) return { rows: [{ value: { document: '61738801000143' } }] };
+        if (sql.includes('FROM audit_logs')) return { rows: [] };
+        if (sql.startsWith('UPDATE fiscal_documents')) return { rows: [{ ...fiscal, status: 'verified', differences: [] }] };
+        if (sql.startsWith('INSERT INTO order_events')) events.push({ sql, params });
+        return { rows: [] };
+    } }; } };
+    const verification = { access_key: key, protocol: fiscal.parsed_data.protocol, source: 'national',
+        confirmed_authorized: true, confirmed_document_matches: true };
+    const env = { AUTO_SHIPPING_PREPARE_ENABLED: 'true', FISCAL_XML_IMPORT_ENABLED: 'true' };
+    const result = await verifyFiscalDocument(order.id, '55555555-5555-4555-8555-555555555555', verification, db, env);
+    assert.equal(result.status, 'verified');
+    assert.equal(events.length, 1);
+    assert.equal(events[0].params[1], 'shipping_auto_prepare_requested');
+    assert.equal(queries.at(-1), 'COMMIT');
+    assert.equal(queries.some(sql => /UPDATE orders|UPDATE products|stock/i.test(sql)), false);
+    assert.equal(order.shipping_status, null);
+    events.length = 0;
+    await verifyFiscalDocument(order.id, '55555555-5555-4555-8555-555555555555', verification, db, {});
+    assert.equal(events.length, 0);
 });
