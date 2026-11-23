@@ -46,7 +46,7 @@ test('publishes a filled synthetic product with the optional editable clothing p
     fireEvent.click(screen.getByRole('button', { name: 'Publicar produto' }));
     await waitFor(() => expect(create).toHaveBeenCalledOnce());
     expect(create.mock.calls[0][0]).toMatchObject({ name: 'Peça fictícia', status: 'published', price: 100,
-        package_height: 5, package_width: 25, package_length: 30, weight: 0.4 });
+        package_height: 5, package_width: 25, package_length: 30, weight: 0.4, sku: null });
     expect(await screen.findByText('Lista de produtos')).toBeTruthy();
 });
 
@@ -65,4 +65,17 @@ test('editing a synthetic product saves a draft without changing its existing im
     expect(update.mock.calls[0][1]).toMatchObject({ name: 'Peça editada', status: 'draft',
         images: ['https://example.test/existing.webp'], expected_updated_date: '2026-11-17T12:00:00Z' });
     expect(create).not.toHaveBeenCalled();
+});
+
+test('trims a manually entered SKU when saving a draft', async () => {
+    create.mockResolvedValue({ id: 'synthetic-product' });
+    render(<MemoryRouter initialEntries={['/admin/produtos/novo']}><Routes>
+        <Route path="/admin/produtos/novo" element={<ProductForm />} />
+        <Route path="/admin/produtos" element={<p>Lista de produtos</p>} />
+    </Routes></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText('Nome do produto'), { target: { value: 'Peça fictícia' } });
+    fireEvent.change(screen.getByLabelText('SKU (opcional)'), { target: { value: '  LUA-42  ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar rascunho' }));
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
+    expect(create.mock.calls[0][0].sku).toBe('LUA-42');
 });

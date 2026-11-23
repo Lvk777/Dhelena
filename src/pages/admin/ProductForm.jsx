@@ -145,7 +145,7 @@ export default function ProductForm() {
 
     const buildPayload = (status) => ({
         name: form.name,
-        sku: form.sku,
+        sku: form.sku.trim() || null,
         category: form.category,
         subcategory: form.subcategory,
         collection: form.collection,
@@ -225,7 +225,7 @@ export default function ProductForm() {
                 return (
                     <div className="max-w-xl mx-auto space-y-4">
                         <WizardInput label="Nome do produto" value={form.name} onChange={(v) => set("name", v)} full placeholder="Ex: Vestido Helena Midi" required error={stepErrors?.name || (saveError === 'Informe o nome do produto antes de salvar.' ? saveError : '')} />
-                        <WizardInput label="SKU" value={form.sku} onChange={(v) => set("sku", v)} placeholder="Ex: DH-VD-001" />
+                        <WizardInput label="SKU (opcional)" value={form.sku} onChange={(v) => set("sku", v)} placeholder="Ex: DH-VD-001" />
                         <WizardTextarea label="Descrição completa" value={form.description} onChange={(v) => set("description", v)} full rows={4} />
                         <WizardTextarea label="Descrição resumida" value={form.short_description} onChange={(v) => set("short_description", v)} full rows={2} />
                         <WizardTextarea label="Detalhes" value={form.details} onChange={(v) => set("details", v)} full rows={2} />

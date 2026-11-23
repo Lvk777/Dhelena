@@ -86,6 +86,25 @@ export function catalogWriteKeys(table, data) {
     return keys;
 }
 
+// A SKU is optional, but PostgreSQL UNIQUE treats repeated empty strings as
+// duplicates. Preserve omitted SKUs on PATCH, and store blank SKUs as NULL.
+export function normalizeProductWrite(data) {
+    if (!Object.hasOwn(data, 'sku')) return data;
+    const sku = data.sku;
+    if (sku != null && typeof sku !== 'string') {
+        throw Object.assign(new Error('SKU do produto deve ser um texto'), { status: 400 });
+    }
+    return { ...data, sku: typeof sku === 'string' ? sku.trim() || null : null };
+}
+
+export function productWriteConflict(error) {
+    if (error?.code !== '23505') return error;
+    const message = error.constraint === 'products_sku_key'
+        ? 'Este SKU já está cadastrado em outro produto. Informe um SKU diferente ou deixe em branco.'
+        : 'Já existe um produto com este identificador. Confira os dados antes de tentar novamente.';
+    return Object.assign(new Error(message), { status: 409 });
+}
+
 export function validateProductForPublication(product) {
     if (product.status !== 'published') return;
     if (!Number.isFinite(Number(product.price)) || Number(product.price) <= 0) {
@@ -258,8 +277,14 @@ router.get('/products/:id', async (req, res, next) => {
 
 router.post('/products', auth, requireAdmin, async (req, res, next) => {
     try {
-        validateProductForPublication(req.body);
-        const product = await insertRow('products', req.body, 'updated_date');
+        const changes = normalizeProductWrite(req.body);
+        validateProductForPublication(changes);
+        let product;
+        try {
+            product = await insertRow('products', changes, 'updated_date');
+        } catch (error) {
+            throw productWriteConflict(error);
+        }
         await logAudit(req.user.id, 'product.create', 'product', product.id, { name: req.body.name }, req.ip);
         res.status(201).json(product);
     } catch (err) { next(err); }
@@ -267,7 +292,8 @@ router.post('/products', auth, requireAdmin, async (req, res, next) => {
 
 router.patch('/products/:id', auth, requireAdmin, async (req, res, next) => {
     try {
-        const { expected_updated_date: expectedUpdatedDate, ...changes } = req.body;
+        const { expected_updated_date: expectedUpdatedDate, ...rawChanges } = req.body;
+        const changes = normalizeProductWrite(rawChanges);
         const product = await withTransaction(async client => {
             const { rows: existing } = await client.query('SELECT id, status, historical_only, sold_count, price, sale_price, sizes, colors, weight, package_height, package_width, package_length, updated_date FROM products WHERE id = $1 FOR UPDATE', [req.params.id]);
             if (!existing.length) return null;
@@ -277,7 +303,11 @@ router.patch('/products/:id', auth, requireAdmin, async (req, res, next) => {
             }
             await assertHistoricalProductCanPublish(client, existing[0], changes.status);
             validateProductForPublication({ ...existing[0], ...changes });
-            return updateRow('products', req.params.id, changes, 'updated_date', client);
+            try {
+                return await updateRow('products', req.params.id, changes, 'updated_date', client);
+            } catch (error) {
+                throw productWriteConflict(error);
+            }
         });
         if (!product) return res.status(404).json({ error: 'Produto não encontrado' });
         await logAudit(req.user.id, 'product.update', 'product', req.params.id, changes, req.ip);
