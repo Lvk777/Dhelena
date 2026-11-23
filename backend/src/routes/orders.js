@@ -30,6 +30,7 @@ import { readInstallmentSettings, publicInstallmentPolicy } from '../lib/install
 import { effectiveInstallmentPolicy, installmentOffers, confirmInstallmentOffer, installmentVersion, installmentSettingsLock, installmentError } from '../lib/installmentPolicy.js';
 import { assertNoWithdrawalRequest } from '../lib/withdrawalRequest.js';
 import { reserveOrderStockInTransaction, releaseOrderStockInTransaction } from '../lib/deferredStock.js';
+import { assertCheckoutDetails } from '../lib/checkoutDetails.js';
 
 const router = Router();
 router.use(installmentRoutes);
@@ -67,6 +68,7 @@ router.post('/orders', auth, orderLimiter, async (req, res) => {
                 return res.status(503).json({ error: 'Loja em manutenção. Tente novamente após a reabertura.' });
             }
         }
+        assertCheckoutDetails(req.body);
         const idempotencyKey = req.headers['x-idempotency-key'] || req.headers['idempotency-key'];
         const order = await placeOrder(req.user.id, req.body, idempotencyKey);
         res.status(201).json(order);

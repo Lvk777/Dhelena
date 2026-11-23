@@ -15,7 +15,7 @@ export function omitEmptyOptional(value) {
     return typeof value === 'string' ? nonEmpty(value) : value;
 }
 
-function validCpf(number) {
+export function validCpf(number) {
     if (!/^\d{11}$/.test(number) || /^(\d)\1{10}$/.test(number)) return false;
     const check = (length) => {
         const sum = [...number.slice(0, length)].reduce((total, digit, index) => total + Number(digit) * (length + 1 - index), 0);

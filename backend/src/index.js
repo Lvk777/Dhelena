@@ -27,6 +27,7 @@ import webhookRoutes from './routes/webhooks.js';
 import melhorEnvioOAuthRoutes from './routes/melhorEnvioOAuth.js';
 import { createOrderWebhookWorker } from './services/mercadoPagoWebhookQueue.js';
 import { createOrderReservationExpiryWorker } from './services/orderReservationExpiry.js';
+import { createPendingPaymentReconciliationWorker } from './services/pendingPaymentReconciliation.js';
 import { createLoginCodeCleanupWorker } from './services/loginCode.js';
 
 const app = express();
@@ -189,6 +190,7 @@ const notificationWorker = createNotificationWorker();
 const shippingWebhookWorker = createShippingWebhookWorker();
 const autoShippingPreparationWorker = createAutoShippingPreparationWorker();
 const reservationExpiryWorker = createOrderReservationExpiryWorker();
+const pendingPaymentWorker = createPendingPaymentReconciliationWorker();
 const loginCodeCleanupWorker = createLoginCodeCleanupWorker({ db: pool });
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[D'Helenas API] Running on port ${PORT}`);
@@ -198,6 +200,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     shippingWebhookWorker.start();
     autoShippingPreparationWorker.start();
     reservationExpiryWorker.start();
+    pendingPaymentWorker.start();
     loginCodeCleanupWorker.start();
 });
 
@@ -212,6 +215,7 @@ async function shutdown(signal) {
         await shippingWebhookWorker.stop();
         await autoShippingPreparationWorker.stop();
         await reservationExpiryWorker.stop();
+        await pendingPaymentWorker.stop();
         loginCodeCleanupWorker.stop();
         try { await pool.end(); } catch { /* pool may not have connected yet */ }
         process.exit(0);

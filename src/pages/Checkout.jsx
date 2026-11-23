@@ -34,6 +34,7 @@ export default function Checkout() {
         nome: "", cpf: "", email: "", telefone: "",
         cep: "", street: "", number: "", complement: "", district: "", city: "", state: "SP",
     });
+    const [savedAddresses, setSavedAddresses] = useState([]);
     const [shipping, setShipping] = useState({ method: "", cost: null, carrier: null, serviceName: null, deliveryTime: null, quoteId: null });
     const [quoteLoading, setQuoteLoading] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState("");
@@ -72,6 +73,34 @@ export default function Checkout() {
             }));
         }
     }, [user]);
+
+    // A logged-in customer may reuse an address already saved in her account.
+    // The choice remains explicit; it never silently overwrites a new address.
+    useEffect(() => {
+        let active = true;
+        setSavedAddresses([]);
+        if (user?.id) {
+            base44.entities.Address.list("-created_date", 50)
+                .then(addresses => { if (active) setSavedAddresses(Array.isArray(addresses) ? addresses : []); })
+                .catch(() => { /* Manual address entry remains available. */ });
+        }
+        return () => { active = false; };
+    }, [user?.id]);
+
+    const applySavedAddress = address => {
+        setForm(current => ({
+            ...current,
+            cep: address.cep || address.zip_code || "",
+            street: address.street || "",
+            number: address.number || "",
+            complement: address.complement || "",
+            district: address.district || "",
+            city: address.city || "",
+            state: address.state || "SP",
+        }));
+        setErrors(previous => ({ ...previous, cep: undefined, street: undefined,
+            number: undefined, district: undefined, city: undefined, state: undefined }));
+    };
 
     // Load payment methods when reaching payment step
     useEffect(() => {
@@ -364,6 +393,17 @@ export default function Checkout() {
                     {step === 1 && (
                         <div className="space-y-5">
                             <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Endereço de entrega</h2>
+                            {savedAddresses.length > 0 && <div className="space-y-2">
+                                <p className="text-sm text-muted-foreground">Usar um endereço da minha conta</p>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                    {savedAddresses.map(address => <button type="button" key={address.id}
+                                        onClick={() => applySavedAddress(address)}
+                                        className="min-h-11 border border-border p-3 text-left text-sm hover:border-[hsl(var(--gold))] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(var(--gold))]">
+                                        <span className="font-medium">{address.label || (address.is_primary ? 'Endereço principal' : 'Endereço salvo')}</span>
+                                        <span className="block text-xs text-muted-foreground mt-1">{address.street}, {address.number} · {address.city}/{address.state}</span>
+                                    </button>)}
+                                </div>
+                            </div>}
                             <AddressFields form={form} set={set} errors={errors} />
                         </div>
                     )}
