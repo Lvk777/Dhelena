@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Upload, Download, ExternalLink } from 'lucide-react';
+import { FileText, Upload, Download, ExternalLink, ChevronDown } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { formatBRL } from '@/data/products';
 import { userFacingError } from '@/lib/userFacingError';
@@ -26,6 +26,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
     const [selectedPair, setSelectedPair] = useState('');
     const [matchConfirmed, setMatchConfirmed] = useState(false);
     const [saveForFuture, setSaveForFuture] = useState(false);
+    const [showDetails, setShowDetails] = useState(false);
     const reviewIssues = document?.analysis?.issues || [];
     const candidates = document?.analysis?.manualCandidates || document?.analysis?.productCandidates
         || (document?.analysis?.productCandidate ? [document.analysis.productCandidate] : []);
@@ -49,6 +50,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
         } catch { setHistoryError('Não foi possível consultar o histórico fiscal. Atualize a página antes de trocar a nota.'); }
     };
     useEffect(() => { refreshHistory(); }, [order.id]);
+    useEffect(() => { setShowDetails(false); }, [order.id, document?.id]);
     const unlinkBlocked = !!order.melhor_envio_shipment_id || ['cart_created', 'purchase_inflight', 'purchase_uncertain',
         'purchased', 'generating', 'generated', 'posted', 'in_transit', 'out_for_delivery', 'delivered'].includes(order.shipping_status);
     const unlink = async review => {
@@ -130,7 +132,14 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
     };
 
     return <section className="bg-background text-foreground p-5 space-y-3" aria-label="Nota fiscal do pedido">
-        <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground flex items-center gap-2"><FileText className="w-4 h-4" /> Nota fiscal</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground flex items-center gap-2"><FileText className="w-4 h-4" /> Nota fiscal</h2>
+            {(document || history.length > 0) && <button type="button" aria-expanded={showDetails} onClick={() => setShowDetails(value => !value)}
+                className="btn-outline text-xs min-h-11 inline-flex items-center gap-2">
+                {showDetails ? 'Ocultar detalhes' : 'Ver detalhes'}
+                <ChevronDown className={`w-4 h-4 transition-transform ${showDetails ? 'rotate-180' : ''}`} aria-hidden="true" />
+            </button>}
+        </div>
         {loadError && <p role="alert" className="text-sm text-error-ink">{loadError}</p>}
         {error && <p role="alert" className="text-sm text-error-ink">{error}</p>}
         {!loadError && <input ref={inputRef} type="file" accept=".xml,text/xml,application/xml" onChange={importFile} className="sr-only" aria-label="Arquivo XML da NF-e" />}
@@ -142,7 +151,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
             </button>
         </> : document.origin === 'key_only' ? <>
             <p className="text-xs font-medium">Chave registrada em {new Date(document.created_at).toLocaleString('pt-BR')} · pendente</p>
-            <p className="text-xs break-all">Chave: {document.access_key}</p>
+            {showDetails && <p className="text-xs break-all" aria-label="Detalhes da nota fiscal">Chave: {document.access_key}</p>}
             <p role="status" className="text-sm border border-amber-500/50 p-3">Falta importar o XML fiscal original. A chave isolada não foi conferida com o pedido e não pode ser usada no Melhor Envio.</p>
             <a href={OFFICIAL_PORTALS.national} target="_blank" rel="noopener noreferrer" className="text-gold-ink underline inline-flex items-center gap-1">Consultar no portal oficial <ExternalLink className="w-3 h-3" /></a>
             <div className="flex flex-wrap gap-2">
@@ -150,22 +159,26 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
                 <button type="button" className="btn-outline text-xs min-h-11" disabled={busy} onClick={removeKey}>Remover chave pendente</button>
             </div>
         </> : <>
-            <p className="text-xs font-medium">Origem: {document.origin === 'manual' ? 'Preenchimento manual' : 'XML importado'}{document.created_at && ` · cadastrado em ${new Date(document.created_at).toLocaleString('pt-BR')}`}</p>
             <p className="text-sm font-medium">NF-e {document.data.number} · série {document.data.series} · modelo 55</p>
-            <p className="text-xs break-all">Chave: {document.access_key}</p>
-            <p className="text-xs">Protocolo: {document.data.protocol} · Emissão: {new Date(document.data.issuedAt).toLocaleString('pt-BR')}</p>
-            <p className="text-xs">Emitente: {document.data.issuerName} · CNPJ {document.data.issuerCnpj}</p>
-            <p className="text-xs">Destinatário: {document.data.recipientName} · documento {document.data.recipientDocument}</p>
-            <p className="text-xs">Mercadorias: {formatBRL(document.data.productCents / 100)} · Frete: {formatBRL(document.data.shippingCents / 100)} · Total: {formatBRL(document.data.totalCents / 100)}</p>
-            <ul className="text-xs list-disc pl-5">{document.data.items.map((item, index) => <li key={index}>{item.name} · {item.quantity} un. · {formatBRL(item.productCents / 100)}</li>)}</ul>
+            <p className="text-xs text-muted-foreground">Total da nota: {formatBRL(document.data.totalCents / 100)}</p>
+            {showDetails && <div className="border border-border p-3 space-y-2 min-w-0 text-xs" aria-label="Detalhes da nota fiscal">
+                <p>Origem: {document.origin === 'manual' ? 'Preenchimento manual' : 'XML importado'}{document.created_at && ` · cadastrado em ${new Date(document.created_at).toLocaleString('pt-BR')}`}</p>
+                <p className="break-all">Chave: {document.access_key}</p>
+                <p>Protocolo: {document.data.protocol} · Emissão: {new Date(document.data.issuedAt).toLocaleString('pt-BR')}</p>
+                <p>Emitente: {document.data.issuerName} · CNPJ {document.data.issuerCnpj}</p>
+                <p>Destinatário: {document.data.recipientName} · documento {document.data.recipientDocument}</p>
+                <p>Mercadorias: {formatBRL(document.data.productCents / 100)} · Frete: {formatBRL(document.data.shippingCents / 100)}</p>
+                <ul className="list-disc pl-5">{document.data.items.map((item, index) => <li key={index}>{item.name} · {item.quantity} un. · {formatBRL(item.productCents / 100)}</li>)}</ul>
+                {document.status === 'verified' && document.official_checked_at && <p>Conferência oficial registrada em {new Date(document.official_checked_at).toLocaleString('pt-BR')}.</p>}
+            </div>}
             {document.differences.length > 0 ? <div role="alert" className="border border-amber-500/50 p-3 text-sm">
                 <p className="font-medium">Divergência com o pedido. Associação e uso no Melhor Envio bloqueados.</p>
                 <ul className="list-disc pl-5 space-y-1">{(document.analysis?.issues?.length
                     ? document.analysis.issues.map(issue => issue.message) : document.differences)
                     .map((message, index) => <li key={index}>{message}</li>)}</ul>
-            </div> : document.status === 'verified' ? <p role="status" className="text-sm">Conferência manual em fonte oficial registrada em {new Date(document.official_checked_at).toLocaleString('pt-BR')}. Chave liberada para a preparação do envio, sujeita às demais proteções.</p>
+            </div> : document.status === 'verified' ? <p role="status" className="text-sm">NF-e conferida em fonte oficial. Chave liberada para preparar o envio, sujeita às demais proteções.</p>
                 : <p role="status" className="text-sm">Dados cadastrados e pedido conferem. Falta confirmar a situação atual da NF-e no portal oficial.</p>}
-            {Array.isArray(document.equivalence_reviews) && document.equivalence_reviews.length > 0 &&
+            {showDetails && Array.isArray(document.equivalence_reviews) && document.equivalence_reviews.length > 0 &&
                 <div className="border border-border p-3 space-y-2 text-sm" aria-label="Conferências de equivalência registradas">
                     <h3 className="font-medium">Correspondências registradas</h3>
                     {document.equivalence_reviews.map((review, index) => <div key={index} className="border-t border-border pt-2">
@@ -176,7 +189,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
                     </div>)}
                     <p className="text-xs text-muted-foreground">O XML original permanece intacto. A autorização fiscal requer consulta separada em fonte oficial.</p>
                 </div>}
-            {document.automatic_product_matches > 0 && <p role="status" className="border border-border p-3 text-sm">
+            {showDetails && document.automatic_product_matches > 0 && <p role="status" className="border border-border p-3 text-sm">
                 {document.automatic_product_matches} correspondência(s) de produto já comprovada(s) foram aplicadas. Quantidades, valores e demais dados continuam sujeitos à conferência.
             </p>}
             {document.review_stale && <p role="alert" className="border border-amber-500/50 p-3 text-sm">O pedido mudou desde uma conferência anterior. Solicite nova análise fiscal; a expedição permanece bloqueada.</p>}
@@ -248,7 +261,7 @@ export default function FiscalDocumentPanel({ order, document, loadError = '', o
             </div>}
         </>}
         {historyError && <p role="alert" className="text-sm text-error-ink">{historyError}</p>}
-        {history.length > 0 && <div className="border-t border-border pt-4 space-y-2" aria-label="Histórico de documentos fiscais">
+        {showDetails && history.length > 0 && <div className="border-t border-border pt-4 space-y-2" aria-label="Histórico de documentos fiscais">
             <h3 className="text-xs uppercase tracking-widest">Histórico de documentos anteriores</h3>
             <ul className="space-y-3">{history.map(item => <li key={`${item.id}-${item.unlinked_at}`} className="border border-border p-3 text-xs break-words">
                 <p className="font-medium">NF-e {item.number || '—'} · série {item.series || '—'} · chave terminada em {item.access_key_last4}</p>

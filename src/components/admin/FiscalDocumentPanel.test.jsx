@@ -116,7 +116,38 @@ test('reviewed unlink preserves the historical entry and offers XML import again
     }));
     rerender(<FiscalDocumentPanel order={order} document={null} onChanged={onChanged} />);
     expect(screen.getByRole('button', { name: 'Importar XML' })).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver detalhes' }));
     await waitFor(() => expect(screen.getByLabelText('Histórico de documentos fiscais').textContent).toContain('XML preservado'));
+});
+
+test('verified NF-e shows a compact summary and hides auxiliary data until details are requested', () => {
+    base44.functions.invoke.mockResolvedValue([]);
+    const document = { id: 'fiscal-1', origin: 'xml', status: 'verified', differences: [],
+        access_key: '3'.repeat(44), official_checked_at: '2026-11-20T12:00:00Z',
+        equivalence_reviews: [{ fields_compared: ['product_code'], created_at: '2026-11-20T11:00:00Z', reviewed_by: 'Admin' }],
+        data: { number: '191110001', series: '26', issuedAt: '2026-11-19T09:39:21Z', protocol: '4'.repeat(15),
+            issuerName: 'Emitente de exemplo', issuerCnpj: '12345678000199', recipientName: 'Cliente de exemplo',
+            recipientDocument: '12345678909', productCents: 3000, shippingCents: 998, totalCents: 3998,
+            items: [{ name: 'Shorts de exemplo', quantity: 1, productCents: 3000 }] } };
+    render(<FiscalDocumentPanel order={{ id: 'order-1' }} document={document} onChanged={vi.fn()} />);
+
+    expect(screen.getByText('NF-e 191110001 · série 26 · modelo 55')).toBeTruthy();
+    expect(screen.getByText(/Total da nota: R\$/)).toBeTruthy();
+    expect(screen.getByText(/NF-e conferida em fonte oficial/)).toBeTruthy();
+    expect(screen.queryByLabelText('Detalhes da nota fiscal')).toBeNull();
+    expect(screen.queryByText(/Correspondências registradas/)).toBeNull();
+
+    const expand = screen.getByRole('button', { name: 'Ver detalhes' });
+    expect(expand.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(expand);
+    expect(screen.getByLabelText('Detalhes da nota fiscal').textContent).toContain('Cliente de exemplo');
+    expect(screen.getByText('Correspondências registradas')).toBeTruthy();
+    const collapse = screen.getByRole('button', { name: 'Ocultar detalhes' });
+    expect(collapse.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(collapse);
+    expect(screen.queryByLabelText('Detalhes da nota fiscal')).toBeNull();
+    expect(screen.getByText(/NF-e conferida em fonte oficial/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Baixar XML autorizado' })).toBeTruthy();
 });
 
 test('replacement confirms official status and imports a new XML in one request', async () => {
