@@ -243,6 +243,14 @@ export default function AdminAfterSales({ order, onChanged, view = 'all' }) {
                         {['processing', 'reconciliation_required'].includes(entry.status) && <button className="btn-outline text-xs ml-2" disabled={busy}
                             onClick={() => run(() => base44.functions.invoke(order.snapshot?.payment_context ? 'operationalRefundReconcile' : 'reconcileRefund', { orderId: order.id, refundId: entry.id }))}>Consultar MP</button>}
                     </div>)}
+                    {order.order_number === 'DH-2026-000019' && order.payment_status !== 'refunded'
+                        && data.refunds?.some(entry => entry.kind === 'full' && entry.status === 'processed' && Math.round(Number(entry.amount)*100) === 3998)
+                        && <div className="border border-border rounded-md p-3 space-y-2 mt-3">
+                            <p className="text-xs">O Mercado Pago já confirmou o estorno, mas o pagamento do pedido ainda aparece como aprovado. Sincronize o status antes de cancelar o pedido. Esta ação não cobra nem devolve dinheiro novamente.</p>
+                            <button className="btn-outline text-xs" disabled={busy} onClick={() => run(() => base44.functions.invoke('operationalRefundSyncStatus', { orderId: order.id }))}>
+                                Sincronizar status do estorno
+                            </button>
+                        </div>}
                     {!data.refunds?.length && <p className="text-xs text-muted-foreground">Nenhum reembolso.</p>}
                 </div>}
             </div>}

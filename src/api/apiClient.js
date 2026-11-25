@@ -369,6 +369,8 @@ const functions = {
                 return apiFetch(`/orders/${args.orderId}/refunds/operational/preview`, { method:'POST',body:JSON.stringify(args.request) });
             case 'operationalRefundReconcile':
                 return apiFetch(`/orders/${args.orderId}/refunds/operational/${args.refundId}/reconcile`,{method:'POST'});
+            case 'operationalRefundSyncStatus':
+                return apiFetch(`/orders/${args.orderId}/refunds/operational/sync-status`,{method:'POST'});
             case 'operationalRefund':
                 return apiFetch(`/orders/${args.orderId}/refunds/operational`, { method:'POST',headers:{'X-Idempotency-Key':args.idempotencyKey},body:JSON.stringify(args.request) });
             case 'notificationReadiness':

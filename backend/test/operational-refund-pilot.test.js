@@ -77,6 +77,34 @@ test('pilot flag blocks financial request and prevents provider calls', async ()
     assert.deepEqual(calls, { reads: 0, refunds: 0, writes: 0 });
 });
 
+test('syncs an already processed provider refund without issuing another refund or changing stock', async () => {
+    let current={...order,payment_status:'approved'};
+    const refund={id:'refund-local-19',kind:'full',amount:'39.98',status:'processed',
+        provider_refund_id:'RF-19',provider_payment_id:'PAY-TEST-19'};
+    let providerRefundCalls=0,stockWrites=0,updated=false;
+    const client={query:async(sql)=>{
+        if(sql.startsWith('SELECT * FROM orders'))return {rows:[current]};
+        if(sql.startsWith('SELECT * FROM order_refunds'))return {rows:[refund]};
+        if(sql.startsWith('SELECT * FROM order_items'))return {rows:[]};
+        if(sql.startsWith('UPDATE orders SET payment_status')){current={...current,payment_status:'refunded'};updated=true;return {rows:[]};}
+        if(sql.startsWith('INSERT INTO audit_logs'))return {rows:[]};
+        stockWrites++;throw new Error('Unexpected mutation');
+    }};
+    const provider={
+        getWebhookCredentialIdentity:async()=>({mode:'test',userId:'seller'}),
+        getRefundableOrder:async()=>({...remote,refunds:[{id:'RF-19',transaction_id:'PAY-TEST-19',amount:39.98,status:'processed'}]}),
+        refundOrder:async()=>{providerRefundCalls++;throw new Error('must never refund');},
+    };
+    const service=createOperationalRefundService({db:client,transaction:async callback=>callback(client),provider,
+        contexts:()=>[context],env:{AFTER_SALES_OPERATIONAL_PILOT_ENABLED:'true',
+            AFTER_SALES_OPERATIONAL_ORDER_SCOPE:'DH-2026-000019'}});
+    const result=await service.syncRefundedStatus(order.id,'admin');
+    assert.deepEqual(result,{payment_status:'refunded',already_synced:false});
+    assert.equal(updated,true);assert.equal(providerRefundCalls,0);assert.equal(stockWrites,0);
+    const repeated=await service.syncRefundedStatus(order.id,'admin');
+    assert.equal(repeated.already_synced,true);
+});
+
 test('pilot financial flow confirms, records refund once and never restocks automatically (mock provider)', async () => {
     let local = structuredClone(order);
     let storedRefund = null;

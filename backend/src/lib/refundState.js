@@ -5,6 +5,6 @@ export async function refundInFlight(client, orderId) {
     if (!schema.rows[0]?.relation) return false;
     const { rows } = await client.query(
         `SELECT 1 FROM order_refunds WHERE order_id = $1
-         AND status IN ('reserved', 'processing', 'reconciliation_required') LIMIT 1`, [orderId]);
+         AND status IN ('reserved', 'processing', 'reconciliation_required', 'processed') LIMIT 1`, [orderId]);
     return rows.length > 0;
 }

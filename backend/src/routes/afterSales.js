@@ -22,6 +22,10 @@ router.post('/orders/:id/refunds/operational/:refundId/reconcile',auth,requireSu
     try{res.json(await operationalRefunds.reconcile(req.params.id,req.user.id,req.params.refundId));}
     catch(error){replyError(res,error);}
 });
+router.post('/orders/:id/refunds/operational/sync-status',auth,requireSupabaseAdmin,async(req,res)=>{
+    try{res.json(await operationalRefunds.syncRefundedStatus(req.params.id,req.user.id));}
+    catch(error){replyError(res,error);}
+});
 router.use('/orders', auth, (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Autenticação necessária' });
     next();

@@ -110,6 +110,32 @@ export function createOperationalRefundService({db=pool,transaction=withTransact
         if(remote.refunds.length===prior.filter(r=>r.status==='processed').length){compareLedger(remote,prior);return row;}
         return recordRefundOutcome(row.id,remote,prior,transaction);
     }
-    return {preview,request,reconcile};
+    // Does not create a new provider refund or alter stock. Repairs only the local
+    // payment projection after verifying every processed refund in the official order.
+    async function syncRefundedStatus(id,actor) {
+        if(!pilotRefundEnabled(env))throw afterSalesError('Conciliação operacional desabilitada.',403);
+        const {order,ledger}=await load(db,id,false,true);
+        assertPilotRefund(order,'full',PILOT_REFUND_PAID_CENTS,env);
+        if(ledger.length!==1||ledger[0].status!=='processed'||moneyCents(ledger[0].amount)!==PILOT_REFUND_PAID_CENTS)
+            throw afterSalesError('Reembolso integral ainda não confirmado localmente. Não solicite outro estorno.');
+        const {remote}=await official(order);
+        compareLedger(remote,ledger);
+        return transaction(async client=>{
+            const current=(await client.query('SELECT * FROM orders WHERE id=$1 FOR UPDATE',[id])).rows[0];
+            if(!current)throw afterSalesError('Pedido não encontrado.',404);
+            assertPilotRefund(current,'full',PILOT_REFUND_PAID_CENTS,env);
+            const currentLedger=(await client.query('SELECT * FROM order_refunds WHERE order_id=$1 ORDER BY created_at FOR UPDATE',[id])).rows;
+            if(currentLedger.length!==1||currentLedger[0].status!=='processed'||currentLedger[0].id!==ledger[0].id)
+                throw afterSalesError('O histórico do estorno mudou. Consulte novamente.');
+            if(current.payment_status==='refunded')return {payment_status:'refunded',already_synced:true};
+            if(!['approved','partially_refunded'].includes(current.payment_status))
+                throw afterSalesError('Estado financeiro incompatível com o estorno.');
+            await client.query("UPDATE orders SET payment_status='refunded',payment_updated_at=now(),updated_at=now() WHERE id=$1",[id]);
+            await client.query("INSERT INTO audit_logs(admin_id,action,entity_type,entity_id,changes) VALUES($1,'refund.status_synced','order',$2,$3)",
+                [actor,id,JSON.stringify({provider_refund_id:ledger[0].provider_refund_id})]);
+            return {payment_status:'refunded',already_synced:false};
+        });
+    }
+    return {preview,request,reconcile,syncRefundedStatus};
 }
 export const operationalRefunds=createOperationalRefundService();
