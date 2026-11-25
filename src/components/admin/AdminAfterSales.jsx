@@ -259,7 +259,7 @@ export default function AdminAfterSales({ order, onChanged, view = 'all' }) {
                         <p className="text-xs text-muted-foreground">Esta liberação TEST aceita somente o saldo restante calculado no backend para DH-2026-000006. O reembolso não cria devolução nem repõe estoque.</p>
                         <button className="btn-outline text-xs" disabled={busy || !refundPreview?.safe_to_refund_remaining} onClick={submitRefund}>Solicitar reembolso do saldo MP TEST</button>
                     </div>}
-                    {!data.refunds_enabled && order.order_number !== 'DH-2026-000019' && <p className="text-xs text-muted-foreground">Reembolsos financeiros desabilitados até validação operacional.</p>}
+                    {!data.refunds_enabled && !['DH-2026-000019', 'DH-2026-000020'].includes(order.order_number) && <p className="text-xs text-muted-foreground">Reembolsos financeiros desabilitados até validação operacional.</p>}
                     </>}
                 </div>
 
