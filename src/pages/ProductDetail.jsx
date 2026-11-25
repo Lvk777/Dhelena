@@ -66,9 +66,11 @@ export default function ProductDetail() {
     }
 
     const price = product.salePrice ?? product.price;
-    const galleryImages = product.images.filter(Boolean).slice(0, 4);
     const fav = isFavorite(product.id);
     const currentColor = product.colors.find((c) => c.id === color);
+    const galleryImages = [currentColor?.image, ...product.images.filter(Boolean)]
+        .filter((src, index, all) => src && all.indexOf(src) === index)
+        .slice(0, 4);
     const sizeStock = size ? stockFor(product, color, size) : 0;
     const related = getRelated(product) || [];
     const look = getCompleteLook(product) || [];
@@ -163,7 +165,7 @@ export default function ProductDetail() {
                                 {product.colors.map((c) => (
                                     <button
                                         key={c.id}
-                                        onClick={() => { setColor(c.id); setSize(null); }}
+                                        onClick={() => { setColor(c.id); setSize(null); setActiveImg(0); }}
                                         className={`w-9 h-9 rounded-full border-2 transition-all ${color === c.id ? "border-[hsl(var(--gold))]" : "border-border hover:border-foreground/40"}`}
                                         style={{ background: c.hex || COLOR_SWATCHES[c.id]?.hex }}
                                         aria-label={c.name || COLOR_SWATCHES[c.id]?.name}
