@@ -162,8 +162,10 @@ export default function AdminAfterSales({ order, onChanged, view = 'all' }) {
                         : SHIPPED.has(order.status) ? <p className="text-muted-foreground">Pedido enviado ou entregue: use devolução física, não cancelamento.</p>
                             : ['approved', 'partially_refunded'].includes(order.payment_status)
                                 ? <p className="text-muted-foreground">Pagamento confirmado: concilie o reembolso integral antes de cancelar.</p>
-                                : <button className="btn-outline text-xs" disabled={busy || order.order_number === 'DH-2026-000006'
-                                    || (!!order.mercado_pago_order_id && !data.pending_cancellation_enabled)} onClick={cancel}>Cancelar pedido</button>}
+                                : <><button className="btn-outline text-xs" disabled={busy || order.order_number === 'DH-2026-000006'
+                                    || (order.payment_status !== 'refunded' && !!order.mercado_pago_order_id && !data.pending_cancellation_enabled)} onClick={cancel}>
+                                    {order.payment_status === 'refunded' ? 'Encerrar pedido e repor estoque' : 'Cancelar pedido'}
+                                </button>{order.payment_status === 'refunded' && <p className="text-xs text-muted-foreground mt-2">O pagamento já foi devolvido. Esta ação apenas encerra a compra e repõe a reserva de estoque; não realiza outro estorno.</p>}</>}
                     {!!order.mercado_pago_order_id && !data.pending_cancellation_enabled && order.payment_status === 'pending'
                         && <p className="text-xs text-muted-foreground mt-1">Cancelamento no provedor desabilitado até validação operacional.</p>}
                 </div>}
@@ -257,7 +259,7 @@ export default function AdminAfterSales({ order, onChanged, view = 'all' }) {
                         <p className="text-xs text-muted-foreground">Esta liberação TEST aceita somente o saldo restante calculado no backend para DH-2026-000006. O reembolso não cria devolução nem repõe estoque.</p>
                         <button className="btn-outline text-xs" disabled={busy || !refundPreview?.safe_to_refund_remaining} onClick={submitRefund}>Solicitar reembolso do saldo MP TEST</button>
                     </div>}
-                    {!data.refunds_enabled && <p className="text-xs text-muted-foreground">Reembolsos financeiros desabilitados até validação operacional.</p>}
+                    {!data.refunds_enabled && order.order_number !== 'DH-2026-000019' && <p className="text-xs text-muted-foreground">Reembolsos financeiros desabilitados até validação operacional.</p>}
                     </>}
                 </div>
 

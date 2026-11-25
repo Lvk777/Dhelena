@@ -6,6 +6,7 @@ export default function OperationalRefund({ order, onChanged }) {
     const [reason,setReason]=useState(''),[preview,setPreview]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
     const [confirmed,setConfirmed]=useState(false),[authorization,setAuthorization]=useState(''),[key,setKey]=useState('');
     if(order.order_number!=='DH-2026-000019')return null;
+    if(order.payment_status==='refunded')return <p role="status" className="text-xs text-success-ink">Pagamento integralmente reembolsado. Não é necessário solicitar outro estorno.</p>;
     if(!order.snapshot?.payment_context||order.payment_status!=='approved')return <p className="text-xs text-muted-foreground">O estorno deste pedido exige um pagamento aprovado e vínculo confirmado com o Mercado Pago.</p>;
     const request={kind:'full',reason,selected_items:[]};
     const invalidate=()=>{setPreview(null);setConfirmed(false);setAuthorization('');setKey('');};

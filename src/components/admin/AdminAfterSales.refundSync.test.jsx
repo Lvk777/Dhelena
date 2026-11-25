@@ -33,3 +33,11 @@ test('does not auto-sync a different order', async () => {
     await waitFor(() => expect(screen.getByText(/Total · R\$ 39,98/)).toBeTruthy());
     expect(base44.functions.invoke.mock.calls.filter(([name]) => name === 'operationalRefundSyncStatus')).toHaveLength(0);
 });
+
+test('a refunded order can be closed even while pending-payment cancellation is disabled', async () => {
+    base44.functions.invoke.mockResolvedValue(data);
+    render(<AdminAfterSales order={{ ...order, payment_status: 'refunded', mercado_pago_order_id: 'MP-19' }} view="refunds" onChanged={vi.fn()} />);
+    const close = await screen.findByRole('button', { name: 'Encerrar pedido e repor estoque' });
+    expect(close.disabled).toBe(false);
+    expect(screen.getByText(/não realiza outro estorno/)).toBeTruthy();
+});
