@@ -5,6 +5,7 @@ import { paymentContexts } from '../lib/mercadoPagoContext.js';
 import { verifyResourceContext } from './mercadoPagoWebhookQueue.js';
 import { planRefund, findIdempotentRefund, moneyCents, afterSalesError } from '../lib/afterSalesPolicy.js';
 import { recordRefundOutcome } from '../afterSalesService.js';
+import { assertPilotRefund, pilotRefundEnabled, PILOT_REFUND_PAID_CENTS } from '../lib/refundPilotScope.js';
 
 function input(request) {
     const kind=request?.kind,reason=String(request?.reason||'').trim(),selected=request?.selected_items||[];
@@ -55,21 +56,26 @@ export function createOperationalRefundService({db=pool,transaction=withTransact
         return {order,ledger,items};
     }
     async function preview(id,actor,raw) {
-        const request=input(raw),{order,ledger,items}=await load(db,id),{context,remote}=await official(order);
+        const request=input(raw),{order,ledger,items}=await load(db,id);
+        assertPilotRefund(order,request.kind,PILOT_REFUND_PAID_CENTS,env);
+        const {context,remote}=await official(order);
         compareLedger(remote,ledger);const amount=planRefund(order,remote,ledger,request.kind,request.selected,items);
-        return {mode:context.mode,amount_cents:amount,kind:request.kind,enabled:env.AFTER_SALES_OPERATIONAL_ENABLED==='true'&&env.AFTER_SALES_REFUNDS_ENABLED==='true',
+        assertPilotRefund(order,request.kind,amount,env);
+        return {mode:context.mode,amount_cents:amount,kind:request.kind,enabled:pilotRefundEnabled(env),
             confirmation:confirm(order,ledger,request,actor,amount),expires_in_seconds:300};
     }
     async function request(id,actor,raw,key) {
-        if(env.AFTER_SALES_OPERATIONAL_ENABLED!=='true'||env.AFTER_SALES_REFUNDS_ENABLED!=='true')throw afterSalesError('Reembolsos operacionais desabilitados até homologação.',403);
+        if(!pilotRefundEnabled(env))throw afterSalesError('Reembolsos operacionais desabilitados até homologação.',403);
         if(!/^[A-Za-z0-9_-]{8,128}$/.test(key||''))throw afterSalesError('Chave de idempotência inválida.',400);
         const desired=input(raw);
         const reservation=await transaction(async client=>{
             const {order,ledger,items}=await load(client,id,true,true);
+            assertPilotRefund(order,desired.kind,PILOT_REFUND_PAID_CENTS,env);
             const previous=findIdempotentRefund(ledger,key,desired.kind,desired.reason,desired.selected,null);
             if(previous)return {previous};
             const {context,remote}=await official(order);compareLedger(remote,ledger);
             const amount=planRefund(order,remote,ledger,desired.kind,desired.selected,items);
+            assertPilotRefund(order,desired.kind,amount,env);
             if(raw.confirm!==true)throw afterSalesError('Confirme explicitamente o reembolso.',400);
             confirm(order,ledger,desired,actor,amount,raw.confirmation);
             const saved=(await client.query(`INSERT INTO order_refunds(order_id,idempotency_key,kind,amount,status,provider_order_id,provider_payment_id,reason,actor_id,selected_items,return_id)
@@ -92,10 +98,13 @@ export function createOperationalRefundService({db=pool,transaction=withTransact
         }
     }
     async function reconcile(id,actor,refundId) {
-        if(env.AFTER_SALES_OPERATIONAL_ENABLED!=='true'||env.AFTER_SALES_REFUNDS_ENABLED!=='true')throw afterSalesError('Conciliação operacional desabilitada até homologação.',403);
+        if(!pilotRefundEnabled(env))throw afterSalesError('Conciliação operacional desabilitada até homologação.',403);
         const {order,ledger}=await load(db,id,false,true);
+        assertPilotRefund(order,'full',PILOT_REFUND_PAID_CENTS,env);
         const row=ledger.find(r=>r.id===refundId);
         if(!row)throw afterSalesError('Reembolso não encontrado.',404);
+        if (row.kind!=='full'||moneyCents(row.amount)!==PILOT_REFUND_PAID_CENTS)
+            throw afterSalesError('Reembolso fora da homologação autorizada.',403);
         if(row.status==='processed')return row;
         const {remote}=await official(order),prior=ledger.filter(r=>r.id!==row.id);
         if(remote.refunds.length===prior.filter(r=>r.status==='processed').length){compareLedger(remote,prior);return row;}
