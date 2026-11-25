@@ -78,6 +78,15 @@ export const ORDER_STATUS = {
     cancelado: { label: "Cancelado", step: -1 },
 };
 
+// Display financial outcomes without rewriting the operational order state.
+// Refunds do not imply delivery, cancellation, or inventory restoration.
+export const orderStatusLabel = (order) => {
+    if (order?.status === 'cancelado') return ORDER_STATUS.cancelado.label;
+    if (order?.payment_status === 'refunded') return 'Reembolsado';
+    if (order?.payment_status === 'partially_refunded') return 'Parcialmente reembolsado';
+    return ORDER_STATUS[order?.status]?.label || order?.status || 'Situação indisponível';
+};
+
 export const ORDER_TIMELINE = [
     "recebido",
     "pagamento_aprovado",
