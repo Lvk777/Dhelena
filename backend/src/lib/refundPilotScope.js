@@ -1,7 +1,7 @@
 // Temporary real-refund pilot. Do not widen this fence by environment variables
 // alone: a reviewed code change is required before other orders can be refunded.
-export const PILOT_REFUND_ORDER_NUMBER = 'DH-2026-000019';
-export const PILOT_REFUND_PAID_CENTS = 3998;
+export const PILOT_REFUND_ORDER_NUMBER = 'DH-2026-000020';
+export const PILOT_REFUND_PAID_CENTS = 1615;
 
 const blocked = () => Object.assign(new Error('Este pedido não está autorizado para o estorno de homologação.'), { status: 403 });
 

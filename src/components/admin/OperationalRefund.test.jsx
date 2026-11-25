@@ -8,14 +8,14 @@ vi.mock('@/api/base44Client', () => ({ base44: { functions: { invoke: vi.fn() } 
 import { base44 } from '@/api/base44Client';
 
 const order = {
-    id: 'id-19', order_number: 'DH-2026-000019', payment_status: 'approved',
+    id: 'id-20', order_number: 'DH-2026-000020', payment_status: 'approved',
     snapshot: { payment_context: { mode: 'test' } },
 };
 
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 
 test('only the authorized order displays the financial refund action', () => {
-    const { rerender } = render(<OperationalRefund order={{ ...order, order_number: 'DH-2026-000020' }} />);
+    const { rerender } = render(<OperationalRefund order={{ ...order, order_number: 'DH-2026-000019' }} />);
     expect(screen.queryByText(/Estorno integral de homologação/)).toBeNull();
     rerender(<OperationalRefund order={order} />);
     expect(screen.getByText(/Estorno integral de homologação/)).toBeTruthy();
@@ -23,14 +23,14 @@ test('only the authorized order displays the financial refund action', () => {
 });
 
 test('preview is read-only; actual refund requires checkbox and typed authorization', async () => {
-    vi.mocked(base44.functions.invoke).mockResolvedValue({ mode: 'test', amount_cents: 3998,
+    vi.mocked(base44.functions.invoke).mockResolvedValue({ mode: 'production', amount_cents: 1615,
         kind: 'full', enabled: true, confirmation: 'signed-preview' });
     render(<OperationalRefund order={order} />);
     fireEvent.change(screen.getByRole('textbox', { name: 'Motivo do reembolso' }),
         { target: { value: 'Devolver pagamento da homologação' } });
     fireEvent.click(screen.getByRole('button', { name: 'Consultar prévia sem reembolsar' }));
     await waitFor(() => expect(base44.functions.invoke).toHaveBeenCalledWith('operationalRefundPreview',
-        { orderId: 'id-19', request: { kind: 'full', reason: 'Devolver pagamento da homologação', selected_items: [] } }));
+        { orderId: 'id-20', request: { kind: 'full', reason: 'Devolver pagamento da homologação', selected_items: [] } }));
     const submit = screen.getByRole('button', { name: /Confirmar estorno real/ });
     expect(submit.disabled).toBe(true);
     fireEvent.click(screen.getByRole('checkbox'));
