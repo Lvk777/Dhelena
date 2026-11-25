@@ -78,9 +78,15 @@ app.use('/api/uploads', express.static(uploadDir));
 
 // ─── Auto-run migrations + seed on first start ────────────────────
 let initialized = false;
+let initializationPromise = null;
 async function ensureInitialized() {
     if (initialized) return;
-    try {
+    if (initializationPromise) return initializationPromise;
+    initializationPromise = (async () => {
+      try {
+        // Production schema changes must be reviewed and applied explicitly.
+        // Replaying historical SQL on every boot can damage an existing Supabase schema.
+        if (!isProduction) {
         const migrationsDir = './migrations';
         if (fs.existsSync(migrationsDir)) {
             const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
@@ -90,9 +96,10 @@ async function ensureInitialized() {
                 console.log(`[Migration] ✓ ${file}`);
             }
         }
+        }
 
         const { rows } = await pool.query('SELECT COUNT(*) as cnt FROM products');
-        if (parseInt(rows[0].cnt) === 0) {
+        if (!isProduction && parseInt(rows[0].cnt) === 0) {
             console.log('[Seed] Products table empty, running seed...');
             const { runSeed } = await import('../seed/seed.js');
             await runSeed();
@@ -101,13 +108,20 @@ async function ensureInitialized() {
         console.log('[API] Database initialized');
     } catch (err) {
         console.error('[API] Init error:', err.message);
-        initialized = true;
+        throw err;
     }
+    })();
+    try { await initializationPromise; }
+    finally { initializationPromise = null; }
 }
 
 app.use(async (req, res, next) => {
-    if (!initialized) await ensureInitialized();
-    next();
+    try {
+        if (!initialized) await ensureInitialized();
+        next();
+    } catch {
+        res.status(503).json({ error: 'Serviço temporariamente indisponível' });
+    }
 });
 
 app.use(errorHandler);
@@ -115,5 +129,5 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`[D'Helenas API] Running on port ${PORT}`);
-    ensureInitialized();
+    ensureInitialized().catch(() => {}); // Requests return 503 until initialization succeeds.
 });
