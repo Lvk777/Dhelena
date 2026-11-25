@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Check, Truck, MapPin, QrCode, CreditCard, Banknote, Loader2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { formatBRL, ORDER_STATUS, ORDER_TIMELINE, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
+import { formatBRL, ORDER_STATUS, orderStatusLabel, ORDER_TIMELINE, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
 import OrderTimeline from "@/components/checkout/OrderTimeline";
 import CustomerAfterSales from "@/components/checkout/CustomerAfterSales";
 import OrderPaymentPanel from '@/components/checkout/OrderPaymentPanel';
@@ -66,7 +66,7 @@ export default function OrderDetail() {
             <div className="flex items-center justify-between flex-wrap gap-3 mb-2">
                 <h1 className="font-heading text-3xl tracking-[0.03em]">{order.order_number}</h1>
                 <span className="text-[11px] uppercase tracking-[0.18em] px-3 py-1.5 bg-[hsl(var(--bone))]">
-                    {ORDER_STATUS[order.status]?.label || order.status}
+                    {orderStatusLabel(order)}
                 </span>
             </div>
             <p className="text-sm text-muted-foreground mb-8">
