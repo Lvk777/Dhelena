@@ -284,6 +284,15 @@ export default function ProductForm() {
                                             <input value={color.name} onChange={(e) => updateColor(idx, "name", e.target.value)} placeholder="Nome da cor" className="admin-field flex-1 px-3 py-2" />
                                             <button onClick={() => removeColor(idx)} className="p-2 text-muted-foreground hover:text-rose-ink"><X className="w-4 h-4" /></button>
                                         </div>
+                                        <div className="mb-4">
+                                            <label className="block text-[11px] uppercase tracking-[0.12em] mb-2">Foto desta cor (opcional)</label>
+                                            <ImageUploader
+                                                images={color.image ? [color.image] : []}
+                                                max={1}
+                                                onChange={(urls) => updateColor(idx, "image", urls[0] || "")}
+                                            />
+                                            <p className="text-xs text-muted-foreground mt-2">A foto aparece primeiro quando esta cor for selecionada na loja.</p>
+                                        </div>
                                         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                                             {form.sizes.map((s) => (
                                                 <div key={s}>
