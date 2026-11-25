@@ -268,6 +268,8 @@ export default function AdminAfterSales({ order, onChanged, view = 'all' }) {
                     {(data.refunds || []).map(entry => <div key={entry.id} className="text-xs py-2 border-b border-border">
                         {entry.kind === 'full' ? 'Total' : entry.kind === 'remaining' ? 'Saldo restante' : 'Parcial'} · {formatBRL(Number(entry.amount))} · {statusLabel(refundLabels, entry.status)}
                         {entry.provider_refund_id && <span> · MP {entry.provider_refund_id}</span>}
+                        {entry.reason && <p className="mt-1"><strong>Justificativa:</strong> {entry.reason}</p>}
+                        {entry.processed_at && <p className="text-muted-foreground mt-1">Confirmado em: {showDate(entry.processed_at)}</p>}
                         {['processing', 'reconciliation_required'].includes(entry.status) && <button className="btn-outline text-xs ml-2" disabled={busy}
                             onClick={() => run(() => base44.functions.invoke(order.snapshot?.payment_context ? 'operationalRefundReconcile' : 'reconcileRefund', { orderId: order.id, refundId: entry.id }))}>Consultar MP</button>}
                     </div>)}
