@@ -46,6 +46,21 @@ export function escapeEmailHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 }
 
+const ORDER_STATUS_LABELS = {
+    recebido: 'Pedido recebido',
+    pagamento_aprovado: 'Pagamento aprovado',
+    em_separacao: 'Em separação',
+    enviado: 'Pedido enviado',
+    em_transporte: 'Em transporte',
+    saiu_entrega: 'Saiu para entrega',
+    entregue: 'Entregue',
+    cancelado: 'Pedido cancelado',
+};
+
+function nonEmptyName(value) {
+    return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 export function buildOrderEmail(order, recipient, event, config) {
     if (!validEmail(recipient) || !EMAIL_EVENTS[event]) throw failure('EMAIL_CONFIG_INVALID');
     const esc = escapeEmailHtml;
@@ -67,20 +82,23 @@ export function buildOrderEmail(order, recipient, event, config) {
     const tracking = order.tracking_code ? `Rastreamento: ${String(order.tracking_code)}` : '';
     const items = (order.snapshot?.items || []).map(item => `<tr><td style="padding:12px 8px">${esc(item.product_name)}<br><small>${esc(item.color_name)} / ${esc(item.size)}</small></td><td style="padding:12px 8px;text-align:center">${esc(item.quantity)}</td><td style="padding:12px 8px;text-align:right">R$ ${money(item.subtotal)}</td></tr>`).join('');
     const addr = order.shipping_address || {};
+    const customerName = nonEmptyName(order.snapshot?.customer?.name) || nonEmptyName(order.user_name) || '-';
+    const deliveryName = nonEmptyName(addr.recipient) || customerName;
+    const statusLabel = ORDER_STATUS_LABELS[order.status] || 'Consulte o andamento na sua conta';
     return {
         ...config, to: recipient, subject: `${title}: ${String(order.order_number || '').replace(/[\r\n]/g, '')}`,
         html: `<div style="font-family:'DM Sans',sans-serif;max-width:600px;margin:0 auto;color:#292526">
             <div style="padding:28px 24px;border-bottom:2px solid #a5925a"><h1 style="font-family:Georgia,serif;margin:0">D'Helenas</h1></div>
             <div style="padding:24px"><h2>${title}</h2><p>${esc(messages[event])}</p><p>Pedido ${esc(order.order_number)}</p>
             <p>${esc(tracking)}</p><p><a href="https://dhelenas.com/minha-conta/pedidos">Acompanhar na minha conta</a></p>
-            <p><strong>Cliente:</strong> ${esc(order.user_name || '-')}</p>
+            <p><strong>Cliente:</strong> ${esc(customerName)}</p>
             <table style="border-collapse:collapse;width:100%;border-bottom:1px solid #ddd"><thead><tr><th align="left">Peça</th><th>Qtd.</th><th align="right">Subtotal</th></tr></thead><tbody>${items}</tbody></table>
             <p>Subtotal: R$ ${money(order.subtotal)}<br>Desconto: R$ ${money(order.discount)}<br>Frete: R$ ${money(order.shipping_cost)}</p>
             <p style="font-size:20px"><strong>Total: R$ ${money(order.total)}</strong></p>
-            <p><strong>Entrega:</strong> ${esc(addr.recipient || order.user_name || '-')}<br>${esc(addr.street || '')} ${esc(addr.number || '')} ${esc(addr.complement || '')}<br>${esc(addr.district || '')} / ${esc(addr.city || '')} ${esc(addr.state || '')}<br>${esc(addr.cep || addr.zip_code || '')}</p>
-            <p><strong>Pagamento:</strong> ${esc(order.payment_method || '-')}<br><strong>Status:</strong> ${esc(order.status)}</p></div>
+            <p><strong>Entrega:</strong> ${esc(deliveryName)}<br>${esc(addr.street || '')} ${esc(addr.number || '')} ${esc(addr.complement || '')}<br>${esc(addr.district || '')} / ${esc(addr.city || '')} ${esc(addr.state || '')}<br>${esc(addr.cep || addr.zip_code || '')}</p>
+            <p><strong>Pagamento:</strong> ${esc(order.payment_method || '-')}<br><strong>Status:</strong> ${esc(statusLabel)}</p></div>
             <div style="padding:20px 24px;background:#eadfe3;font-size:12px">Moda que conecta histórias.</div></div>`,
-        text: `${title}\n${messages[event]}\nPedido ${order.order_number}\nTotal: R$ ${money(order.total)}\nStatus: ${order.status}\n${tracking}\nhttps://dhelenas.com/minha-conta/pedidos`,
+        text: `${title}\n${messages[event]}\nPedido ${order.order_number}\nTotal: R$ ${money(order.total)}\nStatus: ${statusLabel}\n${tracking}\nhttps://dhelenas.com/minha-conta/pedidos`,
     };
 }
 
