@@ -153,15 +153,19 @@ test('email preparation duration comes from the persisted order, never a fixed n
     assert.ok(email.text.includes('até 3 dia(s) úteis'));delete order.snapshot.delivery_estimate;
     assert.ok(buildOrderEmail(order,'customer@example.test','payment_approved',{}).text.includes('prazo contratado'));
 });
-test('email uses checkout customer name and human-readable status without overriding explicit delivery recipient',()=>{
+test('email shows checkout customer and readable status without exposing delivery address or CPF',()=>{
     const order={order_number:'SYNTHETIC',status:'pagamento_aprovado',payment_method:'pix',user_name:'Administrador',
-        snapshot:{customer:{name:'Cliente do checkout'},items:[]},
-        shipping_address:{recipient:'Pessoa que recebe',street:'Rua de teste',number:'10'}};
+        snapshot:{customer:{name:'Cliente do checkout',cpf:'123.456.789-00'},items:[]},
+        shipping_address:{recipient:'Pessoa que recebe',street:'Rua de teste',number:'10',cep:'12345-678'}};
     const email=buildOrderEmail(order,'customer@example.test','order_created',{});
     assert.match(email.html,/Cliente:<\/strong> Cliente do checkout/);
-    assert.match(email.html,/Entrega:<\/strong> Pessoa que recebe/);
     assert.match(email.html,/Status:<\/strong> Pagamento aprovado/);
     assert.match(email.text,/Status: Pagamento aprovado/);
     assert.doesNotMatch(email.html,/Cliente:<\/strong> Administrador/);
     assert.doesNotMatch(email.html,/pagamento_aprovado/);
+    for (const field of ['Rua de teste','Pessoa que recebe','12345-678','123.456.789-00']) {
+        assert.ok(!email.html.includes(field));
+        assert.ok(!email.text.includes(field));
+    }
+    assert.match(email.html,/Acompanhar na minha conta/);
 });

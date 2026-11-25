@@ -81,9 +81,7 @@ export function buildOrderEmail(order, recipient, event, config) {
     };
     const tracking = order.tracking_code ? `Rastreamento: ${String(order.tracking_code)}` : '';
     const items = (order.snapshot?.items || []).map(item => `<tr><td style="padding:12px 8px">${esc(item.product_name)}<br><small>${esc(item.color_name)} / ${esc(item.size)}</small></td><td style="padding:12px 8px;text-align:center">${esc(item.quantity)}</td><td style="padding:12px 8px;text-align:right">R$ ${money(item.subtotal)}</td></tr>`).join('');
-    const addr = order.shipping_address || {};
     const customerName = nonEmptyName(order.snapshot?.customer?.name) || nonEmptyName(order.user_name) || '-';
-    const deliveryName = nonEmptyName(addr.recipient) || customerName;
     const statusLabel = ORDER_STATUS_LABELS[order.status] || 'Consulte o andamento na sua conta';
     return {
         ...config, to: recipient, subject: `${title}: ${String(order.order_number || '').replace(/[\r\n]/g, '')}`,
@@ -95,7 +93,6 @@ export function buildOrderEmail(order, recipient, event, config) {
             <table style="border-collapse:collapse;width:100%;border-bottom:1px solid #ddd"><thead><tr><th align="left">Peça</th><th>Qtd.</th><th align="right">Subtotal</th></tr></thead><tbody>${items}</tbody></table>
             <p>Subtotal: R$ ${money(order.subtotal)}<br>Desconto: R$ ${money(order.discount)}<br>Frete: R$ ${money(order.shipping_cost)}</p>
             <p style="font-size:20px"><strong>Total: R$ ${money(order.total)}</strong></p>
-            <p><strong>Entrega:</strong> ${esc(deliveryName)}<br>${esc(addr.street || '')} ${esc(addr.number || '')} ${esc(addr.complement || '')}<br>${esc(addr.district || '')} / ${esc(addr.city || '')} ${esc(addr.state || '')}<br>${esc(addr.cep || addr.zip_code || '')}</p>
             <p><strong>Pagamento:</strong> ${esc(order.payment_method || '-')}<br><strong>Status:</strong> ${esc(statusLabel)}</p></div>
             <div style="padding:20px 24px;background:#eadfe3;font-size:12px">Moda que conecta histórias.</div></div>`,
         text: `${title}\n${messages[event]}\nPedido ${order.order_number}\nTotal: R$ ${money(order.total)}\nStatus: ${statusLabel}\n${tracking}\nhttps://dhelenas.com/minha-conta/pedidos`,
