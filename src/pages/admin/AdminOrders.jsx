@@ -305,7 +305,7 @@ export default function AdminOrders() {
                                         <td className="py-3 px-4 text-muted-foreground">{PAYMENT_LABELS[o.payment_method] || o.payment_method || "—"}</td>
                                         <td className="py-3 px-4 text-muted-foreground">{SHIPPING_LABELS[o.shipping_method] || o.shipping_method || "—"}</td>
                                         <td className="py-3 px-4">
-                                            <span className="text-[10px] uppercase tracking-[0.12em] px-2 py-1 rounded bg-muted">{o.status === 'cancelado' ? 'Pedido cancelado' : o.payment_status === 'refunded' ? 'Pagamento reembolsado' : o.payment_status === 'partially_refunded' ? 'Reembolso parcial' : ORDER_STATUS[o.status]?.label || o.status}</span>
+                                            <span className="text-[10px] uppercase tracking-[0.12em] px-2 py-1 rounded bg-muted">{o.status === 'cancelado' ? 'Pedido cancelado' : o.payment_status === 'refunded' ? 'Reembolsado' : o.payment_status === 'partially_refunded' ? 'Reembolso parcial' : ORDER_STATUS[o.status]?.label || o.status}</span>
                                         </td>
                                         <td className="py-3 px-4">
                                             <div className="flex items-center justify-end gap-1">
@@ -328,7 +328,7 @@ export default function AdminOrders() {
                             <div key={o.id} className="bg-background rounded-lg border border-border p-4">
                                 <div className="flex items-start justify-between gap-2 mb-2">
                                     <Link to={`/admin/pedidos/${o.id}`} className="font-medium text-sm hover:text-gold-ink">{o.order_number}</Link>
-                                    <span className="text-[10px] uppercase tracking-[0.12em] px-2 py-1 rounded bg-muted">{o.status === 'cancelado' ? 'Pedido cancelado' : o.payment_status === 'refunded' ? 'Pagamento reembolsado' : o.payment_status === 'partially_refunded' ? 'Reembolso parcial' : ORDER_STATUS[o.status]?.label || o.status}</span>
+                                    <span className="text-[10px] uppercase tracking-[0.12em] px-2 py-1 rounded bg-muted">{o.status === 'cancelado' ? 'Pedido cancelado' : o.payment_status === 'refunded' ? 'Reembolsado' : o.payment_status === 'partially_refunded' ? 'Reembolso parcial' : ORDER_STATUS[o.status]?.label || o.status}</span>
                                 </div>
                                 <p className="text-sm font-medium">{o.customer_name}</p>
                                 <p className="text-[11px] text-muted-foreground">{o.customer_email} · {o.customer_phone}</p>
