@@ -153,3 +153,15 @@ test('email preparation duration comes from the persisted order, never a fixed n
     assert.ok(email.text.includes('até 3 dia(s) úteis'));delete order.snapshot.delivery_estimate;
     assert.ok(buildOrderEmail(order,'customer@example.test','payment_approved',{}).text.includes('prazo contratado'));
 });
+test('email uses checkout customer name and human-readable status without overriding explicit delivery recipient',()=>{
+    const order={order_number:'SYNTHETIC',status:'pagamento_aprovado',payment_method:'pix',user_name:'Administrador',
+        snapshot:{customer:{name:'Cliente do checkout'},items:[]},
+        shipping_address:{recipient:'Pessoa que recebe',street:'Rua de teste',number:'10'}};
+    const email=buildOrderEmail(order,'customer@example.test','order_created',{});
+    assert.match(email.html,/Cliente:<\/strong> Cliente do checkout/);
+    assert.match(email.html,/Entrega:<\/strong> Pessoa que recebe/);
+    assert.match(email.html,/Status:<\/strong> Pagamento aprovado/);
+    assert.match(email.text,/Status: Pagamento aprovado/);
+    assert.doesNotMatch(email.html,/Cliente:<\/strong> Administrador/);
+    assert.doesNotMatch(email.html,/pagamento_aprovado/);
+});
