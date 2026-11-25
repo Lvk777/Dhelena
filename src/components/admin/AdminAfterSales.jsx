@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { formatBRL } from '@/data/products';
 import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
@@ -33,6 +33,9 @@ export default function AdminAfterSales({ order, onChanged, view = 'all' }) {
     const [reversePostingCode, setReversePostingCode] = useState({});
     const idempotencyKey = `remaining-${order.id}`;
     const [refundPreview, setRefundPreview] = useState(null);
+    const autoSyncAttempted = useRef(false);
+    const onChangedRef = useRef(onChanged);
+    onChangedRef.current = onChanged;
 
     const refresh = useCallback(async () => {
         try {
@@ -45,6 +48,29 @@ export default function AdminAfterSales({ order, onChanged, view = 'all' }) {
     }, [order.id]);
 
     useEffect(() => { refresh(); }, [refresh]);
+
+    const fullRefundRecorded = order.order_number === 'DH-2026-000019'
+        && data?.refunds?.some(entry => entry.kind === 'full' && entry.status === 'processed'
+            && Math.round(Number(entry.amount) * 100) === 3998);
+    // A processed refund has already been proved against MP; synchronize only
+    // the order's local projection, never submit a second financial refund.
+    useEffect(() => {
+        if (view === 'returns' || !fullRefundRecorded || order.payment_status === 'refunded' || autoSyncAttempted.current) return;
+        autoSyncAttempted.current = true;
+        let active = true;
+        setBusy(true);
+        base44.functions.invoke('operationalRefundSyncStatus', { orderId: order.id })
+            .then(async () => {
+                if (!active) return;
+                await onChangedRef.current?.();
+                await refresh();
+            })
+            .catch(failure => {
+                if (active) setError(failure.response?.data?.error || failure.message || 'Não foi possível sincronizar o estorno.');
+            })
+            .finally(() => { if (active) setBusy(false); });
+        return () => { active = false; };
+    }, [fullRefundRecorded, order.id, order.payment_status, refresh, view]);
 
     const run = async (action, confirmation) => {
         if (confirmation && !await dialogs.confirm({ title: 'Confirmar operação', message: confirmation })) return;
@@ -243,8 +269,7 @@ export default function AdminAfterSales({ order, onChanged, view = 'all' }) {
                         {['processing', 'reconciliation_required'].includes(entry.status) && <button className="btn-outline text-xs ml-2" disabled={busy}
                             onClick={() => run(() => base44.functions.invoke(order.snapshot?.payment_context ? 'operationalRefundReconcile' : 'reconcileRefund', { orderId: order.id, refundId: entry.id }))}>Consultar MP</button>}
                     </div>)}
-                    {order.order_number === 'DH-2026-000019' && order.payment_status !== 'refunded'
-                        && data.refunds?.some(entry => entry.kind === 'full' && entry.status === 'processed' && Math.round(Number(entry.amount)*100) === 3998)
+                    {fullRefundRecorded && order.payment_status !== 'refunded'
                         && <div className="border border-border rounded-md p-3 space-y-2 mt-3">
                             <p className="text-xs">O Mercado Pago já confirmou o estorno, mas o pagamento do pedido ainda aparece como aprovado. Sincronize o status antes de cancelar o pedido. Esta ação não cobra nem devolve dinheiro novamente.</p>
                             <button className="btn-outline text-xs" disabled={busy} onClick={() => run(() => base44.functions.invoke('operationalRefundSyncStatus', { orderId: order.id }))}>

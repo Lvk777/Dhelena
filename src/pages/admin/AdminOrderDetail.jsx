@@ -193,7 +193,8 @@ export default function AdminOrderDetail() {
                     {fiscalXmlImportEnabled && <FiscalDocumentPanel order={order} document={fiscalDocument} loadError={fiscalLoadError} onChanged={setFiscalDocument} />}
 
                     {/* Delivery / Shipping */}
-                    <OperationalPanel title="Expedição e etiquetas" badge={uncertainShipping ? 'Pendente' : null}>
+                    <OperationalPanel title="Expedição e etiquetas" badge={order.payment_status === 'refunded' ? 'Não expedir' : uncertainShipping ? 'Verificar envio' : null}>
+                        {order.payment_status === 'refunded' && <p role="status" className="border border-amber-500/60 bg-amber-500/10 p-3 text-sm mb-4">Pagamento integralmente reembolsado. Não gere nem poste etiqueta para este pedido. O registro anterior de expedição permanece para conferência até o encerramento do pedido.</p>}
                         <h3 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4 flex items-center gap-2"><Truck className="w-4 h-4" strokeWidth={1.5} /> Entrega</h3>
                         <div className="grid sm:grid-cols-2 gap-3 text-sm">
                             <InfoRow label="Transportadora" value={order.shipping_carrier || snapshot.shipping_carrier || "—"} />
