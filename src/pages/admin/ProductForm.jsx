@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { Plus, X, Loader2, Eye, Check, Package, ImageIcon, DollarSign, Palette, FolderTree, Settings, Truck } from "lucide-react";
+import { Plus, X, Eye, Check, Package, ImageIcon, DollarSign, Palette, FolderTree, Settings } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useCatalog } from "@/context/CatalogContext";
 import { COLOR_SWATCHES, SIZES_LIST } from "@/data/products";
@@ -230,6 +230,15 @@ export default function ProductForm() {
                                             <input type="color" value={color.hex} onChange={(e) => updateColor(idx, "hex", e.target.value)} className="w-10 h-10 rounded border border-border cursor-pointer" />
                                             <input value={color.name} onChange={(e) => updateColor(idx, "name", e.target.value)} placeholder="Nome da cor" className="flex-1 border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:border-[hsl(var(--gold))]" />
                                             <button onClick={() => removeColor(idx)} className="p-2 text-muted-foreground hover:text-[hsl(var(--rose))]"><X className="w-4 h-4" /></button>
+                                        </div>
+                                        <div className="mb-4">
+                                            <label className="block text-[11px] uppercase tracking-[0.12em] mb-2">Foto desta cor (opcional)</label>
+                                            <ImageUploader
+                                                images={color.image ? [color.image] : []}
+                                                max={1}
+                                                onChange={(urls) => updateColor(idx, "image", urls[0] || "")}
+                                            />
+                                            <p className="text-xs text-muted-foreground mt-2">Ao escolher esta cor na loja, a foto aparecerá primeiro. Sem foto específica, serão usadas as imagens gerais.</p>
                                         </div>
                                         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                                             {form.sizes.map((s) => (
