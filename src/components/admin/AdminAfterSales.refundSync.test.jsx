@@ -41,3 +41,11 @@ test('a refunded order can be closed even while pending-payment cancellation is 
     expect(close.disabled).toBe(false);
     expect(screen.getByText(/não realiza outro estorno/)).toBeTruthy();
 });
+
+test('refund history shows the recorded justification and confirmation date', async () => {
+    base44.functions.invoke.mockResolvedValue({ ...data, refunds:[{...data.refunds[0],reason:'Compra de homologação sem documento fiscal',processed_at:'2026-11-25T15:08:00Z'}] });
+    render(<AdminAfterSales order={{...order,order_number:'DH-2026-000020',payment_status:'refunded'}} view="refunds" onChanged={vi.fn()} />);
+    expect(await screen.findByText(/Justificativa:/)).toBeTruthy();
+    expect(screen.getByText(/Compra de homologação sem documento fiscal/)).toBeTruthy();
+    expect(screen.getByText(/Confirmado em:/)).toBeTruthy();
+});
