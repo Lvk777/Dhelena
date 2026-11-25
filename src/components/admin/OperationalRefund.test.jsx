@@ -12,7 +12,7 @@ const order = {
     snapshot: { payment_context: { mode: 'test' } },
 };
 
-afterEach(() => { cleanup(); vi.resetAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.resetAllMocks(); });
 
 test('only the authorized order displays the financial refund action', () => {
     const { rerender } = render(<OperationalRefund order={{ ...order, order_number: 'DH-2026-000020' }} />);
@@ -22,11 +22,9 @@ test('only the authorized order displays the financial refund action', () => {
     expect(screen.queryByRole('button', { name: /Confirmar estorno real/ })).toBeNull();
 });
 
-test('preview is read-only; actual refund requires checkbox and browser confirmation', async () => {
+test('preview is read-only; actual refund requires checkbox and typed authorization', async () => {
     vi.mocked(base44.functions.invoke).mockResolvedValue({ mode: 'test', amount_cents: 3998,
         kind: 'full', enabled: true, confirmation: 'signed-preview' });
-    const confirm = vi.fn(() => false);
-    vi.stubGlobal('confirm', confirm);
     render(<OperationalRefund order={order} />);
     fireEvent.change(screen.getByRole('textbox', { name: 'Motivo do reembolso' }),
         { target: { value: 'Devolver pagamento da homologação' } });
@@ -36,8 +34,11 @@ test('preview is read-only; actual refund requires checkbox and browser confirma
     const submit = screen.getByRole('button', { name: /Confirmar estorno real/ });
     expect(submit.disabled).toBe(true);
     fireEvent.click(screen.getByRole('checkbox'));
-    expect(submit.disabled).toBe(false);
+    expect(submit.disabled).toBe(true);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Autorização do estorno' }), { target: { value: 'estornar' } });
+    expect(submit.disabled).toBe(true);
     fireEvent.click(submit);
-    expect(confirm).toHaveBeenCalledTimes(1);
     expect(base44.functions.invoke).toHaveBeenCalledTimes(1);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Autorização do estorno' }), { target: { value: 'ESTORNAR' } });
+    expect(submit.disabled).toBe(false);
 });
