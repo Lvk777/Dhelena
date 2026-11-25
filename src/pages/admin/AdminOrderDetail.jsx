@@ -6,7 +6,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Truck, Loader2, Copy, MapPin, QrCode, CreditCard, Banknote } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { formatBRL, ORDER_STATUS, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
+import { formatBRL, ORDER_STATUS, orderStatusLabel, PAYMENT_LABELS, SHIPPING_LABELS, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
 import OrderTimeline from "@/components/checkout/OrderTimeline";
 import AdminAfterSales from "@/components/admin/AdminAfterSales";
 import PaymentReconciliationPreview from "@/components/admin/PaymentReconciliationPreview";
@@ -108,11 +108,13 @@ export default function AdminOrderDetail() {
                     <p className="text-sm text-muted-foreground mt-1">{new Date(order.created_date).toLocaleString("pt-BR")}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    {['refunded', 'partially_refunded'].includes(order.payment_status) ?
+                        <span role="status" className="admin-field px-4 py-2.5">{orderStatusLabel(order)}</span> :
                     <select value={order.status} onChange={(e) => changeStatus(e.target.value)} disabled={saving || !isPaid || order.status === 'cancelado'} className="admin-field w-auto px-4 py-2.5" >
                         {!STATUS_OPTIONS.some(s => s.value === order.status) && <option value={order.status}>{ORDER_STATUS[order.status]?.label || order.status}</option>}
                         {STATUS_OPTIONS.filter(s => s.value === order.status || NEXT_STATUS[order.status]?.includes(s.value))
                             .map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                    </select>
+                    </select>}
                 </div>
             </div>
 
