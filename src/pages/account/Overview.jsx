@@ -4,7 +4,7 @@ import { Package, Clock, Heart, ArrowRight } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useStore } from "@/context/StoreContext";
-import { formatBRL, ORDER_STATUS } from "@/data/products";
+import { formatBRL, orderStatusLabel } from "@/data/products";
 
 export default function Overview() {
     const { user } = useAuth();
@@ -23,7 +23,7 @@ export default function Overview() {
     }, []);
 
     const firstName = (user?.full_name || "").split(" ")[0] || "querida";
-    const ongoing = orders.filter((o) => !["entregue", "cancelado"].includes(o.status));
+    const ongoing = orders.filter((o) => !["entregue", "cancelado"].includes(o.status) && o.payment_status !== 'refunded');
     const latest = orders[0];
 
     return (
@@ -51,7 +51,7 @@ export default function Overview() {
                             </p>
                         </div>
                         <span className="text-[11px] uppercase tracking-[0.18em] px-3 py-1.5 bg-background">
-                            {ORDER_STATUS[latest.status]?.label || latest.status}
+                            {orderStatusLabel(latest)}
                         </span>
                     </div>
                     <div className="flex items-center gap-2 mt-4 text-rose-ink text-sm">

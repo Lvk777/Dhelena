@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Package, ArrowRight } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { formatBRL, ORDER_STATUS } from "@/data/products";
+import { formatBRL, orderStatusLabel } from "@/data/products";
 
 export default function Orders() {
     const [orders, setOrders] = useState([]);
@@ -50,7 +50,7 @@ export default function Orders() {
                                 </p>
                             </div>
                             <span className="text-[11px] uppercase tracking-[0.18em] px-3 py-1.5 bg-background">
-                                {ORDER_STATUS[order.status]?.label || order.status}
+                                {orderStatusLabel(order)}
                             </span>
                         </div>
 

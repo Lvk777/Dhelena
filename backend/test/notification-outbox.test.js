@@ -63,7 +63,10 @@ test('cutover excludes historic events and queues distinct buyer and institution
         {source_event_id:'shipped',notification_event:'order_shipped',created_at:'2026-10-29T12:04:00Z'},
         {source_event_id:'delivered',notification_event:'order_delivered',created_at:'2026-10-29T12:05:00Z'},
     ].map(row=>({id:'synthetic-order',order_number:'SYNTHETIC-1',status:row.notification_event==='payment_approved'?'pagamento_aprovado':'recebido',
+        payment_status: row.notification_event==='refund_processed'?'refunded':'approved',
         user_email:'conta@example.test',checkout_email:'compradora@example.test',user_name:'Compradora',total:20,subtotal:20,shipping_cost:0,discount:0,
+        refund_reason:row.notification_event==='refund_processed'?'Compra de homologação':null,
+        refund_amount:row.notification_event==='refund_processed'?20:null,
         snapshot:{items:[]},...row}));
     const queuedEvents=new Set(), sent=new Map();
     const settings=[{key:'general',value:{email:'contato@dhelenas.com'}},
@@ -77,6 +80,7 @@ test('cutover excludes historic events and queues distinct buyer and institution
         if(sql.includes("SELECT key,value FROM settings"))return {rows:settings};
         if(sql.includes('FROM order_events e JOIN orders')){
             assert.match(sql,/e\.created_at >= \$5::timestamptz/);
+            assert.match(sql,/LEFT JOIN order_refunds rf/);
             return {rows:rows.filter(row=>row.created_at>=params[4] && !queuedEvents.has(row.source_event_id)
                 && (params[1]===null || row.notification_event===params[1]))};
         }
@@ -111,6 +115,18 @@ test('cutover excludes historic events and queues distinct buyer and institution
     assert.equal(sent.size,10);
     assert.ok([...sent.values()].every(payload=>['compradora@example.test','pedidos@dhelenas.com'].includes(payload.to)));
     assert.equal(queuedEvents.has('historic'),false);
+});
+test('refund email uses the confirmed refund state and reason, not a stale fulfilment status',()=>{
+    const order={order_number:'DH-2026-000020',status:'pagamento_aprovado',payment_status:'refunded',
+        refund_amount:'16.15',refund_reason:'Compra de teste sem NF <fornecedor>',total:'16.15',
+        snapshot:{customer:{name:'Cliente de teste'},items:[]}};
+    const payload=buildOrderEmail(order,'customer@example.test','refund_processed',{});
+    assert.match(payload.html,/Status:<\/strong> Reembolsado/);
+    assert.match(payload.html,/Valor reembolsado:<\/strong> R\$ 16\.15/);
+    assert.match(payload.html,/Motivo:<\/strong> Compra de teste sem NF &lt;fornecedor&gt;/);
+    assert.match(payload.text,/Status: Reembolsado/);
+    assert.match(payload.text,/Motivo: Compra de teste sem NF <fornecedor>/);
+    assert.doesNotMatch(payload.html,/Status:<\/strong> Pagamento aprovado/);
 });
 test('a failed delivery retries its frozen payload with the same provider key',async()=>{
     const now=Date.now(), keys=[];

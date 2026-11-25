@@ -34,8 +34,11 @@ export async function queueOrderEmails(orderId = null, event = null, { db = pool
     const settings = Object.fromEntries(settingsRows.map(row => [row.key, row.value]));
     const config = orderEmailConfig(settings, env);
     const { rows } = await db.query(`SELECT e.id AS source_event_id,e.event AS notification_event,o.*,
-        o.snapshot->'customer'->>'email' AS checkout_email,p.email AS user_email,p.full_name AS user_name
+        o.snapshot->'customer'->>'email' AS checkout_email,p.email AS user_email,p.full_name AS user_name,
+        rf.reason AS refund_reason,rf.amount AS refund_amount
         FROM order_events e JOIN orders o ON o.id=e.order_id JOIN profiles p ON p.id=o.user_id
+        LEFT JOIN order_refunds rf ON e.event='refund_processed' AND rf.order_id=o.id
+            AND rf.id::text=e.metadata->>'refund_id' AND rf.status='processed'
         WHERE e.metadata->>'transactional_email_version'='1'
         AND e.event=ANY($4::text[]) AND ($1::uuid IS NULL OR o.id=$1) AND ($2::text IS NULL OR e.event=$2)
         AND e.metadata->>'payment_environment'=$3
