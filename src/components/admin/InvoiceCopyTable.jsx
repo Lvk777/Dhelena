@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Check, Copy, FileText } from 'lucide-react';
 import { formatBRL } from '@/data/products';
+import { carrierFiscalData } from '@/lib/carrierFiscalData';
 
 const available = (value) => value === null || value === undefined ? '' : String(value).trim();
 const money = (value) => value === null || value === undefined || value === '' ? '' : formatBRL(Number(value));
@@ -20,6 +21,9 @@ export function invoiceCopyGroups(order) {
     const customer = order?.snapshot?.customer || {};
     const address = order?.shipping_address || order?.snapshot?.shipping_address || {};
     const items = order?.items?.length ? order.items : order?.snapshot?.items || [];
+    const shippingCarrier = order?.shipping_carrier || order?.snapshot?.shipping_carrier;
+    const shippingService = order?.shipping_service_name || order?.snapshot?.shipping_service_name;
+    const carrier = order?.shipping_method === 'melhor_envio' ? carrierFiscalData(shippingCarrier) : null;
 
     return [
         {
@@ -41,6 +45,15 @@ export function invoiceCopyGroups(order) {
                 ['CEP', address.cep || address.postal_code],
             ],
         },
+        ...(order?.shipping_method === 'melhor_envio' ? [{
+            title: 'Transportadora selecionada no checkout', rows: [
+                ['Transportadora', shippingCarrier],
+                ['Serviço contratado', shippingService],
+                ['Razão social', carrier?.legalName],
+                ['CNPJ do transportador', carrier?.cnpj],
+                ['Inscrição estadual do transportador', carrier?.ie],
+            ],
+        }] : []),
         ...items.map((item, index) => ({
             title: `Produto ${index + 1}`, rows: [
                 ['Descrição cadastrada', item.product_name || item.name],
@@ -68,6 +81,8 @@ export default function InvoiceCopyTable({ order }) {
     const [expanded, setExpanded] = useState(true);
     const [copied, setCopied] = useState('');
     const [copyError, setCopyError] = useState('');
+    const shippingCarrier = order?.shipping_carrier || order?.snapshot?.shipping_carrier;
+    const unrecognizedCarrier = order?.shipping_method === 'melhor_envio' && !carrierFiscalData(shippingCarrier);
 
     const copy = async (value, key, label) => {
         try {
@@ -91,6 +106,8 @@ export default function InvoiceCopyTable({ order }) {
         </summary>
         <div className="border-t border-border p-5 space-y-4 min-w-0 [overflow-wrap:anywhere]">
             <p className="text-xs text-muted-foreground">Clique no valor de cada campo para copiá-lo. Os dados vêm do pedido e não emitem nem alteram a nota fiscal. Valores monetários são copiados sem o símbolo R$.</p>
+            {order?.shipping_method === 'melhor_envio' && <p className="text-xs text-muted-foreground">Os dados cadastrais da transportadora são referências publicadas pelo Melhor Envio. Confira CNPJ e inscrição estadual no emissor antes de autorizar a NF-e; o Melhor Envio é intermediador, não transportador.</p>}
+            {unrecognizedCarrier && <p role="alert" className="border border-amber-500/60 bg-amber-500/10 p-3 text-xs">Não foi possível identificar com segurança a transportadora deste pedido. Confira o serviço selecionado no Melhor Envio antes de preencher o CNPJ na NF-e.</p>}
 
         {invoiceCopyGroups(order).map((group, groupIndex) => <div key={group.title}>
             <h3 className="text-xs font-semibold mb-2">{group.title}</h3>
