@@ -12,6 +12,17 @@ export function shippingEnvironment(order) {
     return mode;
 }
 
+// A single order may be authorized for shipment-label homologation without
+// turning on label purchases for every production order.
+export function labelPurchaseEnabled(order, env = process.env) {
+    if (order?.shipping_method !== 'melhor_envio') return false;
+    const scopedOrderId = String(env.SHIPPING_LABEL_PURCHASE_ORDER_ID || '').trim();
+    if (scopedOrderId) {
+        return order.id === scopedOrderId && order.snapshot?.shipping_environment === 'production';
+    }
+    return env.SHIPPING_LABEL_PURCHASE_ENABLED === 'true';
+}
+
 export function shippingPreparation(order, address, sender, invoiceKey) {
     const phone = normalizeBrazilianPhone(sender.phone), document = String(sender.document || '').replace(/\D/g, '');
     const fiscalKey = String(invoiceKey || '').replace(/\D/g, '');
@@ -49,7 +60,7 @@ export function shippingPreparation(order, address, sender, invoiceKey) {
 export function createShippingOperations({ db = pool, provider = melhorEnvio, env = process.env } = {}) {
     return async function operate(orderId, action, input = {}, actorId = null) {
         if (!['prepare', 'purchase', 'generate', 'print', 'refresh'].includes(action)) throw error('Ação de envio inválida.', 400);
-        if (action === 'purchase' && (env.SHIPPING_LABEL_PURCHASE_ENABLED !== 'true' || input.confirm_purchase !== true)) throw error('Compra de etiquetas exige liberação operacional e confirmação explícita.', 403);
+        if (action === 'purchase' && input.confirm_purchase !== true) throw error('Compra de etiquetas exige confirmação explícita.', 403);
         const client = await db.connect(); let locked = false, inTransaction = false, preparationRecord = null;
         const begin = async () => { await client.query('BEGIN'); inTransaction = true; await client.query("SET LOCAL lock_timeout='2000ms'"); await client.query("SET LOCAL statement_timeout='5000ms'"); };
         const commit = async () => { await client.query('COMMIT'); inTransaction = false; };
@@ -75,6 +86,7 @@ export function createShippingOperations({ db = pool, provider = melhorEnvio, en
             locked = lock.rows[0]?.locked === true;
             if (!locked) throw error('Uma operação de envio já está em andamento.');
             await begin(); let order = await read(), mode = shippingEnvironment(order), id = order.melhor_envio_shipment_id;
+            if (action === 'purchase' && !labelPurchaseEnabled(order, env)) throw error('Compra de etiqueta não liberada para este pedido.', 403);
             const state = order.shipping_status, operation = order.snapshot?.shipping_operation || {};
             if (action === 'prepare') {
                 if (id) { await commit(); return { shipment_id: id, status: state, environment: mode, price: operation.price ?? null }; }
