@@ -61,3 +61,28 @@ test('reports clipboard failures without claiming the value was copied', async (
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Não foi possível copiar CPF/));
     expect(screen.queryByText('Valor copiado. Agora você pode colá-lo no emissor da NF-e.')).toBeNull();
 });
+
+test('shows the selected carrier fiscal identity and lets Juliane copy its CNPJ for NFF', async () => {
+    const writeText = vi.fn().mockResolvedValue();
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const shippingOrder = { ...order, shipping_method: 'melhor_envio', shipping_carrier: 'Jadlog', shipping_service_name: '.Package' };
+    render(<InvoiceCopyTable order={shippingOrder} />);
+
+    expect(screen.getByText('Transportadora selecionada no checkout')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copiar Serviço contratado: .Package' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copiar Razão social: JADLOG LOGISTICA S.A' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Copiar CNPJ do transportador: 04.884.082/0001-35' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('04.884.082/0001-35'));
+    expect(screen.getByRole('button', { name: 'Copiar Inscrição estadual do transportador: 149.744.148.111' })).toBeTruthy();
+});
+
+test('does not invent fiscal IDs for an unrecognized carrier or a non-Melhor Envio order', () => {
+    const unknown = { ...order, shipping_method: 'melhor_envio', shipping_carrier: 'Transportadora ainda não cadastrada' };
+    const groups = invoiceCopyGroups(unknown);
+    const transport = groups.find(group => group.title === 'Transportadora selecionada no checkout');
+    expect(transport.rows.find(([label]) => label === 'CNPJ do transportador')[1]).toBeUndefined();
+    render(<InvoiceCopyTable order={unknown} />);
+    expect(screen.getByRole('alert').textContent).toMatch(/Não foi possível identificar/);
+    expect(screen.queryByRole('button', { name: /Copiar CNPJ do transportador/ })).toBeNull();
+    expect(invoiceCopyGroups(order).some(group => group.title === 'Transportadora selecionada no checkout')).toBe(false);
+});
