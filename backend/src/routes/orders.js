@@ -10,7 +10,7 @@ import { validateCoupon, couponPreviewSubtotal, adjustStock, logAudit } from '..
 import { orderLimiter, couponLimiter } from '../middleware/rateLimiters.js';
 import * as mp from '../services/mercadoPago.js';
 import * as me from '../services/melhorEnvio.js';
-import { operateShipping, shippingEnvironment } from '../services/shippingOperations.js';
+import { operateShipping, shippingEnvironment, labelPurchaseEnabled } from '../services/shippingOperations.js';
 import { buildShippingPackages } from '../lib/shipping.js';
 import { getVerifiedPaymentForOrder } from '../lib/paymentVerification.js';
 import { readPaymentStatus } from '../services/paymentStatus.js';
@@ -822,7 +822,7 @@ router.post('/orders/:id/shipping/label', auth, requireSupabaseAdmin, async (req
 
 router.get('/orders/:id/shipping/readiness', auth, requireSupabaseAdmin, async (req, res, next) => {
     try {
-        const { rows } = await pool.query(`SELECT o.snapshot, o.shipping_status, o.shipping_carrier,
+        const { rows } = await pool.query(`SELECT o.id, o.shipping_method, o.snapshot, o.shipping_status, o.shipping_carrier,
             o.shipping_service_name, o.shipping_cost, o.melhor_envio_shipment_id,
             (SELECT e.metadata->>'auto_shipping_prepare_state' FROM order_events e
                 WHERE e.order_id=o.id AND e.event='shipping_auto_prepare_requested'
@@ -836,7 +836,7 @@ router.get('/orders/:id/shipping/readiness', auth, requireSupabaseAdmin, async (
             packages: row.snapshot?.shipping_packages || [], fiscal_model: operation.fiscal_model || null,
             fiscal_key_last4: operation.fiscal_key_last4 || null,
             rejection_fields: operation.rejection_fields || [], price: operation.price ?? null,
-            purchase_enabled: process.env.SHIPPING_LABEL_PURCHASE_ENABLED === 'true',
+            purchase_enabled: labelPurchaseEnabled(row, process.env),
             automatic_prepare_enabled: process.env.AUTO_SHIPPING_PREPARE_ENABLED === 'true',
             automatic_prepare_state: row.automatic_prepare_state || null });
     } catch (err) { next(err); }
