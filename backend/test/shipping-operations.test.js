@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createShippingOperations,shippingEnvironment,shippingPreparation} from '../src/services/shippingOperations.js';
+import {createShippingOperations,shippingEnvironment,shippingPreparation,labelPurchaseEnabled} from '../src/services/shippingOperations.js';
 import {createShippingWebhookWorker,officialShippingUpdate} from '../src/services/shippingWebhookQueue.js';
 import {assertCorreiosPackage,assertDistinctShippingAddresses,fiscalKeyModel,safeShippingPrintUrl} from '../src/lib/shipping.js';
 import {safeMelhorEnvioValidation} from '../src/services/melhorEnvio.js';
@@ -52,6 +52,25 @@ test('purchase requires flag, explicit approval, fresh exact price and a single 
     f.env.SHIPPING_LABEL_PURCHASE_ENABLED='false';await assert.rejects(f.operate('fixture','purchase',{confirm_purchase:true,expected_price_cents:1890}));
     f.env.SHIPPING_LABEL_PURCHASE_ENABLED='true';await f.operate('fixture','purchase',{confirm_purchase:true,expected_price_cents:1890});
     await f.operate('fixture','purchase',{confirm_purchase:true,expected_price_cents:1890});assert.equal(f.calls.filter(c=>c[0]==='checkout').length,1);
+});
+test('single-order production purchase scope keeps every other order blocked', async()=>{
+    const allowed={...orderFixture,id:'order-21',snapshot:{...orderFixture.snapshot,shipping_environment:'production'}};
+    const blocked={...allowed,id:'order-22'};
+    const env={SHIPPING_LABEL_PURCHASE_ORDER_ID:'order-21',SHIPPING_LABEL_PURCHASE_ENABLED:'false'};
+    assert.equal(labelPurchaseEnabled(allowed,env),true);
+    assert.equal(labelPurchaseEnabled(blocked,env),false);
+    assert.equal(labelPurchaseEnabled({...allowed,snapshot:{shipping_environment:'sandbox'}},env),false);
+    assert.equal(labelPurchaseEnabled(allowed,{...env,SHIPPING_LABEL_PURCHASE_ENABLED:'true'}),true);
+    assert.equal(labelPurchaseEnabled(blocked,{...env,SHIPPING_LABEL_PURCHASE_ENABLED:'true'}),false);
+    const f=fixture();f.order.snapshot.shipping_environment='production';
+    f.env.SHIPPING_LABEL_PURCHASE_ENABLED='false';f.env.SHIPPING_LABEL_PURCHASE_ORDER_ID='other-order';
+    f.setFiscal(fiscalKey('55'));
+    await f.operate('fixture','prepare');
+    await assert.rejects(f.operate('fixture','purchase',{confirm_purchase:true,expected_price_cents:1890}),/não liberada/);
+    assert.equal(f.calls.filter(call=>call[0]==='checkout').length,0);
+    f.env.SHIPPING_LABEL_PURCHASE_ORDER_ID='fixture';
+    await f.operate('fixture','purchase',{confirm_purchase:true,expected_price_cents:1890});
+    assert.equal(f.calls.filter(call=>call[0]==='checkout').length,1);
 });
 test('timeout after cart acceptance preserves in-flight reservation across restart',async()=>{
     const f=fixture();f.provider.addShipmentToCart=async()=>{f.calls.push(['cart']);throw new Error('timeout');};
