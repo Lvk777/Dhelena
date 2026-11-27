@@ -65,6 +65,10 @@ export default function Settings() {
     useEffect(() => { loadSettings(); }, []);
 
     const isNonSetting = NON_SETTING_SECTIONS.includes(activeSection);
+    // The System tab edits the public `maintenance` record, not a `system` record.
+    // Using settings.system here silently displayed the default OFF state even
+    // while the customer-facing maintenance guard was still ON.
+    const activeSettingsKey = activeSection === 'system' ? 'maintenance' : activeSection;
     const hasChanges = useMemo(() => !isNonSetting && JSON.stringify(settings) !== JSON.stringify(originalSettings), [settings, originalSettings, isNonSetting]);
 
     useEffect(() => {
@@ -193,7 +197,7 @@ export default function Settings() {
                         <div className="h-64 bg-background animate-pulse rounded-lg" />
                     ) : (
                         <div className="max-w-2xl">
-                            {ActiveComponent && <ActiveComponent data={settings[activeSection] || {}} onChange={(data) => updateSection(activeSection, data)} />}
+                            {ActiveComponent && <ActiveComponent data={settings[activeSettingsKey] || {}} onChange={(data) => updateSection(activeSettingsKey, data)} />}
                         </div>
                     )}
                 </div>
