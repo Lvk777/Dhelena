@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Heart } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
@@ -9,6 +9,10 @@ export default function ProductCard({ product, index = 0 }) {
     const fav = isFavorite(product.id);
     const price = product.salePrice ?? product.price;
     const soldOut = !isAvailable(product);
+    const [selectedColorId, setSelectedColorId] = useState(null);
+    const selectedColor = product.colors.find((c) => c.id === selectedColorId);
+    const primaryImage = selectedColor?.image || product.images[0];
+    const hoverImage = selectedColor?.image || product.images[1] || primaryImage;
 
     return (
         <div
@@ -25,12 +29,12 @@ export default function ProductCard({ product, index = 0 }) {
             <div className="relative overflow-hidden bg-bone aspect-[3/4]">
                 <Link to={`/produto/${product.id}`}>
                     <img
-                        src={product.images[0]}
+                        src={primaryImage}
                         alt={product.name}
                         className="absolute inset-0 w-full h-full object-cover transition-all duration-1000 ease-out group-hover:scale-[1.03] group-hover:opacity-0"
                     />
                     <img
-                        src={product.images[1] || product.images[0]}
+                        src={hoverImage}
                         alt={`${product.name} — detalhe`}
                         className="absolute inset-0 w-full h-full object-cover opacity-0 transition-all duration-1000 ease-out group-hover:opacity-100 group-hover:scale-[1.03]"
                     />
@@ -69,7 +73,7 @@ export default function ProductCard({ product, index = 0 }) {
                 {/* color swatches */}
                 <div className="flex items-center justify-center gap-1.5 mt-2.5">
                     {product.colors.map((c) => (
-                        <span key={c.id} className="w-3 h-3 rounded-full border border-border" style={{ background: c.hex || COLOR_SWATCHES[c.id]?.hex }} title={c.name || COLOR_SWATCHES[c.id]?.name} />
+                        <button key={c.id} type="button" onClick={() => setSelectedColorId(c.id)} aria-pressed={selectedColorId === c.id} aria-label={c.name || COLOR_SWATCHES[c.id]?.name || c.id} title={c.name || COLOR_SWATCHES[c.id]?.name} className="w-7 h-7 inline-flex items-center justify-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"><span className={`w-3 h-3 rounded-full border border-border ${selectedColorId === c.id ? "ring-1 ring-foreground ring-offset-2" : ""}`} style={{ background: c.hex || COLOR_SWATCHES[c.id]?.hex }} /></button>
                     ))}
                 </div>
 
