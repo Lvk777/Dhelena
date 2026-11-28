@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Layers, Loader2, Check, Tag, Image, Settings, Eye } from "lucide-react";
+import { Layers, Check, Tag, Image, Settings, Eye } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import AdminWizard from "@/components/admin/AdminWizard";
 import AdminInput from "@/components/admin/AdminInput";
@@ -114,7 +114,7 @@ export default function CollectionForm({ item, onClose, onSaved }) {
                 return (
                     <div className="max-w-3xl mx-auto space-y-6">
                         <div className="bg-muted/30 rounded-lg border border-border p-6 space-y-2">
-                            <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-accent mb-3">Resumo da Coleção</h3>
+                            <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-gold-ink mb-3">Resumo da Coleção</h3>
                             <SummaryRow label="Nome" value={form.name || "—"} />
                             <SummaryRow label="Slug" value={form.slug || slugify(form.name) || "—"} />
                             <SummaryRow label="Status" value={form.status === "active" ? "Ativa" : "Inativa"} />
@@ -128,7 +128,7 @@ export default function CollectionForm({ item, onClose, onSaved }) {
                             </div>
                             <CollectionPreview form={form} />
                         </div>
-                        {error && <p className="text-[11px] text-destructive text-center">{error}</p>}
+                        {error && <p className="text-[11px] text-error-ink text-center">{error}</p>}
                     </div>
                 );
             default:

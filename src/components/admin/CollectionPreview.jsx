@@ -10,7 +10,7 @@ import StorefrontFrame, { DeviceToggle } from "@/components/admin/StorefrontFram
  *  - form: collection form data (name, slug, description, image, banner_image)
  *  - device: "desktop" | "mobile" (if controlled by parent)
  */
-export default function CollectionPreview({ form, device: deviceProp }) {
+export default function CollectionPreview({ form, device: deviceProp = undefined }) {
     const [internalDevice, setInternalDevice] = React.useState("desktop");
     const device = deviceProp || internalDevice;
     const isMobile = device === "mobile";
@@ -24,9 +24,9 @@ export default function CollectionPreview({ form, device: deviceProp }) {
                 {form.banner_image && (
                     <div className="relative overflow-hidden" style={{ aspectRatio: isMobile ? "16/9" : "16/5" }}>
                         <img src={form.banner_image} alt={form.name} className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-charcoal/25" />
+                        <div className="absolute inset-0 bg-charcoal/70" />
                         <div className="absolute inset-0 flex items-center justify-center text-center px-6">
-                            <div className="text-bone">
+                            <div className="text-on-dark">
                                 <p className="text-[8px] uppercase tracking-[0.28em] text-[hsl(var(--gold))] mb-1">Coleção</p>
                                 <h2 className={`font-heading tracking-[0.03em] ${isMobile ? "text-xl" : "text-4xl"}`}>{form.name || "Nome da coleção"}</h2>
                             </div>
@@ -52,10 +52,10 @@ export default function CollectionPreview({ form, device: deviceProp }) {
                 {!form.banner_image && form.image && (
                     <div className="relative overflow-hidden" style={{ aspectRatio: "3/4", maxHeight: isMobile ? "320px" : "400px" }}>
                         <img src={form.image} alt={form.name} className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-charcoal/40 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-charcoal/75 to-charcoal/30" />
                         {form.description && (
                             <div className="absolute bottom-0 inset-x-0 p-4">
-                                <p className={`text-bone/90 leading-relaxed ${isMobile ? "text-[10px]" : "text-xs"} max-w-md`}>{form.description}</p>
+                                <p className={`text-on-dark/90 leading-relaxed ${isMobile ? "text-[10px]" : "text-xs"} max-w-md`}>{form.description}</p>
                             </div>
                         )}
                     </div>

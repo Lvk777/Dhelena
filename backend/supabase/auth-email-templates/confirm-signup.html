@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;background:#faf7f4;color:#2d2926;font-family:'Montserrat',sans-serif">
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="padding:32px 16px;background:#faf7f4"><tr><td align="center">
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background:#fffdfa;border:1px solid #eadfd9"><tr><td style="padding:38px 36px">
+<p style="margin:0 0 22px;color:#833f4a;font-family:Georgia,serif;font-size:30px;letter-spacing:2px">D’Helenas</p>
+<p style="margin:0 0 10px;color:#833f4a;font-size:11px;font-weight:bold;letter-spacing:3px;text-transform:uppercase">Sua conta</p>
+<h1 style="margin:0 0 18px;font-family:Georgia,serif;font-size:30px;font-weight:normal;line-height:1.2">Confirme seu e-mail</h1>
+<p style="margin:0 0 28px;font-size:15px;line-height:1.65">Para concluir seu cadastro na D’Helenas, confirme este endereço de e-mail.</p>
+<a href="{{ .SiteURL }}/auth/callback?flow=signup&amp;returnTo=%2Fminha-conta%2Fdados#token_hash={{ .TokenHash }}&amp;type=email" style="display:inline-block;background:#914b57;color:#ffffff;padding:15px 24px;text-decoration:none;font-size:13px;font-weight:bold;letter-spacing:1px">Confirmar meu e-mail</a>
+<p style="margin:28px 0 8px;color:#655d59;font-size:13px">Se preferir, informe este código na tela do cadastro:</p>
+<p style="margin:0;padding:14px;border:1px solid #c9a86a;color:#833f4a;font-size:25px;font-weight:bold;letter-spacing:5px;text-align:center">{{ .Token }}</p>
+<p style="margin:30px 0 0;color:#655d59;font-size:13px;line-height:1.6">Se você não criou esta conta, ignore esta mensagem.</p>
+</td></tr><tr><td style="border-top:1px solid #eadfd9;padding:18px 36px;color:#655d59;font-size:12px">D’Helenas · Mensagem de autenticação</td></tr></table>
+</td></tr></table></body></html>

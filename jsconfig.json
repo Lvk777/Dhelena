@@ -2,6 +2,9 @@
     "compilerOptions": {
         "baseUrl": ".",
         "paths": {
+            "@/hooks/*": [
+                "./src/lib/hooks/*"
+            ],
             "@/*": [
                 "./src/*"
             ]
@@ -19,7 +22,9 @@
         "allowSyntheticDefaultImports": true,
         "esModuleInterop": true,
         "resolveJsonModule": true,
-        "types": []
+        "types": [
+            "vite/client"
+        ]
     },
     "include": [
         "src/components/**/*.js",
@@ -32,6 +37,7 @@
         "src/vite-plugins",
         "src/components/ui",
         "src/api",
-        "src/lib"
+        "src/lib",
+        "src/pages/**/*.test.jsx"
     ]
 }

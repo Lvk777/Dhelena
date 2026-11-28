@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, X, Power, Tag, Calendar, Palette, Percent, Truck, ShoppingCart, Save, Layout, Eye, Check } from "lucide-react";
+import { base44 } from '@/api/base44Client';
+import { Plus, Trash2, Power, Tag, Calendar, Palette, Percent, Truck, ShoppingCart, Eye, Check } from "lucide-react";
 import AdminWizard from "@/components/admin/AdminWizard";
 import AdminInput from "@/components/admin/AdminInput";
 import AdminSelect from "@/components/admin/AdminSelect";
 import AdminTextarea from "@/components/admin/AdminTextarea";
 import AdminToggle from "@/components/admin/AdminToggle";
-import AdminFormSection from "@/components/admin/AdminFormSection";
 import AdminImageUploader from "@/components/admin/AdminImageUploader";
 import PromotionPreview from "@/components/admin/PromotionPreview";
+import { useBoutiqueDialogs } from '@/components/BoutiqueDialogs';
 
 const PROMO_TYPES = [
     { value: "look_discount", label: "Desconto no Look" },
@@ -39,18 +40,15 @@ const WIZARD_STEPS = [
 const PROMO_TYPE_LABELS = Object.fromEntries(PROMO_TYPES.map(t => [t.value, t.label]));
 
 export default function Promotions() {
+    const dialogs = useBoutiqueDialogs();
     const [promos, setPromos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(null);
 
-    const token = localStorage.getItem("dhelena_access_token");
-    const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
-
     const load = async () => {
         setLoading(true);
         try {
-            const res = await fetch("/api/look-promotions/admin", { headers });
-            const data = await res.json();
+            const data = await base44.custom.adminPromotions();
             setPromos(data || []);
         } catch { /* */ }
         finally { setLoading(false); }
@@ -60,22 +58,22 @@ export default function Promotions() {
 
     const handleSave = async (promo) => {
         if (promo.id) {
-            await fetch(`/api/look-promotions/${promo.id}`, { method: "PATCH", headers, body: JSON.stringify(promo) });
+            await base44.entities.LookPromotion.update(promo.id, promo);
         } else {
-            await fetch("/api/look-promotions", { method: "POST", headers, body: JSON.stringify(promo) });
+            await base44.entities.LookPromotion.create(promo);
         }
         setEditing(null);
         load();
     };
 
     const handleToggle = async (promo) => {
-        await fetch(`/api/look-promotions/${promo.id}`, { method: "PATCH", headers, body: JSON.stringify({ active: !promo.active }) });
+        await base44.entities.LookPromotion.update(promo.id, { active: !promo.active });
         load();
     };
 
     const handleDelete = async (id) => {
-        if (!confirm("Excluir esta promoção?")) return;
-        await fetch(`/api/look-promotions/${id}`, { method: "DELETE", headers });
+        if (!await dialogs.confirm({ title: 'Excluir promoção', message: 'Excluir esta promoção? Esta ação não poderá ser desfeita.' })) return;
+        await base44.entities.LookPromotion.delete(id);
         load();
     };
 
@@ -88,7 +86,7 @@ export default function Promotions() {
         if (!p.active) return { label: "INATIVA", className: "border-border text-muted-foreground" };
         if (start && start > now) return { label: "AGENDADA", className: "border-blue-400/40 text-blue-600" };
         if (end && end < now) return { label: "ENCERRADA", className: "border-border text-muted-foreground line-through" };
-        return { label: "ATIVA", className: "border-green-500/40 text-green-600" };
+        return { label: "ATIVA", className: "border-green-500/40 text-success-ink" };
     }
 
     function formatDate(dt) {
@@ -135,7 +133,7 @@ export default function Promotions() {
                                             <span className={`text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 border ${status.className}`}>
                                                 {status.label}
                                             </span>
-                                            {p.free_shipping && <span className="text-[9px] uppercase tracking-[0.1em] px-2 py-0.5 border border-[hsl(var(--gold))]/30 text-[hsl(var(--gold))]">Frete grátis</span>}
+                                            {p.free_shipping && <span className="text-[9px] uppercase tracking-[0.1em] px-2 py-0.5 border border-[hsl(var(--gold))]/30 text-gold-ink">Frete grátis</span>}
                                         </div>
                                         <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
                                             <span className="text-[11px] text-muted-foreground">Tipo: {PROMO_TYPE_LABELS[p.promo_type || p.type] || p.type}</span>
@@ -149,11 +147,11 @@ export default function Promotions() {
                                     </div>
                                 </div>
                                 <div className="flex gap-2 shrink-0">
-                                    <button onClick={() => handleToggle(p)} className={`p-1.5 ${p.active ? "text-green-600" : "text-muted-foreground hover:text-foreground"}`} title={p.active ? "Desativar" : "Ativar"}>
+                                    <button onClick={() => handleToggle(p)} className={`p-1.5 ${p.active ? "text-success-ink" : "text-muted-foreground hover:text-foreground"}`} title={p.active ? "Desativar" : "Ativar"}>
                                         <Power className="w-4 h-4" strokeWidth={1.25} />
                                     </button>
                                     <button onClick={() => setEditing(p)} className="text-[11px] uppercase tracking-[0.12em] text-foreground/70 hover:text-foreground border border-border px-3 py-1.5">Editar</button>
-                                    <button onClick={() => handleDelete(p.id)} className="text-muted-foreground hover:text-[hsl(var(--rose))] p-1.5"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
+                                    <button onClick={() => handleDelete(p.id)} className="text-muted-foreground hover:text-rose-ink p-1.5"><Trash2 className="w-4 h-4" strokeWidth={1.25} /></button>
                                 </div>
                             </div>
                         );
@@ -248,7 +246,7 @@ function PromoWizard({ promo, onSave, onCancel }) {
                         <div className="flex items-center gap-2 pt-2">
                             <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Status previsto:</span>
                             <span className={`text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 border ${
-                                getPromoStatus() === "ATIVA" ? "border-green-500/40 text-green-600"
+                                getPromoStatus() === "ATIVA" ? "border-green-500/40 text-success-ink"
                                 : getPromoStatus() === "AGENDADA" ? "border-blue-400/40 text-blue-600"
                                 : "border-border text-muted-foreground"
                             }`}>{getPromoStatus()}</span>
@@ -276,7 +274,7 @@ function PromoWizard({ promo, onSave, onCancel }) {
                     <div className="max-w-3xl mx-auto space-y-6">
                         {/* Summary */}
                         <div className="bg-muted/30 rounded-lg border border-border p-6 space-y-3">
-                            <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-accent mb-4">Resumo da Promoção</h3>
+                            <h3 className="text-[11px] uppercase tracking-[0.18em] font-medium text-gold-ink mb-4">Resumo da Promoção</h3>
                             <SummaryRow label="Campanha" value={form.name || "—"} />
                             <SummaryRow label="Título" value={form.title || "—"} />
                             <SummaryRow label="Tipo" value={PROMO_TYPE_LABELS[form.promo_type || form.type] || "—"} />

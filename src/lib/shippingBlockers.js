@@ -1,0 +1,29 @@
+import { assertCorreiosPackage } from '../../backend/src/lib/shipping.js';
+
+export function shippingPreparationBlockers({ order, ready, fiscalDocument, fiscalLoadError = '', fiscalEnabled = false, busy = false }) {
+    const reasons = [];
+    if (busy) reasons.push('Aguarde a operação em andamento.');
+    if (order.payment_status !== 'approved') reasons.push('O pagamento ainda não foi confirmado. Confira a conciliação financeira.');
+    if (order.status === 'cancelado') reasons.push('O pedido foi cancelado. Confira o histórico antes de qualquer envio.');
+    if (!ready?.environment) reasons.push('Os dados operacionais do envio não foram carregados. Atualize a página e confira a configuração.');
+    const state = ready?.status || order.shipping_status;
+    if (['cart_inflight', 'cart_uncertain'].includes(state))
+        reasons.push('O Melhor Envio ainda não confirmou a tentativa anterior. Concilie o histórico com o provedor antes de tentar novamente; uma nova tentativa pode gerar duplicidade.');
+    const correiosService = ['1', '2'].includes(String(order?.shipping_quote_id || ''))
+        || /correios/i.test(ready?.carrier || '') || /^(pac|sedex)\b/i.test(ready?.service || '');
+    if (correiosService && Array.isArray(ready?.packages) && ready.packages.length > 0) {
+        try { ready.packages.forEach(assertCorreiosPackage); }
+        catch {
+            reasons.push('As medidas ou o peso salvos na cotação são inválidos para PAC/SEDEX. Confira a embalagem fechada e solicite uma nova cotação depois de resolver qualquer envio pendente. Não use dimensões estimadas.');
+        }
+    }
+    if (ready?.environment === 'production') {
+        if (!fiscalEnabled) reasons.push('A importação fiscal está indisponível. Solicite a homologação antes de preparar o envio.');
+        else if (fiscalLoadError) reasons.push('Não foi possível consultar a nota fiscal. Atualize o pedido e confira o vínculo fiscal.');
+        else {
+            if (fiscalDocument?.differences?.length) reasons.push('A nota fiscal ainda diverge do pedido. Resolva as diferenças indicadas na seção Nota fiscal.');
+            if (fiscalDocument?.status !== 'verified') reasons.push('A autorização da NF-e ainda precisa de conferência administrativa no portal oficial. Confira os dados e registre a consulta após resolver as divergências.');
+        }
+    }
+    return reasons;
+}

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { QrCode, Copy, Check, Loader2, Clock, AlertCircle } from "lucide-react";
+import { Copy, Check, Loader2, Clock, AlertCircle } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatBRL, PAYMENT_STATUS_PT, PAYMENT_STATUS_COLORS } from "@/data/products";
 
-export default function PixPaymentScreen({ order, onApproved, onExpired }) {
+export default function PixPaymentScreen({ order, onApproved, onAttempt = () => {} }) {
     const [pixData, setPixData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -22,10 +22,12 @@ export default function PixPaymentScreen({ order, onApproved, onExpired }) {
         setLoading(true);
         setError("");
         try {
+            onAttempt();
             const res = await base44.functions.invoke("createPixPayment", { orderId: order.id });
             setPixData(res);
             setStatus(res.payment_status || "pending");
-            startPolling();
+            if (res.payment_status === 'approved') onApproved?.();
+            else startPolling();
         } catch (e) {
             setError(e.response?.data?.error || e.message || "Erro ao gerar Pix");
         } finally {
@@ -38,6 +40,11 @@ export default function PixPaymentScreen({ order, onApproved, onExpired }) {
         pollRef.current = setInterval(async () => {
             try {
                 const res = await base44.functions.invoke("getPaymentStatus", { orderId: order.id });
+                if (res.reconciliation_required) {
+                    setError(res.status_message || 'Este pagamento precisa de conciliação. Entre em contato com o atendimento antes de uma nova tentativa.');
+                    clearInterval(pollRef.current);
+                    return;
+                }
                 setStatus(res.payment_status || "pending");
                 setStatusDetail(res.mp_status_detail || "");
 
@@ -64,7 +71,7 @@ export default function PixPaymentScreen({ order, onApproved, onExpired }) {
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center py-16">
-                <Loader2 className="w-8 h-8 animate-spin text-[hsl(var(--gold))]" />
+                <Loader2 className="w-8 h-8 animate-spin text-gold-ink" />
                 <p className="mt-4 text-sm text-muted-foreground">Gerando pagamento Pix...</p>
             </div>
         );
@@ -73,8 +80,8 @@ export default function PixPaymentScreen({ order, onApproved, onExpired }) {
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center py-16">
-                <AlertCircle className="w-10 h-10 text-red-600" strokeWidth={1.5} />
-                <p className="mt-4 text-sm text-red-600 text-center max-w-xs">{error}</p>
+                <AlertCircle className="w-10 h-10 text-error-ink" strokeWidth={1.5} />
+                <p className="mt-4 text-sm text-error-ink text-center max-w-xs">{error}</p>
                 <button onClick={createPix} className="btn-outline mt-6 text-sm">Tentar novamente</button>
             </div>
         );
@@ -106,13 +113,23 @@ export default function PixPaymentScreen({ order, onApproved, onExpired }) {
                     <div className="w-16 h-16 rounded-full bg-green-600 mx-auto flex items-center justify-center">
                         <Check className="w-8 h-8 text-white" strokeWidth={1.5} />
                     </div>
-                    <p className="mt-4 text-sm text-green-600">Pagamento confirmado!</p>
+                    <p className="mt-4 text-sm text-success-ink">Pagamento confirmado!</p>
+                </div>
+            ) : ['rejected', 'cancelled', 'refunded', 'partially_refunded'].includes(status) ? (
+                <div className="text-center py-8" role="status">
+                    <AlertCircle className="w-10 h-10 text-warning-ink mx-auto" strokeWidth={1.5} />
+                    <p className="mt-4 text-sm">Este código não deve ser usado para um novo pagamento. Consulte o pedido e o atendimento.</p>
+                </div>
+            ) : pixData?.qr_unavailable && !pixData?.pix_qr_code ? (
+                <div className="text-center py-8" role="status">
+                    <AlertCircle className="w-10 h-10 text-warning-ink mx-auto" strokeWidth={1.5} />
+                    <p className="mt-4 text-sm text-warning-ink">O código Pix ainda não está disponível. Estamos verificando o pagamento deste pedido.</p>
                 </div>
             ) : expired ? (
                 <div className="text-center py-8">
-                    <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" strokeWidth={1.5} />
-                    <p className="mt-4 text-sm text-amber-600">O código Pix expirou.</p>
-                    <button onClick={createPix} className="btn-outline mt-6 text-sm">Gerar novo Pix</button>
+                    <AlertCircle className="w-10 h-10 text-warning-ink mx-auto" strokeWidth={1.5} />
+                    <p className="mt-4 text-sm text-warning-ink">O código Pix expirou.</p>
+                    <p className="mt-4 text-sm">Consulte o pedido ou entre em contato com o atendimento antes de uma nova tentativa.</p>
                 </div>
             ) : (
                 <>

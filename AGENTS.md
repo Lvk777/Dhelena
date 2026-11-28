@@ -54,12 +54,20 @@ A mudança é automática: quando `SUPABASE_URL` está definida, o backend valid
 - Health: `docker compose exec backend node -e "require('http').get('http://localhost:3001/health', r => { let d=''; r.on('data', c => d+=c); r.on('end', () => console.log(d)); })"`
 - Console errors: usar `preview_execute_code` com `consoleLogs({ level: 'error' })`.
 
-## Produção — Checklist
+## Produção — porta de segurança atual
 
-1. Criar projeto Supabase (região sa-east-1).
-2. Rodar `backend/supabase/schema.sql` no Supabase SQL Editor.
-3. Atualizar `DATABASE_URL` para o formato pooler (`aws-0-sa-east-1.pooler.supabase.com:6543`) — o formato direto (`db.xxxx.supabase.co:5432`) usa IPv6 e não funciona em Docker.
-4. Deploy backend no Railway (usar `backend/railway.json`).
-5. Setar `VITE_API_URL` no frontend para a URL do Railway.
-6. Deploy frontend (Vercel/Netlify/GitHub Pages).
-7. Promover primeiro usuário a admin: `UPDATE profiles SET role = 'admin' WHERE email = '...'`.
+Este checklist antigo de instalação não deve ser executado contra a produção
+existente. O plano atual, os pré-requisitos de backup e a ordem ensaiada de RLS
+e migrations estão em `backend/docs/admin-identity-backup-security-gate-2026-10-21.md`.
+Não usar `backend/supabase/schema.sql`, `npm run migrate` nem promoção por e-mail
+como atalho para o corte. O perfil administrativo legado só pode ser vinculado
+ao UUID Auth comprovado por processo independente, após migration 016 e
+autorização específica. Preservar os UUIDs e os históricos existentes.
+
+## Invariantes de Produção
+
+- `VITE_API_URL` é obrigatório no build de produção e deve apontar para `https://api.dhelenas.com`; não existe fallback para `/api` do SPA.
+- Produção usa apenas tokens Supabase Auth. O fallback JWT Express é exclusivo de desenvolvimento. Um e-mail confirmado não reivindica automaticamente um perfil administrativo legado com UUID diferente; esse caso exige vínculo explícito e comprovado em `profile_auth_links`.
+- Valores, dimensões e cotação de frete são recalculados no backend. O navegador pode apenas escolher o serviço retornado pela cotação.
+- Webhooks Mercado Pago e Melhor Envio são autenticados por assinatura e deduplicados. O segredo de webhook do Melhor Envio é `MELHOR_ENVIO_WEBHOOK_SECRET`, não o token OAuth.
+- Migrations e seed não rodam automaticamente em produção. A migration `009_profile_contact_fields.sql` deve ser aplicada conscientemente antes de usar CPF/data de nascimento.

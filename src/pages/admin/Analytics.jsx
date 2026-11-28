@@ -79,7 +79,7 @@ export default function Analytics() {
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
-    if (loading) return <div className="h-64 bg-background animate-pulse rounded-lg" />;
+    if (loading) return <div className="h-64 bg-background text-foreground animate-pulse rounded-lg" />;
 
     if (!overview || (overview.visitors === 0 && overview.sessions === 0 && overview.orders === 0)) {
         return (
@@ -167,11 +167,11 @@ export default function Analytics() {
 
             {/* Custom date pickers */}
             {period === 'custom' && (
-                <div className="flex items-center gap-3 mb-6 p-3 bg-background border border-border rounded-lg">
+                <div className="flex items-center gap-3 mb-6 p-3 bg-background text-foreground border border-border rounded-lg">
                     <Calendar className="w-4 h-4 text-muted-foreground" />
-                    <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="px-3 py-1.5 text-sm bg-transparent border border-border rounded focus:outline-none focus:border-accent" />
+                    <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="admin-field w-auto px-3 py-1.5 rounded" />
                     <span className="text-muted-foreground">até</span>
-                    <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="px-3 py-1.5 text-sm bg-transparent border border-border rounded focus:outline-none focus:border-accent" />
+                    <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="admin-field w-auto px-3 py-1.5 rounded" />
                     <button onClick={fetchData} disabled={!customStart || !customEnd} className="btn-gold text-xs ml-2">Aplicar</button>
                 </div>
             )}
@@ -186,7 +186,7 @@ export default function Analytics() {
             {/* Funnel + Sources */}
             <div className="grid lg:grid-cols-2 gap-4 mb-6">
                 {/* Funnel */}
-                <div className="bg-background border border-border rounded-lg p-5">
+                <div className="bg-background text-foreground border border-border rounded-lg p-5">
                     <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Funil de Conversão</h2>
                     {funnelData.length === 0 ? (
                         <p className="text-sm text-muted-foreground py-8 text-center">Sem dados suficientes.</p>
@@ -219,7 +219,7 @@ export default function Analytics() {
                 </div>
 
                 {/* Traffic Sources */}
-                <div className="bg-background border border-border rounded-lg p-5">
+                <div className="bg-background text-foreground border border-border rounded-lg p-5">
                     <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Origem do Tráfego</h2>
                     {sourceData.length === 0 ? (
                         <p className="text-sm text-muted-foreground py-8 text-center">Sem dados.</p>
@@ -247,7 +247,7 @@ export default function Analytics() {
 
             {/* Campaigns */}
             {campaigns.length > 0 && (
-                <div className="bg-background border border-border rounded-lg p-5 mb-6">
+                <div className="bg-background text-foreground border border-border rounded-lg p-5 mb-6">
                     <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Desempenho por Campanha</h2>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
@@ -272,7 +272,7 @@ export default function Analytics() {
                                         <td className="py-2.5 px-4 text-xs font-numeric text-right">{c.add_to_cart}</td>
                                         <td className="py-2.5 px-4 text-xs font-numeric text-right">{c.checkouts}</td>
                                         <td className="py-2.5 px-4 text-xs font-numeric text-right">{c.orders}</td>
-                                        <td className="py-2.5 px-4 text-xs font-numeric text-right">{formatCurrency(c.revenue)}</td>
+                                        <td className="py-2.5 px-4 text-xs font-numeric text-right" title="Pedidos sem vínculo persistido de campanha">{c.revenue == null ? '—' : formatCurrency(c.revenue)}</td>
                                         <td className="py-2.5 pl-4 text-xs font-numeric text-right">{c.conversion}%</td>
                                     </tr>
                                 ))}
@@ -284,7 +284,7 @@ export default function Analytics() {
 
             {/* Pages + Products */}
             <div className="grid lg:grid-cols-2 gap-4 mb-6">
-                <div className="bg-background border border-border rounded-lg p-5">
+                <div className="bg-background text-foreground border border-border rounded-lg p-5">
                     <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Páginas Mais Visitadas</h2>
                     {pages.length === 0 ? (
                         <p className="text-sm text-muted-foreground py-8 text-center">Sem dados.</p>
@@ -300,7 +300,7 @@ export default function Analytics() {
                     )}
                 </div>
 
-                <div className="bg-background border border-border rounded-lg p-5">
+                <div className="bg-background text-foreground border border-border rounded-lg p-5">
                     <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Produtos Populares</h2>
                     {products.most_viewed.length === 0 ? (
                         <p className="text-sm text-muted-foreground py-8 text-center">Sem dados.</p>
@@ -319,7 +319,7 @@ export default function Analytics() {
 
             {/* Customers */}
             {customers && (
-                <div className="bg-background border border-border rounded-lg p-5 mb-6">
+                <div className="bg-background text-foreground border border-border rounded-lg p-5 mb-6">
                     <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Clientes</h2>
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-4">
                         <MiniStat label="Total" value={formatNumber(customers.total_customers)} />
@@ -345,7 +345,7 @@ export default function Analytics() {
 
             {/* Devices + Browsers */}
             <div className="grid lg:grid-cols-2 gap-4">
-                <div className="bg-background border border-border rounded-lg p-5">
+                <div className="bg-background text-foreground border border-border rounded-lg p-5">
                     <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Dispositivos</h2>
                     {deviceData.length === 0 ? (
                         <p className="text-sm text-muted-foreground py-8 text-center">Sem dados.</p>
@@ -373,7 +373,7 @@ export default function Analytics() {
                     )}
                 </div>
 
-                <div className="bg-background border border-border rounded-lg p-5">
+                <div className="bg-background text-foreground border border-border rounded-lg p-5">
                     <h2 className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mb-4">Browsers</h2>
                     {browserData.length === 0 ? (
                         <p className="text-sm text-muted-foreground py-8 text-center">Sem dados.</p>
@@ -393,14 +393,14 @@ export default function Analytics() {
     );
 }
 
-function KPICard({ icon: Icon, label, value, change }) {
+function KPICard({ icon: Icon, label, value, change = undefined }) {
     const isPositive = change && parseFloat(change) >= 0;
     return (
-        <div className="bg-background border border-border rounded-lg p-4">
+        <div className="bg-background text-foreground border border-border rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
-                <Icon className="w-4 h-4 text-[hsl(var(--gold))]" strokeWidth={1.25} />
+                <Icon className="w-4 h-4 text-gold-ink" strokeWidth={1.25} />
                 {change && (
-                    <span className={`text-[10px] font-medium flex items-center gap-0.5 ${isPositive ? 'text-accent' : 'text-destructive'}`}>
+                    <span className={`text-[10px] font-medium flex items-center gap-0.5 ${isPositive ? 'text-gold-ink' : 'text-error-ink'}`}>
                         {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                         {isPositive ? '+' : ''}{change}%
                     </span>

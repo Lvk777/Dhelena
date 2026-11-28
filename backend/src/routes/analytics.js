@@ -3,6 +3,7 @@ import { pool } from '../config/db.js';
 import { auth, requireAdmin } from '../middleware.js';
 import { analyticsLimiter } from '../middleware/rateLimiters.js';
 import { logSecurityEvent } from '../middleware/securityLog.js';
+import { parseOperationalStart } from '../services/launchSummary.js';
 
 const router = Router();
 
@@ -172,11 +173,30 @@ function getDateRange(period, customStart, customEnd) {
     return { start, end: now };
 }
 
+async function getOperationalDateRange(period, customStart, customEnd) {
+    const range = getDateRange(period, customStart, customEnd);
+    if (!Number.isFinite(range.start.getTime()) || !Number.isFinite(range.end.getTime())) {
+        throw Object.assign(new Error('Período inválido'), { status: 400 });
+    }
+    const { rows } = await pool.query("SELECT value FROM settings WHERE key = 'operational_start'");
+    const launchStart = rows.length ? parseOperationalStart(rows[0].value) : null;
+    const boundedStart = launchStart && range.start < launchStart ? launchStart : range.start;
+    return { start: boundedStart > range.end ? range.end : boundedStart, end: range.end, launchStart };
+}
+
+const PAID_REVENUE_SQL = `SELECT COALESCE(SUM(o.total - COALESCE(r.refunded, 0)), 0) AS revenue
+    FROM orders o LEFT JOIN LATERAL (
+        SELECT SUM(amount) AS refunded FROM order_refunds
+        WHERE order_id = o.id AND status = 'processed'
+    ) r ON true
+    WHERE o.paid_at >= $1 AND o.paid_at < $2 AND o.created_at >= $3
+      AND o.payment_status IN ('approved', 'partially_refunded', 'refunded')`;
+
 // ─── GET /api/analytics/overview ──────────────────────────────────
 router.get('/analytics/overview', auth, requireAdmin, async (req, res, next) => {
     try {
         const { period = '7d', start: customStart, end: customEnd } = req.query;
-        const { start, end } = getDateRange(period, customStart, customEnd);
+        const { start, end, launchStart } = await getOperationalDateRange(period, customStart, customEnd);
 
         // Exclude admin/internal pages from analytics
         const pageExclude = `AND page NOT LIKE '/admin%' AND page NOT LIKE '/login%' AND page NOT LIKE '/api%' AND page NOT LIKE '/preview%' AND page NOT LIKE '/health%'`;
@@ -192,12 +212,13 @@ router.get('/analytics/overview', auth, requireAdmin, async (req, res, next) => 
             pool.query(`SELECT COUNT(*) as cnt FROM analytics_events ${baseQuery} AND event_name = 'add_to_cart'`, params),
             pool.query(`SELECT COUNT(*) as cnt FROM analytics_events ${baseQuery} AND event_name = 'begin_checkout'`, params),
             pool.query(`SELECT COUNT(*) as cnt FROM analytics_events ${baseQuery} AND event_name = 'order_created'`, params),
-            pool.query(`SELECT COALESCE(SUM(total), 0) as revenue FROM orders WHERE created_at >= $1 AND created_at < $2 AND status != 'cancelled'`, params),
+            pool.query(PAID_REVENUE_SQL, [...params, launchStart || new Date(0)]),
         ]);
 
         // Previous period for comparison
         const duration = end.getTime() - start.getTime();
-        const prevStart = new Date(start.getTime() - duration);
+        const rawPrevStart = new Date(start.getTime() - duration);
+        const prevStart = launchStart && rawPrevStart < launchStart ? launchStart : rawPrevStart;
         const prevEnd = start;
         const prevParams = [prevStart, prevEnd];
         const prevBaseQuery = `WHERE created_at >= $1 AND created_at < $2 ${pageExclude}`;
@@ -205,7 +226,7 @@ router.get('/analytics/overview', auth, requireAdmin, async (req, res, next) => 
         const [prevVisitors, prevOrders, prevRevenue, prevCartAdds, prevCheckouts, prevSignups, prevPageViews] = await Promise.all([
             pool.query(`SELECT COUNT(DISTINCT anonymous_session_id) as cnt FROM analytics_events ${prevBaseQuery} AND event_name != 'page_view'`, prevParams),
             pool.query(`SELECT COUNT(*) as cnt FROM analytics_events ${prevBaseQuery} AND event_name = 'order_created'`, prevParams),
-            pool.query(`SELECT COALESCE(SUM(total), 0) as revenue FROM orders WHERE created_at >= $1 AND created_at < $2 AND status != 'cancelled'`, prevParams),
+            pool.query(PAID_REVENUE_SQL, [...prevParams, launchStart || new Date(0)]),
             pool.query(`SELECT COUNT(*) as cnt FROM analytics_events ${prevBaseQuery} AND event_name = 'add_to_cart'`, prevParams),
             pool.query(`SELECT COUNT(*) as cnt FROM analytics_events ${prevBaseQuery} AND event_name = 'begin_checkout'`, prevParams),
             pool.query(`SELECT COUNT(*) as cnt FROM analytics_events ${prevBaseQuery} AND event_name = 'sign_up'`, prevParams),
@@ -252,7 +273,7 @@ router.get('/analytics/overview', auth, requireAdmin, async (req, res, next) => 
 router.get('/analytics/sources', auth, requireAdmin, async (req, res, next) => {
     try {
         const { period = '7d' } = req.query;
-        const { start, end } = getDateRange(period);
+        const { start, end } = await getOperationalDateRange(period);
         const { rows } = await pool.query(
             `SELECT COALESCE(source, 'direto') as source, COUNT(DISTINCT anonymous_session_id) as visitors
              FROM analytics_events WHERE created_at >= $1 AND created_at < $2
@@ -267,7 +288,7 @@ router.get('/analytics/sources', auth, requireAdmin, async (req, res, next) => {
 router.get('/analytics/devices', auth, requireAdmin, async (req, res, next) => {
     try {
         const { period = '7d' } = req.query;
-        const { start, end } = getDateRange(period);
+        const { start, end } = await getOperationalDateRange(period);
         const { rows } = await pool.query(
             `SELECT device_type, browser, os, COUNT(DISTINCT anonymous_session_id) as visitors
              FROM analytics_events WHERE created_at >= $1 AND created_at < $2
@@ -283,7 +304,7 @@ router.get('/analytics/devices', auth, requireAdmin, async (req, res, next) => {
 router.get('/analytics/pages', auth, requireAdmin, async (req, res, next) => {
     try {
         const { period = '7d' } = req.query;
-        const { start, end } = getDateRange(period);
+        const { start, end } = await getOperationalDateRange(period);
         const { rows } = await pool.query(
             `SELECT page, COUNT(*) as views, COUNT(DISTINCT anonymous_session_id) as unique_visitors
              FROM analytics_events
@@ -307,7 +328,7 @@ router.get('/analytics/pages', auth, requireAdmin, async (req, res, next) => {
 router.get('/analytics/campaigns', auth, requireAdmin, async (req, res, next) => {
     try {
         const { period = '7d' } = req.query;
-        const { start, end } = getDateRange(period);
+        const { start, end } = await getOperationalDateRange(period);
         const { rows } = await pool.query(
             `SELECT
                 COALESCE(NULLIF(campaign, ''), '(sem campanha)') as campaign,
@@ -323,19 +344,10 @@ router.get('/analytics/campaigns', auth, requireAdmin, async (req, res, next) =>
              ORDER BY sessions DESC LIMIT 20`,
             [start, end]
         );
-        // Calculate revenue and conversion
-        const result = await Promise.all(rows.map(async (r) => {
-            const revResult = await pool.query(
-                `SELECT COALESCE(SUM(total), 0) as revenue FROM orders
-                 WHERE created_at >= $1 AND created_at < $2 AND status != 'cancelled'`,
-                [start, end]
-            );
-            return {
-                ...r,
-                revenue: parseFloat(revResult.rows[0].revenue) || 0,
-                conversion: r.sessions > 0 ? ((r.orders / r.sessions) * 100).toFixed(2) : '0.00',
-            };
-        }));
+        // Orders do not retain campaign attribution. Do not assign the store's
+        // entire revenue to every campaign.
+        const result = rows.map(r => ({ ...r, revenue: null,
+            conversion: r.sessions > 0 ? ((r.orders / r.sessions) * 100).toFixed(2) : '0.00' }));
         res.json(result);
     } catch (err) { next(err); }
 });
@@ -344,15 +356,20 @@ router.get('/analytics/campaigns', auth, requireAdmin, async (req, res, next) =>
 router.get('/analytics/customers', auth, requireAdmin, async (req, res, next) => {
     try {
         const { period = '7d' } = req.query;
-        const { start, end } = getDateRange(period);
+        const { start, end } = await getOperationalDateRange(period);
 
         const [total, newInPeriod, recurring, buyers, nonBuyers, avgTicket] = await Promise.all([
-            pool.query('SELECT COUNT(*) as cnt FROM profiles WHERE role = $1', ['customer']),
             pool.query('SELECT COUNT(*) as cnt FROM profiles WHERE role = $1 AND created_at >= $2 AND created_at < $3', ['customer', start, end]),
-            pool.query(`SELECT COUNT(DISTINCT user_id) as cnt FROM orders WHERE user_id IS NOT NULL AND status != 'cancelled' GROUP BY user_id HAVING COUNT(*) > 1`),
-            pool.query(`SELECT COUNT(DISTINCT user_id) as cnt FROM orders WHERE user_id IS NOT NULL AND status != 'cancelled' AND created_at >= $1 AND created_at < $2`, [start, end]),
-            pool.query(`SELECT COUNT(*) as cnt FROM profiles WHERE role = 'customer' AND id NOT IN (SELECT DISTINCT user_id FROM orders WHERE user_id IS NOT NULL)`),
-            pool.query(`SELECT COALESCE(AVG(total), 0) as avg FROM orders WHERE status != 'cancelled' AND created_at >= $1 AND created_at < $2`, [start, end]),
+            pool.query('SELECT COUNT(*) as cnt FROM profiles WHERE role = $1 AND created_at >= $2 AND created_at < $3', ['customer', start, end]),
+            pool.query(`SELECT user_id FROM orders WHERE user_id IS NOT NULL AND paid_at IS NOT NULL
+                AND payment_status IN ('approved','partially_refunded','refunded') AND created_at >= $1 AND created_at < $2
+                GROUP BY user_id HAVING COUNT(*) > 1`, [start, end]),
+            pool.query(`SELECT COUNT(DISTINCT user_id) as cnt FROM orders WHERE paid_at IS NOT NULL
+                AND payment_status IN ('approved','partially_refunded','refunded') AND created_at >= $1 AND created_at < $2`, [start, end]),
+            pool.query(`SELECT COUNT(*) as cnt FROM profiles p WHERE role = 'customer' AND created_at >= $1 AND created_at < $2
+                AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = p.id AND o.paid_at IS NOT NULL)`, [start, end]),
+            pool.query(`SELECT COALESCE(AVG(total), 0) as avg FROM orders WHERE paid_at IS NOT NULL AND payment_status IN ('approved','partially_refunded','refunded')
+                AND created_at >= $1 AND created_at < $2`, [start, end]),
         ]);
 
         // Customer growth over time (daily)
@@ -379,7 +396,7 @@ router.get('/analytics/customers', auth, requireAdmin, async (req, res, next) =>
 router.get('/analytics/geo', auth, requireAdmin, async (req, res, next) => {
     try {
         const { period = '7d' } = req.query;
-        const { start, end } = getDateRange(period);
+        const { start, end } = await getOperationalDateRange(period);
 
         // Since we don't store geo on analytics_events, return empty for now
         // This can be extended when geo is captured
@@ -391,7 +408,7 @@ router.get('/analytics/geo', auth, requireAdmin, async (req, res, next) => {
 router.get('/analytics/funnel', auth, requireAdmin, async (req, res, next) => {
     try {
         const { period = '7d' } = req.query;
-        const { start, end } = getDateRange(period);
+        const { start, end } = await getOperationalDateRange(period);
         const { rows } = await pool.query(
             `SELECT event_name, COUNT(DISTINCT anonymous_session_id) as unique_users
              FROM analytics_events WHERE created_at >= $1 AND created_at < $2
@@ -407,7 +424,7 @@ router.get('/analytics/funnel', auth, requireAdmin, async (req, res, next) => {
 router.get('/analytics/products', auth, requireAdmin, async (req, res, next) => {
     try {
         const { period = '7d' } = req.query;
-        const { start, end } = getDateRange(period);
+        const { start, end } = await getOperationalDateRange(period);
         const [viewed, cartAdded] = await Promise.all([
             pool.query(
                 `SELECT ae.product_id, p.name, COUNT(*) as views

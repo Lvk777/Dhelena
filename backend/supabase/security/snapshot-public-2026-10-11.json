@@ -1,0 +1,3618 @@
+{
+  "tables": [
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "active_sessions",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "addresses",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "analytics_events",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "audit_logs",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "banners",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "categories",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "collections",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "contact_messages",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "coupon_usages",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "coupons",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "favorites",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "integration_configs",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "login_history",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "look_promotions",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "notification_logs",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "order_events",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "order_items",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "order_refunds",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "order_return_items",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "order_returns",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "orders",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "products",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "profiles",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "settings",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "size_guide_rows",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "size_guides",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "stock_movements",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "stock_restorations",
+      "owner": "postgres",
+      "force_rls": false
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "rls": false,
+      "name": "webhook_events",
+      "owner": "postgres",
+      "force_rls": false
+    }
+  ],
+  "columns": [
+    {
+      "type": "uuid",
+      "table": "active_sessions",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "active_sessions",
+      "column": "user_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "active_sessions",
+      "column": "token_jti",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "active_sessions",
+      "column": "ip_address",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "active_sessions",
+      "column": "city",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "active_sessions",
+      "column": "state",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "active_sessions",
+      "column": "country",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "active_sessions",
+      "column": "device_type",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "active_sessions",
+      "column": "browser",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "active_sessions",
+      "column": "os",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "active_sessions",
+      "column": "user_agent",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "active_sessions",
+      "column": "last_activity",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "active_sessions",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "active_sessions",
+      "column": "expires_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "boolean",
+      "table": "active_sessions",
+      "column": "is_revoked",
+      "default": "false",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "addresses",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "addresses",
+      "column": "user_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "addresses",
+      "column": "label",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "addresses",
+      "column": "recipient",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "addresses",
+      "column": "zip_code",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "addresses",
+      "column": "street",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "addresses",
+      "column": "number",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "addresses",
+      "column": "complement",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "addresses",
+      "column": "district",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "addresses",
+      "column": "city",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "addresses",
+      "column": "state",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "boolean",
+      "table": "addresses",
+      "column": "is_default",
+      "default": "false",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "addresses",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "addresses",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "analytics_events",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "character varying",
+      "table": "analytics_events",
+      "column": "anonymous_session_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "analytics_events",
+      "column": "user_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "character varying",
+      "table": "analytics_events",
+      "column": "event_name",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "character varying",
+      "table": "analytics_events",
+      "column": "page",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "analytics_events",
+      "column": "product_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "character varying",
+      "table": "analytics_events",
+      "column": "source",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "character varying",
+      "table": "analytics_events",
+      "column": "medium",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "character varying",
+      "table": "analytics_events",
+      "column": "campaign",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "character varying",
+      "table": "analytics_events",
+      "column": "referrer",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "character varying",
+      "table": "analytics_events",
+      "column": "device_type",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "character varying",
+      "table": "analytics_events",
+      "column": "browser",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "character varying",
+      "table": "analytics_events",
+      "column": "os",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "character varying",
+      "table": "analytics_events",
+      "column": "country",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "character varying",
+      "table": "analytics_events",
+      "column": "region",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "analytics_events",
+      "column": "metadata",
+      "default": "'{}'::jsonb",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "analytics_events",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "audit_logs",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "audit_logs",
+      "column": "admin_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "audit_logs",
+      "column": "action",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "audit_logs",
+      "column": "entity_type",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "audit_logs",
+      "column": "entity_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "audit_logs",
+      "column": "changes",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "audit_logs",
+      "column": "ip_address",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "audit_logs",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "banners",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "title",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "subtitle",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "text",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "eyebrow",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "image",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "link",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "primary_cta_label",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "primary_cta_link",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "secondary_cta_label",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "secondary_cta_link",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "position",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "banners",
+      "column": "sort_order",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "boolean",
+      "table": "banners",
+      "column": "active",
+      "default": "true",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "banners",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "banners",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "internal_name",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "image_mobile",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "banners",
+      "column": "start_date",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "banners",
+      "column": "end_date",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "banners",
+      "column": "priority",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "banners",
+      "column": "promotion_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "display_mode",
+      "default": "'priority'::text",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "button_text",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "banners",
+      "column": "button_link",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "banners",
+      "column": "max_image_size_mb",
+      "default": "5",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "categories",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "categories",
+      "column": "name",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "categories",
+      "column": "slug",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "categories",
+      "column": "image",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "categories",
+      "column": "sort_order",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "categories",
+      "column": "parent_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "categories",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "categories",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "collections",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "collections",
+      "column": "name",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "collections",
+      "column": "slug",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "collections",
+      "column": "description",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "collections",
+      "column": "image",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "collections",
+      "column": "sort_order",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "collections",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "collections",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "contact_messages",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "character varying",
+      "table": "contact_messages",
+      "column": "name",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "character varying",
+      "table": "contact_messages",
+      "column": "email",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "character varying",
+      "table": "contact_messages",
+      "column": "subject",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "contact_messages",
+      "column": "message",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "character varying",
+      "table": "contact_messages",
+      "column": "ip_address",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "character varying",
+      "table": "contact_messages",
+      "column": "user_agent",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "contact_messages",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "coupon_usages",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "coupon_usages",
+      "column": "coupon_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "coupon_usages",
+      "column": "order_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "coupon_usages",
+      "column": "user_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "coupon_usages",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "coupons",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "coupons",
+      "column": "code",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "coupons",
+      "column": "description",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "coupons",
+      "column": "discount_type",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "coupons",
+      "column": "discount_value",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "coupons",
+      "column": "min_order_value",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "coupons",
+      "column": "max_uses",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "coupons",
+      "column": "max_uses_per_customer",
+      "default": "1",
+      "nullable": "YES"
+    },
+    {
+      "type": "boolean",
+      "table": "coupons",
+      "column": "first_purchase_only",
+      "default": "false",
+      "nullable": "YES"
+    },
+    {
+      "type": "boolean",
+      "table": "coupons",
+      "column": "active",
+      "default": "true",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "coupons",
+      "column": "valid_from",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "coupons",
+      "column": "valid_until",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "coupons",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "coupons",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "favorites",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "favorites",
+      "column": "user_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "favorites",
+      "column": "product_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "favorites",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "integration_configs",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "integration_configs",
+      "column": "service_key",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "integration_configs",
+      "column": "service_name",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "integration_configs",
+      "column": "description",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "integration_configs",
+      "column": "config_data",
+      "default": "'{}'::jsonb",
+      "nullable": "NO"
+    },
+    {
+      "type": "boolean",
+      "table": "integration_configs",
+      "column": "is_active",
+      "default": "false",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "integration_configs",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "integration_configs",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "login_history",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "login_history",
+      "column": "user_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "login_history",
+      "column": "email",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "login_history",
+      "column": "user_type",
+      "default": "'customer'::text",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "login_history",
+      "column": "status",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "login_history",
+      "column": "ip_address",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "login_history",
+      "column": "city",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "login_history",
+      "column": "state",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "login_history",
+      "column": "country",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "login_history",
+      "column": "device_type",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "login_history",
+      "column": "browser",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "login_history",
+      "column": "os",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "login_history",
+      "column": "user_agent",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "login_history",
+      "column": "session_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "boolean",
+      "table": "login_history",
+      "column": "is_archived",
+      "default": "false",
+      "nullable": "YES"
+    },
+    {
+      "type": "boolean",
+      "table": "login_history",
+      "column": "is_suspicious",
+      "default": "false",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "login_history",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "look_promotions",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "look_promotions",
+      "column": "name",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "look_promotions",
+      "column": "type",
+      "default": "'look_discount'::text",
+      "nullable": "NO"
+    },
+    {
+      "type": "integer",
+      "table": "look_promotions",
+      "column": "min_items",
+      "default": "3",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "look_promotions",
+      "column": "discount_percent",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "look_promotions",
+      "column": "discount_fixed",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "look_promotions",
+      "column": "required_categories",
+      "default": "'[]'::jsonb",
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "look_promotions",
+      "column": "eligible_products",
+      "default": "'[]'::jsonb",
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "look_promotions",
+      "column": "eligible_collections",
+      "default": "'[]'::jsonb",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "look_promotions",
+      "column": "valid_from",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "look_promotions",
+      "column": "valid_until",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "boolean",
+      "table": "look_promotions",
+      "column": "active",
+      "default": "false",
+      "nullable": "YES"
+    },
+    {
+      "type": "boolean",
+      "table": "look_promotions",
+      "column": "stacks_with_coupon",
+      "default": "false",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "look_promotions",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "look_promotions",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "look_promotions",
+      "column": "title",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "look_promotions",
+      "column": "subtitle",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "look_promotions",
+      "column": "promo_type",
+      "default": "'look_discount'::text",
+      "nullable": "YES"
+    },
+    {
+      "type": "boolean",
+      "table": "look_promotions",
+      "column": "free_shipping",
+      "default": "false",
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "look_promotions",
+      "column": "buy_quantity",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "look_promotions",
+      "column": "min_value",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "look_promotions",
+      "column": "applicable_category",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "look_promotions",
+      "column": "applicable_collection",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "look_promotions",
+      "column": "priority",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "look_promotions",
+      "column": "campaign_color",
+      "default": "'#A5925A'::text",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "look_promotions",
+      "column": "banner_image",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "look_promotions",
+      "column": "short_text",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "notification_logs",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "notification_logs",
+      "column": "order_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "notification_logs",
+      "column": "event",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "notification_logs",
+      "column": "channel",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "notification_logs",
+      "column": "recipient",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "notification_logs",
+      "column": "status",
+      "default": "'pending'::text",
+      "nullable": "NO"
+    },
+    {
+      "type": "integer",
+      "table": "notification_logs",
+      "column": "attempts",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "notification_logs",
+      "column": "provider_message_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "notification_logs",
+      "column": "error",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "notification_logs",
+      "column": "sent_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "notification_logs",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "order_events",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "order_events",
+      "column": "order_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "order_events",
+      "column": "event",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "order_events",
+      "column": "description",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "order_events",
+      "column": "metadata",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "order_events",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "order_items",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "order_items",
+      "column": "order_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "order_items",
+      "column": "product_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "order_items",
+      "column": "product_name",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "order_items",
+      "column": "product_sku",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "order_items",
+      "column": "product_image",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "order_items",
+      "column": "color_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "order_items",
+      "column": "color_name",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "order_items",
+      "column": "size",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "order_items",
+      "column": "quantity",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "order_items",
+      "column": "unit_price",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "order_items",
+      "column": "subtotal",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "order_items",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "order_refunds",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "order_refunds",
+      "column": "order_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "order_refunds",
+      "column": "idempotency_key",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "order_refunds",
+      "column": "kind",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "order_refunds",
+      "column": "amount",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "order_refunds",
+      "column": "status",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "order_refunds",
+      "column": "provider_order_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "order_refunds",
+      "column": "provider_payment_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "order_refunds",
+      "column": "provider_refund_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "order_refunds",
+      "column": "provider_status",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "order_refunds",
+      "column": "return_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "order_refunds",
+      "column": "reason",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "order_refunds",
+      "column": "actor_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "jsonb",
+      "table": "order_refunds",
+      "column": "selected_items",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "order_refunds",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "order_refunds",
+      "column": "processed_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "order_refunds",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "order_return_items",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "order_return_items",
+      "column": "return_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "order_return_items",
+      "column": "order_item_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "integer",
+      "table": "order_return_items",
+      "column": "quantity",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "boolean",
+      "table": "order_return_items",
+      "column": "restockable",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "order_return_items",
+      "column": "condition_note",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "order_returns",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "order_returns",
+      "column": "order_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "order_returns",
+      "column": "status",
+      "default": "'solicitada'::text",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "order_returns",
+      "column": "reason",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "order_returns",
+      "column": "requested_by",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "order_returns",
+      "column": "reviewed_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "order_returns",
+      "column": "received_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "order_returns",
+      "column": "received_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "order_returns",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "order_returns",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "order_returns",
+      "column": "authorized_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "order_returns",
+      "column": "awaiting_post_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "order_returns",
+      "column": "posted_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "order_returns",
+      "column": "in_transit_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "order_returns",
+      "column": "closed_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "order_returns",
+      "column": "posting_instructions",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "order_returns",
+      "column": "reverse_tracking_code",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "order_returns",
+      "column": "reverse_posting_code",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "order_returns",
+      "column": "reverse_shipment_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "orders",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "order_number",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "orders",
+      "column": "user_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "status",
+      "default": "'recebido'::text",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "payment_status",
+      "default": "'pending'::text",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "payment_method",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "shipping_method",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "orders",
+      "column": "shipping_cost",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "orders",
+      "column": "discount",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "coupon_code",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "orders",
+      "column": "subtotal",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "orders",
+      "column": "total",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "jsonb",
+      "table": "orders",
+      "column": "snapshot",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "jsonb",
+      "table": "orders",
+      "column": "shipping_address",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "tracking_code",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "notes",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "idempotency_key",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "orders",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "orders",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "payment_provider",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "mercado_pago_order_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "mercado_pago_payment_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "mercado_pago_status",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "mercado_pago_status_detail",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "mercado_pago_external_reference",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "pix_qr_code",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "pix_qr_code_base64",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "orders",
+      "column": "pix_expiration_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "orders",
+      "column": "installments",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "orders",
+      "column": "paid_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "orders",
+      "column": "payment_updated_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "shipping_provider",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "shipping_service",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "shipping_company",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "orders",
+      "column": "shipping_deadline",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "shipping_quote_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "melhor_envio_shipment_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "tracking_url",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "shipping_status",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "orders",
+      "column": "posted_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "orders",
+      "column": "delivered_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "shipping_carrier",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "shipping_service_name",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "orders",
+      "column": "shipping_delivery_time",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "orders",
+      "column": "payment_attempt_started_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "orders",
+      "column": "payment_attempt_method",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "products",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "name",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "sku",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "category",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "subcategory",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "collection",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "description",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "short_description",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "details",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "products",
+      "column": "price",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "products",
+      "column": "sale_price",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "products",
+      "column": "cost_price",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "products",
+      "column": "installments",
+      "default": "6",
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "products",
+      "column": "images",
+      "default": "'[]'::jsonb",
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "products",
+      "column": "colors",
+      "default": "'[]'::jsonb",
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "products",
+      "column": "sizes",
+      "default": "'[\"PP\", \"P\", \"M\", \"G\", \"GG\"]'::jsonb",
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "products",
+      "column": "badges",
+      "default": "'{}'::jsonb",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "composition",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "modeling",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "length",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "lining",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "transparency",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "elasticity",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "care",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "measurements",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "products",
+      "column": "weight",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "products",
+      "column": "package_height",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "products",
+      "column": "package_width",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "products",
+      "column": "package_length",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "products",
+      "column": "status",
+      "default": "'draft'::text",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "products",
+      "column": "rating",
+      "default": "5",
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "products",
+      "column": "sold_count",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "products",
+      "column": "created_date",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "products",
+      "column": "updated_date",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "products",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "products",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "products",
+      "column": "size_guide_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "products",
+      "column": "custom_measurements",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "profiles",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "email",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "password_hash",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "full_name",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "phone",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "role",
+      "default": "'customer'::text",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "profiles",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "profiles",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "totp_secret_encrypted",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "boolean",
+      "table": "profiles",
+      "column": "totp_enabled",
+      "default": "false",
+      "nullable": "YES"
+    },
+    {
+      "type": "boolean",
+      "table": "profiles",
+      "column": "require_2fa",
+      "default": "false",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "recovery_codes_encrypted",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "preferred_theme",
+      "default": "'light'::text",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "profiles",
+      "column": "cpf",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "date",
+      "table": "profiles",
+      "column": "birth_date",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "settings",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "settings",
+      "column": "key",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "jsonb",
+      "table": "settings",
+      "column": "value",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "boolean",
+      "table": "settings",
+      "column": "is_public",
+      "default": "false",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "settings",
+      "column": "updated_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "settings",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "settings",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "size_guide_rows",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "size_guide_rows",
+      "column": "guide_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "size_guide_rows",
+      "column": "size",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "size_guide_rows",
+      "column": "bust",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "size_guide_rows",
+      "column": "waist",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "size_guide_rows",
+      "column": "hip",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "size_guide_rows",
+      "column": "low_waist",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "size_guide_rows",
+      "column": "length",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "size_guide_rows",
+      "column": "sort_order",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "size_guide_rows",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "size_guide_rows",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "size_guides",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "size_guides",
+      "column": "name",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "size_guides",
+      "column": "type",
+      "default": "'Feminino padrão'::text",
+      "nullable": "NO"
+    },
+    {
+      "type": "integer",
+      "table": "size_guides",
+      "column": "sort_order",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "size_guides",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "size_guides",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "stock_movements",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "stock_movements",
+      "column": "product_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "stock_movements",
+      "column": "order_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "stock_movements",
+      "column": "type",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "integer",
+      "table": "stock_movements",
+      "column": "quantity",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "stock_movements",
+      "column": "color_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "stock_movements",
+      "column": "size",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "integer",
+      "table": "stock_movements",
+      "column": "previous_stock",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "integer",
+      "table": "stock_movements",
+      "column": "new_stock",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "stock_movements",
+      "column": "reason",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "stock_movements",
+      "column": "admin_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "stock_movements",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "stock_restorations",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "stock_restorations",
+      "column": "order_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "stock_restorations",
+      "column": "order_item_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "stock_restorations",
+      "column": "return_item_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "stock_restorations",
+      "column": "source",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "integer",
+      "table": "stock_restorations",
+      "column": "quantity",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "stock_restorations",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "webhook_events",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "webhook_events",
+      "column": "provider",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "webhook_events",
+      "column": "event_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "webhook_events",
+      "column": "event_type",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "webhook_events",
+      "column": "payload",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "boolean",
+      "table": "webhook_events",
+      "column": "processed",
+      "default": "false",
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamp with time zone",
+      "table": "webhook_events",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "YES"
+    }
+  ],
+  "policies": [],
+  "constraints": [
+    {
+      "kind": "p",
+      "name": "active_sessions_pkey",
+      "table": "active_sessions",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "u",
+      "name": "active_sessions_token_jti_key",
+      "table": "active_sessions",
+      "definition": "UNIQUE (token_jti)"
+    },
+    {
+      "kind": "f",
+      "name": "active_sessions_user_id_fkey",
+      "table": "active_sessions",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id)"
+    },
+    {
+      "kind": "p",
+      "name": "addresses_pkey",
+      "table": "addresses",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "f",
+      "name": "addresses_user_id_fkey",
+      "table": "addresses",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "kind": "p",
+      "name": "analytics_events_pkey",
+      "table": "analytics_events",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "f",
+      "name": "analytics_events_user_id_fkey",
+      "table": "analytics_events",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "kind": "f",
+      "name": "audit_logs_admin_id_fkey",
+      "table": "audit_logs",
+      "definition": "FOREIGN KEY (admin_id) REFERENCES profiles(id)"
+    },
+    {
+      "kind": "p",
+      "name": "audit_logs_pkey",
+      "table": "audit_logs",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "c",
+      "name": "banners_display_mode_check",
+      "table": "banners",
+      "definition": "CHECK ((display_mode = ANY (ARRAY['carousel'::text, 'priority'::text])))"
+    },
+    {
+      "kind": "p",
+      "name": "banners_pkey",
+      "table": "banners",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "f",
+      "name": "categories_parent_id_fkey",
+      "table": "categories",
+      "definition": "FOREIGN KEY (parent_id) REFERENCES categories(id)"
+    },
+    {
+      "kind": "p",
+      "name": "categories_pkey",
+      "table": "categories",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "u",
+      "name": "categories_slug_key",
+      "table": "categories",
+      "definition": "UNIQUE (slug)"
+    },
+    {
+      "kind": "p",
+      "name": "collections_pkey",
+      "table": "collections",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "u",
+      "name": "collections_slug_key",
+      "table": "collections",
+      "definition": "UNIQUE (slug)"
+    },
+    {
+      "kind": "p",
+      "name": "contact_messages_pkey",
+      "table": "contact_messages",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "f",
+      "name": "coupon_usages_coupon_id_fkey",
+      "table": "coupon_usages",
+      "definition": "FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE"
+    },
+    {
+      "kind": "u",
+      "name": "coupon_usages_coupon_id_order_id_key",
+      "table": "coupon_usages",
+      "definition": "UNIQUE (coupon_id, order_id)"
+    },
+    {
+      "kind": "f",
+      "name": "coupon_usages_order_id_fkey",
+      "table": "coupon_usages",
+      "definition": "FOREIGN KEY (order_id) REFERENCES orders(id)"
+    },
+    {
+      "kind": "p",
+      "name": "coupon_usages_pkey",
+      "table": "coupon_usages",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "f",
+      "name": "coupon_usages_user_id_fkey",
+      "table": "coupon_usages",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id)"
+    },
+    {
+      "kind": "u",
+      "name": "coupons_code_key",
+      "table": "coupons",
+      "definition": "UNIQUE (code)"
+    },
+    {
+      "kind": "c",
+      "name": "coupons_discount_type_check",
+      "table": "coupons",
+      "definition": "CHECK ((discount_type = ANY (ARRAY['percentage'::text, 'fixed'::text])))"
+    },
+    {
+      "kind": "p",
+      "name": "coupons_pkey",
+      "table": "coupons",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "p",
+      "name": "favorites_pkey",
+      "table": "favorites",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "f",
+      "name": "favorites_product_id_fkey",
+      "table": "favorites",
+      "definition": "FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE"
+    },
+    {
+      "kind": "f",
+      "name": "favorites_user_id_fkey",
+      "table": "favorites",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "kind": "u",
+      "name": "favorites_user_id_product_id_key",
+      "table": "favorites",
+      "definition": "UNIQUE (user_id, product_id)"
+    },
+    {
+      "kind": "p",
+      "name": "integration_configs_pkey",
+      "table": "integration_configs",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "u",
+      "name": "integration_configs_service_key_key",
+      "table": "integration_configs",
+      "definition": "UNIQUE (service_key)"
+    },
+    {
+      "kind": "p",
+      "name": "login_history_pkey",
+      "table": "login_history",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "c",
+      "name": "login_history_status_check",
+      "table": "login_history",
+      "definition": "CHECK ((status = ANY (ARRAY['success'::text, 'failed'::text, 'blocked'::text])))"
+    },
+    {
+      "kind": "f",
+      "name": "login_history_user_id_fkey",
+      "table": "login_history",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id)"
+    },
+    {
+      "kind": "c",
+      "name": "login_history_user_type_check",
+      "table": "login_history",
+      "definition": "CHECK ((user_type = ANY (ARRAY['admin'::text, 'customer'::text])))"
+    },
+    {
+      "kind": "p",
+      "name": "look_promotions_pkey",
+      "table": "look_promotions",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "c",
+      "name": "notification_logs_channel_check",
+      "table": "notification_logs",
+      "definition": "CHECK ((channel = ANY (ARRAY['email'::text, 'whatsapp'::text])))"
+    },
+    {
+      "kind": "u",
+      "name": "notification_logs_order_id_event_channel_recipient_key",
+      "table": "notification_logs",
+      "definition": "UNIQUE (order_id, event, channel, recipient)"
+    },
+    {
+      "kind": "f",
+      "name": "notification_logs_order_id_fkey",
+      "table": "notification_logs",
+      "definition": "FOREIGN KEY (order_id) REFERENCES orders(id)"
+    },
+    {
+      "kind": "p",
+      "name": "notification_logs_pkey",
+      "table": "notification_logs",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "c",
+      "name": "notification_logs_status_check",
+      "table": "notification_logs",
+      "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'sent'::text, 'failed'::text, 'retrying'::text])))"
+    },
+    {
+      "kind": "f",
+      "name": "order_events_order_id_fkey",
+      "table": "order_events",
+      "definition": "FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE"
+    },
+    {
+      "kind": "p",
+      "name": "order_events_pkey",
+      "table": "order_events",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "f",
+      "name": "order_items_order_id_fkey",
+      "table": "order_items",
+      "definition": "FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE"
+    },
+    {
+      "kind": "p",
+      "name": "order_items_pkey",
+      "table": "order_items",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "f",
+      "name": "order_items_product_id_fkey",
+      "table": "order_items",
+      "definition": "FOREIGN KEY (product_id) REFERENCES products(id)"
+    },
+    {
+      "kind": "c",
+      "name": "order_items_quantity_check",
+      "table": "order_items",
+      "definition": "CHECK ((quantity > 0))"
+    },
+    {
+      "kind": "c",
+      "name": "order_refunds_amount_check",
+      "table": "order_refunds",
+      "definition": "CHECK ((amount > (0)::numeric))"
+    },
+    {
+      "kind": "c",
+      "name": "order_refunds_kind_check",
+      "table": "order_refunds",
+      "definition": "CHECK ((kind = ANY (ARRAY['full'::text, 'partial'::text, 'remaining'::text])))"
+    },
+    {
+      "kind": "f",
+      "name": "order_refunds_order_id_fkey",
+      "table": "order_refunds",
+      "definition": "FOREIGN KEY (order_id) REFERENCES orders(id)"
+    },
+    {
+      "kind": "u",
+      "name": "order_refunds_order_id_idempotency_key_key",
+      "table": "order_refunds",
+      "definition": "UNIQUE (order_id, idempotency_key)"
+    },
+    {
+      "kind": "p",
+      "name": "order_refunds_pkey",
+      "table": "order_refunds",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "f",
+      "name": "order_refunds_return_id_fkey",
+      "table": "order_refunds",
+      "definition": "FOREIGN KEY (return_id) REFERENCES order_returns(id)"
+    },
+    {
+      "kind": "c",
+      "name": "order_refunds_status_check",
+      "table": "order_refunds",
+      "definition": "CHECK ((status = ANY (ARRAY['reserved'::text, 'processing'::text, 'processed'::text, 'failed'::text, 'reconciliation_required'::text])))"
+    },
+    {
+      "kind": "f",
+      "name": "order_return_items_order_item_id_fkey",
+      "table": "order_return_items",
+      "definition": "FOREIGN KEY (order_item_id) REFERENCES order_items(id)"
+    },
+    {
+      "kind": "p",
+      "name": "order_return_items_pkey",
+      "table": "order_return_items",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "c",
+      "name": "order_return_items_quantity_check",
+      "table": "order_return_items",
+      "definition": "CHECK ((quantity > 0))"
+    },
+    {
+      "kind": "f",
+      "name": "order_return_items_return_id_fkey",
+      "table": "order_return_items",
+      "definition": "FOREIGN KEY (return_id) REFERENCES order_returns(id)"
+    },
+    {
+      "kind": "u",
+      "name": "order_return_items_return_id_order_item_id_key",
+      "table": "order_return_items",
+      "definition": "UNIQUE (return_id, order_item_id)"
+    },
+    {
+      "kind": "f",
+      "name": "order_returns_order_id_fkey",
+      "table": "order_returns",
+      "definition": "FOREIGN KEY (order_id) REFERENCES orders(id)"
+    },
+    {
+      "kind": "p",
+      "name": "order_returns_pkey",
+      "table": "order_returns",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "c",
+      "name": "order_returns_status_check",
+      "table": "order_returns",
+      "definition": "CHECK ((status = ANY (ARRAY['solicitada'::text, 'autorizada'::text, 'aguardando_postagem'::text, 'em_transito_retorno'::text, 'recebida'::text, 'reembolso_processado'::text, 'recusada'::text, 'cancelada'::text])))"
+    },
+    {
+      "kind": "u",
+      "name": "orders_order_number_key",
+      "table": "orders",
+      "definition": "UNIQUE (order_number)"
+    },
+    {
+      "kind": "c",
+      "name": "orders_payment_status_check",
+      "table": "orders",
+      "definition": "CHECK ((payment_status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'partially_refunded'::text, 'refunded'::text])))"
+    },
+    {
+      "kind": "p",
+      "name": "orders_pkey",
+      "table": "orders",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "c",
+      "name": "orders_status_check",
+      "table": "orders",
+      "definition": "CHECK ((status = ANY (ARRAY['recebido'::text, 'pagamento_aprovado'::text, 'em_separacao'::text, 'enviado'::text, 'em_transporte'::text, 'saiu_entrega'::text, 'entregue'::text, 'cancelado'::text])))"
+    },
+    {
+      "kind": "f",
+      "name": "orders_user_id_fkey",
+      "table": "orders",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "kind": "p",
+      "name": "products_pkey",
+      "table": "products",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "f",
+      "name": "products_size_guide_id_fkey",
+      "table": "products",
+      "definition": "FOREIGN KEY (size_guide_id) REFERENCES size_guides(id) ON DELETE SET NULL"
+    },
+    {
+      "kind": "u",
+      "name": "products_sku_key",
+      "table": "products",
+      "definition": "UNIQUE (sku)"
+    },
+    {
+      "kind": "c",
+      "name": "products_status_check",
+      "table": "products",
+      "definition": "CHECK ((status = ANY (ARRAY['draft'::text, 'published'::text, 'archived'::text])))"
+    },
+    {
+      "kind": "u",
+      "name": "users_email_key",
+      "table": "profiles",
+      "definition": "UNIQUE (email)"
+    },
+    {
+      "kind": "p",
+      "name": "users_pkey",
+      "table": "profiles",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "c",
+      "name": "users_role_check",
+      "table": "profiles",
+      "definition": "CHECK ((role = ANY (ARRAY['admin'::text, 'customer'::text])))"
+    },
+    {
+      "kind": "u",
+      "name": "settings_key_key",
+      "table": "settings",
+      "definition": "UNIQUE (key)"
+    },
+    {
+      "kind": "p",
+      "name": "settings_pkey",
+      "table": "settings",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "f",
+      "name": "settings_updated_by_fkey",
+      "table": "settings",
+      "definition": "FOREIGN KEY (updated_by) REFERENCES profiles(id)"
+    },
+    {
+      "kind": "f",
+      "name": "size_guide_rows_guide_id_fkey",
+      "table": "size_guide_rows",
+      "definition": "FOREIGN KEY (guide_id) REFERENCES size_guides(id) ON DELETE CASCADE"
+    },
+    {
+      "kind": "p",
+      "name": "size_guide_rows_pkey",
+      "table": "size_guide_rows",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "p",
+      "name": "size_guides_pkey",
+      "table": "size_guides",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "f",
+      "name": "stock_movements_admin_id_fkey",
+      "table": "stock_movements",
+      "definition": "FOREIGN KEY (admin_id) REFERENCES profiles(id)"
+    },
+    {
+      "kind": "f",
+      "name": "stock_movements_order_id_fkey",
+      "table": "stock_movements",
+      "definition": "FOREIGN KEY (order_id) REFERENCES orders(id)"
+    },
+    {
+      "kind": "p",
+      "name": "stock_movements_pkey",
+      "table": "stock_movements",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "f",
+      "name": "stock_movements_product_id_fkey",
+      "table": "stock_movements",
+      "definition": "FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE"
+    },
+    {
+      "kind": "c",
+      "name": "stock_movements_type_check",
+      "table": "stock_movements",
+      "definition": "CHECK ((type = ANY (ARRAY['sale'::text, 'cancel'::text, 'adjust'::text, 'return'::text])))"
+    },
+    {
+      "kind": "c",
+      "name": "stock_restorations_check",
+      "table": "stock_restorations",
+      "definition": "CHECK ((((source = 'return'::text) AND (return_item_id IS NOT NULL)) OR ((source = 'cancellation'::text) AND (return_item_id IS NULL))))"
+    },
+    {
+      "kind": "f",
+      "name": "stock_restorations_order_id_fkey",
+      "table": "stock_restorations",
+      "definition": "FOREIGN KEY (order_id) REFERENCES orders(id)"
+    },
+    {
+      "kind": "f",
+      "name": "stock_restorations_order_item_id_fkey",
+      "table": "stock_restorations",
+      "definition": "FOREIGN KEY (order_item_id) REFERENCES order_items(id)"
+    },
+    {
+      "kind": "p",
+      "name": "stock_restorations_pkey",
+      "table": "stock_restorations",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "c",
+      "name": "stock_restorations_quantity_check",
+      "table": "stock_restorations",
+      "definition": "CHECK ((quantity > 0))"
+    },
+    {
+      "kind": "f",
+      "name": "stock_restorations_return_item_id_fkey",
+      "table": "stock_restorations",
+      "definition": "FOREIGN KEY (return_item_id) REFERENCES order_return_items(id)"
+    },
+    {
+      "kind": "c",
+      "name": "stock_restorations_source_check",
+      "table": "stock_restorations",
+      "definition": "CHECK ((source = ANY (ARRAY['cancellation'::text, 'return'::text])))"
+    },
+    {
+      "kind": "p",
+      "name": "webhook_events_pkey",
+      "table": "webhook_events",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "kind": "u",
+      "name": "webhook_events_provider_event_id_key",
+      "table": "webhook_events",
+      "definition": "UNIQUE (provider, event_id)"
+    }
+  ],
+  "default_acls": [
+    {
+      "acl": "{postgres=rwU/postgres,anon=rwU/postgres,authenticated=rwU/postgres,service_role=rwU/postgres}",
+      "owner": "postgres",
+      "schema": "public",
+      "object_type": "S"
+    },
+    {
+      "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "schema": "public",
+      "object_type": "f"
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "owner": "postgres",
+      "schema": "public",
+      "object_type": "r"
+    },
+    {
+      "acl": "{postgres=rwU/supabase_admin,anon=rwU/supabase_admin,authenticated=rwU/supabase_admin,service_role=rwU/supabase_admin}",
+      "owner": "supabase_admin",
+      "schema": "public",
+      "object_type": "S"
+    },
+    {
+      "acl": "{postgres=X/supabase_admin,anon=X/supabase_admin,authenticated=X/supabase_admin,service_role=X/supabase_admin}",
+      "owner": "supabase_admin",
+      "schema": "public",
+      "object_type": "f"
+    },
+    {
+      "acl": "{postgres=arwdDxtm/supabase_admin,anon=arwdDxtm/supabase_admin,authenticated=arwdDxtm/supabase_admin,service_role=arwdDxtm/supabase_admin}",
+      "owner": "supabase_admin",
+      "schema": "public",
+      "object_type": "r"
+    }
+  ],
+  "public_views": [],
+  "captured_at_utc": "2026-10-11T14:09:15.378163+00:00",
+  "public_functions": [],
+  "relevant_triggers": []
+}

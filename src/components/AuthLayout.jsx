@@ -1,18 +1,19 @@
 import React from "react";
 import { Link } from "react-router-dom";
 
-export default function AuthLayout({ title, subtitle, footer, children }) {
+export default function AuthLayout({ title, subtitle = "", footer = null, children = null, icon: Icon = null }) {
     return (
         <div className="min-h-screen flex flex-col bg-background">
-            <div className="flex-1 flex items-center justify-center px-4 py-12">
+            <main className="flex-1 flex items-center justify-center px-4 py-12">
                 <div className="w-full max-w-md">
                     <div className="text-center mb-10">
                         <Link to="/" className="inline-block">
                             <span className="block font-heading text-3xl tracking-[0.08em] text-foreground">D'Helenas</span>
-                            <span className="block text-[8px] uppercase tracking-[0.4em] text-[hsl(var(--gold))] mt-1">Método Ponte</span>
+                            <span className="block text-[8px] uppercase tracking-[0.4em] text-rose-ink mt-1">Método Ponte</span>
                         </Link>
                     </div>
                     <div className="text-center mb-8">
+                        {Icon && <Icon className="w-8 h-8 mx-auto mb-3 text-gold-ink" strokeWidth={1.25} />}
                         <h1 className="font-heading text-3xl tracking-[0.03em] text-foreground">{title}</h1>
                         {subtitle && <p className="text-sm text-muted-foreground mt-2">{subtitle}</p>}
                         <div className="flex justify-center mt-4"><div className="gold-rule" /></div>
@@ -24,7 +25,7 @@ export default function AuthLayout({ title, subtitle, footer, children }) {
                         <p className="text-center text-sm text-muted-foreground mt-6">{footer}</p>
                     )}
                 </div>
-            </div>
+            </main>
         </div>
     );
 }

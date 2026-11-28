@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
-
-const DEFAULT_GUIDE = [
-    { size: "PP", bust: "78-82", waist: "58-62", hip: "86-90" },
-    { size: "P",  bust: "82-86", waist: "62-66", hip: "90-94" },
-    { size: "M",  bust: "86-90", waist: "66-70", hip: "94-98" },
-    { size: "G",  bust: "90-94", waist: "70-74", hip: "98-102" },
-    { size: "GG", bust: "94-98", waist: "74-78", hip: "102-106" },
-];
+import { base44 } from '@/api/base44Client';
 
 export default function SizeGuideModal({ open, onClose, guideId, customMeasurements }) {
     const [guide, setGuide] = useState(null);
@@ -26,28 +19,19 @@ export default function SizeGuideModal({ open, onClose, guideId, customMeasureme
             if (guideId) {
                 setLoading(true);
                 try {
-                    const token = localStorage.getItem("dhelena_access_token");
-                    const res = await fetch(`/api/size-guides/${guideId}`, {
-                        headers: token ? { Authorization: `Bearer ${token}` } : {},
-                    });
-                    if (res.ok) {
-                        const g = await res.json();
+                        const g = await base44.entities.SizeGuide.get(guideId);
                         if (!cancelled) setGuide(g);
                         return;
-                    }
                 } catch { /* fall through to default */ }
                 finally { setLoading(false); }
             }
             // List all guides, pick first as default
             try {
-                const res = await fetch("/api/size-guides");
-                if (res.ok) {
-                    const guides = await res.json();
+                    const guides = await base44.entities.SizeGuide.list();
                     if (guides.length > 0 && !cancelled) {
                         setGuide(guides[0]);
                         return;
                     }
-                }
             } catch { /* fall through */ }
             if (!cancelled) setGuide(null);
         }
@@ -58,7 +42,7 @@ export default function SizeGuideModal({ open, onClose, guideId, customMeasureme
 
     if (!open) return null;
 
-    const rows = guide?.rows || DEFAULT_GUIDE;
+    const rows = guide?.rows || [];
     const title = guide?.name || "Guia de Medidas";
     const hasLowWaist = rows.some(r => r.low_waist);
     const hasLength = rows.some(r => r.length);
@@ -84,7 +68,7 @@ export default function SizeGuideModal({ open, onClose, guideId, customMeasureme
                         <div className="py-12 text-center">
                             <div className="w-6 h-6 border-2 border-[hsl(var(--bone))] border-t-[hsl(var(--gold))] rounded-full animate-spin mx-auto" />
                         </div>
-                    ) : (
+                    ) : rows.length > 0 ? (
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
@@ -111,7 +95,7 @@ export default function SizeGuideModal({ open, onClose, guideId, customMeasureme
                                 </tbody>
                             </table>
                         </div>
-                    )}
+                    ) : <p className="text-sm text-muted-foreground py-6">Medidas desta peça ainda não informadas.</p>}
 
                     <p className="text-[11px] text-muted-foreground mt-6 leading-relaxed">
                         As medidas são aproximadas e podem variar conforme o tecido e modelagem. Em caso de dúvida, escolha o tamanho maior ou entre em contato conosco.
