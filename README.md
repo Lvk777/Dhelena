@@ -1,6 +1,10 @@
-# Dhelena
+# D’Helenas
 
-Projeto e-commerce Dhelena - Aplicação React + Vite standalone.
+Loja virtual de moda feminina. O frontend utiliza React e Vite; a API utiliza Node.js, Express e PostgreSQL.
+
+- [Arquitetura](ARCHITECTURE.md)
+- [Publicação e configuração](DEPLOY.md)
+- [Orientações de manutenção](AGENTS.md)
 
 ## Desenvolvimento Local
 
@@ -14,8 +18,7 @@ Projeto e-commerce Dhelena - Aplicação React + Vite standalone.
    npm run dev
    ```
 
-O servidor iniciará por padrão na porta `5551`, compatível com o túnel do ngrok:
-`https://angella-soullike-virgie.ngrok-free.dev` -> `http://localhost:5551`
+O servidor de desenvolvimento utiliza a porta `5551` por padrão (`http://localhost:5551`). Para acesso externo durante o desenvolvimento, configure um túnel próprio.
 
 ## Build para Produção
 
